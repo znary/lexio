@@ -1,5 +1,5 @@
-name: 英语伴读
-extName: 英语伴读 - 沉浸式翻译与单词同步
+name: 英语伴读 [TEST]
+extName: 英语伴读 [TEST] - 沉浸式翻译与单词同步
 extDescription: 英语伴读是一款浏览器插件，用来做沉浸式翻译、单词短句收藏，以及基于 Google Drive 的多端同步。
 uninstallSurveyUrl: https://tally.so/r/3E9XDL
 dataTypes:
@@ -131,6 +131,9 @@ options:
         region: 区域
       temperature: 温度
       temperatureHint: 控制响应的随机性。较低的值（0）更确定性，较高的值更具创造性。范围因提供商而异。留空则使用提供商默认值。
+      disableThinking: 禁用思考
+      disableThinkingHint: 当前提供商支持时，关闭思考或推理来更快返回。不同提供商会自动使用对应的请求参数。
+      disableThinkingDescription: 支持的模型会更快返回
       providerOptions: 提供商选项
       providerOptionsHint: 用于非标准 API 功能（如思考/推理模式）的提供商特定选项。详情请参阅 Vercel AI SDK 文档或您的提供商官方文档。
       providerOptionsDocsLink: 查看提供商文档

@@ -73,9 +73,15 @@ export async function runAiSegmentSubtitles(data: AiSegmentSubtitlesData): Promi
     return cached.result
   }
 
-  const { model: providerModel, provider, providerOptions: userProviderOptions, temperature } = providerConfig
+  const {
+    model: providerModel,
+    provider,
+    providerOptions: userProviderOptions,
+    temperature,
+    disableThinking,
+  } = providerConfig
   const modelName = resolveModelId(providerModel)
-  const providerOptions = getProviderOptionsWithOverride(modelName ?? "", provider, userProviderOptions)
+  const providerOptions = getProviderOptionsWithOverride(modelName ?? "", provider, userProviderOptions, disableThinking)
   const model = await getModelById(providerId)
 
   const { systemPrompt, prompt } = getSubtitlesSegmentationPrompt(jsonContent)

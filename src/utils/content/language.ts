@@ -146,9 +146,15 @@ export async function detectLanguageWithLLM(
   }
 
   try {
-    const { model: providerModel, provider, providerOptions: userProviderOptions, temperature } = config
+    const {
+      model: providerModel,
+      provider,
+      providerOptions: userProviderOptions,
+      temperature,
+      disableThinking,
+    } = config
     const modelName = resolveModelId(providerModel)
-    const providerOptions = getProviderOptionsWithOverride(modelName ?? "", provider, userProviderOptions)
+    const providerOptions = getProviderOptionsWithOverride(modelName ?? "", provider, userProviderOptions, disableThinking)
     const payload: BackgroundGenerateTextPayload = {
       providerId: config.id,
       system: getLanguageDetectionSystemPrompt(),

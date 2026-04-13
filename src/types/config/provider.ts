@@ -122,6 +122,7 @@ export const baseAPIProviderConfigSchema = baseProviderConfigSchema.extend({
   apiKey: z.string().optional(),
   baseURL: z.string().optional(),
   temperature: z.number().min(0).optional(),
+  disableThinking: z.boolean().optional(),
   providerOptions: z.record(z.string(), z.any()).optional(),
   connectionOptions: z.record(z.string(), z.any()).optional(),
 })

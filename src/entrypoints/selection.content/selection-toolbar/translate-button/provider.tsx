@@ -86,9 +86,10 @@ async function translateWithLlm({
     provider,
     providerOptions: userProviderOptions,
     temperature,
+    disableThinking,
   } = providerConfig
   const modelName = resolveModelId(providerConfig.model)
-  const providerOptions = getProviderOptionsWithOverride(modelName ?? "", provider, userProviderOptions)
+  const providerOptions = getProviderOptionsWithOverride(modelName ?? "", provider, userProviderOptions, disableThinking)
   const abortController = new AbortController()
   registerAbortController(abortController)
 

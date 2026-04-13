@@ -63,6 +63,10 @@ const CUSTOM_HEADER_MAP: Partial<Record<keyof typeof CREATE_AI_MAPPER, Record<st
   anthropic: { "anthropic-dangerous-direct-browser-access": "true" },
 }
 
+export function supportsStructuredOutputsForCustomProvider(provider: string): boolean {
+  return provider !== "volcengine"
+}
+
 async function getLanguageModelById(providerId: string) {
   const config = await storage.getItem<Config>(`local:${CONFIG_STORAGE_KEY}`)
   if (!config) {
@@ -83,7 +87,9 @@ async function getLanguageModelById(providerId: string) {
         ...connectionOptions,
         name: providerConfig.provider,
         baseURL: providerConfig.baseURL ?? "",
-        supportsStructuredOutputs: true,
+        // Volcengine's OpenAI-compatible endpoint accepts JSON mode but rejects
+        // `response_format.type = "json_schema"` for the Doubao models we expose.
+        supportsStructuredOutputs: supportsStructuredOutputsForCustomProvider(providerConfig.provider),
         ...(providerConfig.apiKey && { apiKey: providerConfig.apiKey }),
         ...(customHeaders && { headers: customHeaders }),
       })

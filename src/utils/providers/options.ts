@@ -41,6 +41,25 @@ function normalizeUserProviderOptions(
   return changed ? normalizedOptions : userOptions
 }
 
+function mergeRecommendedProviderOptions(
+  model: string,
+  baseOptions: Record<string, JSONValue> | undefined,
+  disableThinking?: boolean,
+): Record<string, JSONValue> | undefined {
+  if (disableThinking === false) {
+    return baseOptions
+  }
+
+  const recommendedOptions = getRecommendedProviderOptions(model)
+  if (!recommendedOptions) {
+    return baseOptions
+  }
+
+  return baseOptions
+    ? { ...baseOptions, ...recommendedOptions }
+    : recommendedOptions
+}
+
 /**
  * Detect the recommended provider options for a given model.
  * First match wins - more specific patterns should be placed first in MODEL_OPTIONS.
@@ -66,8 +85,9 @@ export function getRecommendedProviderOptions(model: string): Record<string, JSO
 export function getProviderOptions(
   model: string,
   provider: string,
+  disableThinking?: boolean,
 ): Record<string, Record<string, JSONValue>> {
-  const options = getRecommendedProviderOptions(model)
+  const options = mergeRecommendedProviderOptions(model, undefined, disableThinking)
   if (!options) {
     return {}
   }
@@ -84,12 +104,25 @@ export function getProviderOptionsWithOverride(
   model: string,
   provider: string,
   userOptions?: Record<string, JSONValue>,
+  disableThinking?: boolean,
 ): Record<string, Record<string, JSONValue>> | undefined {
+  const normalizedUserOptions = userOptions === undefined
+    ? undefined
+    : normalizeUserProviderOptions(provider, userOptions)
+
   if (userOptions !== undefined) {
-    return { [provider]: normalizeUserProviderOptions(provider, userOptions) }
+    const mergedOptions = mergeRecommendedProviderOptions(
+      model,
+      normalizedUserOptions,
+      disableThinking,
+    )
+
+    return {
+      [provider]: mergedOptions ?? normalizedUserOptions!,
+    }
   }
 
-  const recommendedOptions = getRecommendedProviderOptions(model)
+  const recommendedOptions = mergeRecommendedProviderOptions(model, undefined, disableThinking)
   if (!recommendedOptions) {
     return undefined
   }

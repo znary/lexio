@@ -118,6 +118,9 @@ describe("getProviderOptions", () => {
       const deepseekReasonerOptions = getProviderOptions("deepseek-reasoner", "deepseek")
       expect(deepseekReasonerOptions.deepseek?.thinking).toEqual({ type: "disabled" })
 
+      const volcengineOptions = getProviderOptions("doubao-seed-1-6-flash-250828", "volcengine")
+      expect(volcengineOptions.volcengine?.thinking).toEqual({ type: "disabled" })
+
       const cohereReasoningOptions = getProviderOptions("command-a-reasoning-08-2025", "cohere")
       expect(cohereReasoningOptions.cohere?.thinking).toEqual({ type: "disabled" })
 
@@ -225,7 +228,7 @@ describe("getProviderOptions", () => {
   describe("user provider option overrides", () => {
     it("should treat an explicit empty object as a user override", () => {
       const options = getProviderOptionsWithOverride("qwen3-max", "alibaba", {})
-      expect(options).toEqual({ alibaba: {} })
+      expect(options).toEqual({ alibaba: { enableThinking: false } })
     })
 
     it("should fall back to recommendations when user options are undefined", () => {
@@ -233,9 +236,19 @@ describe("getProviderOptions", () => {
       expect(options).toEqual({ alibaba: { enableThinking: false } })
     })
 
-    it("should use user options as-is without merging matched defaults", () => {
+    it("should merge user options with the thinking override when the switch is on", () => {
       const options = getProviderOptionsWithOverride("qwen3-max", "alibaba", { foo: "bar" })
+      expect(options).toEqual({ alibaba: { foo: "bar", enableThinking: false } })
+    })
+
+    it("should skip the thinking override when the switch is off", () => {
+      const options = getProviderOptionsWithOverride("qwen3-max", "alibaba", { foo: "bar" }, false)
       expect(options).toEqual({ alibaba: { foo: "bar" } })
+    })
+
+    it("should return undefined when the switch is off and there are no manual options", () => {
+      const options = getProviderOptionsWithOverride("qwen3-max", "alibaba", undefined, false)
+      expect(options).toBeUndefined()
     })
 
     it("should normalize common OpenAI-compatible snake_case aliases", () => {
@@ -248,6 +261,7 @@ describe("getProviderOptions", () => {
       expect(options).toEqual({
         "openai-compatible": {
           reasoningEffort: "minimal",
+          thinking: { type: "disabled" },
           textVerbosity: "low",
           foo: "bar",
         },
@@ -264,6 +278,7 @@ describe("getProviderOptions", () => {
 
       expect(options).toEqual({
         volcengine: {
+          thinking: { type: "disabled" },
           reasoningEffort: "minimal",
           textVerbosity: "low",
         },

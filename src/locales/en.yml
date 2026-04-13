@@ -1,5 +1,5 @@
-name: English Companion
-extName: English Companion - Immersive Translate and Vocabulary Sync
+name: English Companion [TEST]
+extName: English Companion [TEST] - Immersive Translate and Vocabulary Sync
 extDescription: English Companion is a browser extension for immersive translation, vocabulary capture, and Google Drive sync across devices.
 uninstallSurveyUrl: https://tally.so/r/nPK6Ob
 dataTypes:
@@ -131,6 +131,9 @@ options:
         region: Region
       temperature: Temperature
       temperatureHint: Controls randomness in responses. Lower values (0) are more deterministic, higher values are more creative. Range varies by provider. Leave empty to use provider default.
+      disableThinking: Disable Thinking
+      disableThinkingHint: Turn off thinking/reasoning for faster replies when the current provider supports it. Different providers use different request fields automatically.
+      disableThinkingDescription: Supported models return faster
       providerOptions: Provider Options
       providerOptionsHint: Provider-specific options for non-standard API features like thinking/reasoning mode. See the Vercel AI SDK docs or your provider's official documentation for configuration details.
       providerOptionsDocsLink: View Provider Docs

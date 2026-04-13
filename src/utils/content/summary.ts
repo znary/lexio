@@ -21,9 +21,15 @@ export async function generateArticleSummary(
   }
 
   try {
-    const { model: providerModel, provider, providerOptions: userProviderOptions, temperature } = providerConfig
+    const {
+      model: providerModel,
+      provider,
+      providerOptions: userProviderOptions,
+      temperature,
+      disableThinking,
+    } = providerConfig
     const modelName = resolveModelId(providerModel)
-    const providerOptions = getProviderOptionsWithOverride(modelName ?? "", provider, userProviderOptions)
+    const providerOptions = getProviderOptionsWithOverride(modelName ?? "", provider, userProviderOptions, disableThinking)
     const model = await getModelById(providerConfig.id)
 
     const prompt = `Summarize the following article in 2-3 sentences. Focus on the main topic and key points. Return ONLY the summary, no explanations or formatting.

@@ -1,5 +1,5 @@
-name: 読書カエル
-extName: 読書カエル - オープンソースインビジブル翻訳
+name: 読書カエル [TEST]
+extName: 読書カエル [TEST] - オープンソースインビジブル翻訳
 extDescription: 読書カエルは、あらゆるウェブサイトから言語を深く学ぶために設計されたオープンソースのブラウザ拡張機能です。
 uninstallSurveyUrl: https://tally.so/r/nPK6Ob
 dataTypes:
@@ -134,6 +134,9 @@ options:
         region: リージョン
       temperature: 温度
       temperatureHint: 応答のランダム性を制御します。低い値（0）はより決定的で、高い値はより創造的です。範囲はプロバイダーによって異なります。空欄の場合はプロバイダーのデフォルト値を使用します。
+      disableThinking: 思考を無効化
+      disableThinkingHint: 現在のプロバイダーが対応している場合、思考または推論をオフにして応答を速くします。プロバイダーごとのパラメータは自動で切り替わります。
+      disableThinkingDescription: 対応モデルでは応答が速くなります
       providerOptions: プロバイダーオプション
       providerOptionsHint: 思考/推論モードなどの非標準API機能のためのプロバイダー固有オプション。詳細はVercel AI SDKドキュメントまたはプロバイダーの公式ドキュメントをご覧ください。
       providerOptionsDocsLink: プロバイダードキュメントを見る

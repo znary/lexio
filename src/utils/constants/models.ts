@@ -174,6 +174,12 @@ export const LLM_MODEL_OPTIONS: Array<{
     options: { thinking: { type: "disabled" } } satisfies DeepSeekLanguageModelOptions as Record<string, JSONValue>,
   },
 
+  // Doubao models on Volcengine - disable deep thinking for faster responses
+  {
+    pattern: /^doubao-/,
+    options: { thinking: { type: "disabled" } },
+  },
+
   // Cohere reasoning models - disable thinking by default
   {
     pattern: /^command-a-reasoning(?:-.+)?$/,

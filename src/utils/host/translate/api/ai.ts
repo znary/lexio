@@ -21,11 +21,18 @@ export async function aiTranslate<TContext>(
   promptResolver: PromptResolver<TContext>,
   options?: { isBatch?: boolean, context?: TContext },
 ) {
-  const { id: providerId, model: providerModel, provider, providerOptions: userProviderOptions, temperature } = providerConfig
+  const {
+    id: providerId,
+    model: providerModel,
+    provider,
+    providerOptions: userProviderOptions,
+    temperature,
+    disableThinking,
+  } = providerConfig
   const modelName = resolveModelId(providerModel)
   const model = await getModelById(providerId)
 
-  const providerOptions = getProviderOptionsWithOverride(modelName ?? "", provider, userProviderOptions)
+  const providerOptions = getProviderOptionsWithOverride(modelName ?? "", provider, userProviderOptions, disableThinking)
   const { systemPrompt, prompt } = await promptResolver(targetLangName, text, options)
 
   try {

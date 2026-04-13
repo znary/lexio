@@ -1,5 +1,5 @@
-name: 陪讀蛙
-extName: 陪讀蛙 - 開源沉浸式翻譯
+name: 陪讀蛙 [TEST]
+extName: 陪讀蛙 [TEST] - 開源沉浸式翻譯
 extDescription: 陪讀蛙是一款開放源代碼的瀏覽器插件，旨在幫助您從任何網站深入學習語言。
 uninstallSurveyUrl: https://tally.so/r/3E9XDL
 dataTypes:
@@ -134,6 +134,9 @@ options:
         region: 區域
       temperature: 溫度
       temperatureHint: 控制回應的隨機性。較低的值（0）更具確定性，較高的值更具創造性。範圍因提供者而異。留空則使用提供者預設值。
+      disableThinking: 停用思考
+      disableThinkingHint: 目前提供者支援時，關閉思考或推理來更快回傳。不同提供者會自動使用對應的請求參數。
+      disableThinkingDescription: 支援的模型會更快回傳
       providerOptions: 提供者選項
       providerOptionsHint: 用於非標準 API 功能（如思考/推理模式）的提供者特定選項。詳情請參閱 Vercel AI SDK 文件或您的提供者官方文件。
       providerOptionsDocsLink: 查看提供者文件

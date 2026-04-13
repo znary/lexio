@@ -1,5 +1,5 @@
-name: Read Frog
-extName: Read Frog - Açık Kaynak Sürükleyici Çeviri
+name: Read Frog [TEST]
+extName: Read Frog [TEST] - Açık Kaynak Sürükleyici Çeviri
 extDescription: Read Frog, herhangi bir web sitesinden dilleri derinlemesine öğrenmenize yardımcı olmak için tasarlanmış açık kaynaklı bir tarayıcı uzantısıdır.
 uninstallSurveyUrl: https://tally.so/r/nPK6Ob
 dataTypes:
@@ -134,6 +134,9 @@ options:
         region: Bölge
       temperature: Sıcaklık
       temperatureHint: Yanıtlardaki rastgeleliği kontrol eder. Düşük değerler (0) daha belirleyici, yüksek değerler daha yaratıcıdır. Aralık sağlayıcıya göre değişir. Sağlayıcı varsayılanını kullanmak için boş bırakın.
+      disableThinking: Düşünmeyi kapat
+      disableThinkingHint: Geçerli sağlayıcı destekliyorsa daha hızlı yanıt için düşünmeyi veya akıl yürütmeyi kapatır. Farklı sağlayıcılar için uygun istek parametreleri otomatik uygulanır.
+      disableThinkingDescription: Desteklenen modeller daha hızlı yanıt verir
       providerOptions: Sağlayıcı Seçenekleri
       providerOptionsHint: Düşünme/akıl yürütme modu gibi standart dışı API özellikleri için sağlayıcıya özel seçenekler. Ayrıntılar için Vercel AI SDK belgelerine veya sağlayıcınızın resmi belgelerine bakın.
       providerOptionsDocsLink: Sağlayıcı Belgelerini Görüntüle

@@ -38,6 +38,7 @@ import { FeatureProviderSection } from "./feature-provider-section"
 import { formOpts, useAppForm } from "./form"
 import { ProviderOptionsField } from "./provider-options-field"
 import { TemperatureField } from "./temperature-field"
+import { ThinkingField } from "./thinking-field"
 import { TranslateModelSelector } from "./translate-model-selector"
 
 export function ProviderConfigForm() {
@@ -167,6 +168,7 @@ export function ProviderConfigForm() {
           <FeatureProviderSection form={form} />
           {isLLM && (
             <AdvancedOptionsSection>
+              <ThinkingField form={form} />
               <TemperatureField form={form} />
               <ProviderOptionsField form={form} />
             </AdvancedOptionsSection>

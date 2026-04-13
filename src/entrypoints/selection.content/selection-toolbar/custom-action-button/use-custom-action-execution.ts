@@ -227,6 +227,7 @@ export function useCustomActionExecution({
         modelName,
         providerConfig.provider,
         providerConfig.providerOptions,
+        providerConfig.disableThinking,
       )
 
       setIsRunning(true)
