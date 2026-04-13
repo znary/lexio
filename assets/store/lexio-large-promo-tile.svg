@@ -1,0 +1,52 @@
+<svg width="1400" height="560" viewBox="0 0 1400 560" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="112" y1="44" x2="1184" y2="552" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#07101C"/>
+      <stop offset="0.52" stop-color="#10253F"/>
+      <stop offset="1" stop-color="#0D1727"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(283 103) rotate(32.8991) scale(302.3 248.998)">
+      <stop stop-color="#FDE68A" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#FDE68A" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1092 133) rotate(146.169) scale(352.918 270.822)">
+      <stop stop-color="#38BDF8" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#38BDF8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="mark-bg" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FDE68A"/>
+      <stop offset="0.48" stop-color="#A7F3D0"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1400" height="560" rx="40" fill="url(#bg)"/>
+  <rect width="1400" height="560" rx="40" fill="url(#glowA)"/>
+  <rect width="1400" height="560" rx="40" fill="url(#glowB)"/>
+
+  <path d="M118 0C198.081 38.6962 234 90.6508 234 155C234 224.329 194.013 266.271 139 295.5C90.5 321.279 46.5 360.5 46.5 424C46.5 467.212 61.4296 510.538 88 560H0V0H118Z" fill="#34D399" fill-opacity="0.12"/>
+  <path d="M1200 0C1114.52 67.5621 1080 137.191 1080 205C1080 270.792 1118 318.617 1174 348C1221.78 373.08 1265.5 411 1265.5 473.5C1265.5 502.454 1255.08 531.651 1238 560H1400V0H1200Z" fill="#38BDF8" fill-opacity="0.1"/>
+
+  <g transform="translate(96 118)">
+    <rect width="160" height="160" rx="44" fill="url(#mark-bg)"/>
+    <path d="M47 39C47 26.2975 57.2975 16 70 16H100V120H47V39Z" fill="#08111D"/>
+    <path d="M126 22H145.391C161.566 22 177.078 28.4241 188.526 39.8699L204 55.343V63H150C132.879 63 119 49.1208 119 32V22H126Z" fill="#08111D"/>
+    <path d="M126 81H210V143C210 155.703 199.703 166 187 166H126V81Z" fill="#08111D"/>
+  </g>
+
+  <text x="300" y="190" fill="#F8FAFC" font-family="Helvetica, Arial, sans-serif" font-size="96" font-weight="800" letter-spacing="-4">Lexio</text>
+  <text x="302" y="262" fill="#B7CCE4" font-family="Helvetica, Arial, sans-serif" font-size="32" font-weight="500">AI reading companion</text>
+
+  <text x="96" y="402" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-size="58" font-weight="780" letter-spacing="-2">Understand while you read.</text>
+  <text x="96" y="454" fill="#C8D7EA" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="500">Immersive translation, vocabulary capture, and cross-device language learning.</text>
+
+  <g transform="translate(912 126)">
+    <rect width="396" height="306" rx="28" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)"/>
+    <text x="32" y="64" fill="#F8FAFC" font-family="Helvetica, Arial, sans-serif" font-size="20" font-weight="700">What changes</text>
+    <text x="32" y="110" fill="#C8D7EA" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="600">No mascot</text>
+    <text x="32" y="146" fill="#DDE9F7" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="500">Clean geometry replaces the frog face.</text>
+
+    <text x="32" y="198" fill="#C8D7EA" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="600">One brand name</text>
+    <text x="32" y="234" fill="#DDE9F7" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="500">Lexio across the app, docs, and icons.</text>
+  </g>
+</svg>

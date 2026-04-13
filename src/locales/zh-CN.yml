@@ -1,6 +1,6 @@
-name: 英语伴读 [TEST]
-extName: 英语伴读 [TEST] - 沉浸式翻译与单词同步
-extDescription: 英语伴读是一款浏览器插件，用来做沉浸式翻译、单词短句收藏，以及基于 Google Drive 的多端同步。
+name: Lexio
+extName: Lexio - 沉浸式翻译与单词同步
+extDescription: Lexio是一款浏览器插件，用来做沉浸式翻译、单词短句收藏，以及基于 Google Drive 的多端同步。
 uninstallSurveyUrl: https://tally.so/r/3E9XDL
 dataTypes:
   string: 文本
@@ -371,14 +371,14 @@ options:
             title: 笔记库连接
             description: 将这个指令的结构化结果保存到远程笔记库。
             loginRequiredTitle: 登录后才能配置笔记库
-            loginRequiredDescription: 先在 readfrog.app 登录，然后再选择笔记库和编辑映射。
+            loginRequiredDescription: 先在 Lexio 登录，然后再选择笔记库和编辑映射。
             loginAction: 去登录
             tableLabel: 笔记库
             tablePlaceholder: 选择一个笔记库
             tableClearOption: 不连接笔记库
             refreshAction: 刷新
             emptyTitle: 还没有笔记库
-            emptyDescription: 先去 readfrog.app 创建一个笔记库，再回来映射字段。
+            emptyDescription: 先去 Lexio 创建一个笔记库，再回来映射字段。
             openNotebaseAction: 打开笔记库
             betaLockedTitle: 当前账号尚未加入 Notebase Beta
             betaLockedDescription: 你可以继续保留当前 action 配置，但选择笔记库和同步结果目前仅对部分 Beta 账号开放。
@@ -710,7 +710,7 @@ options:
       fallback: 兜底
       selectPlaceholder: 请选择一个声音
       preview: 试听
-      previewSample: 来自 Read Frog 的问候！这是我朗读时的声音。
+      previewSample: 来自 Lexio 的问候！这是我朗读时的声音。
     languageVoice:
       label: 语言语音
       reset: 重置为默认
@@ -736,11 +736,11 @@ options:
     title: 配置
     about:
       title: 关于
-      description: Read Frog 出生于 2025 年 4 月
-      mission: Read Frog 致力于在 AI 时代扩大高质量教育机会的平等可及性，通过更低成本地提供尽可能接近真人教师的学习体验，覆盖语言学习、医学以及其他知识密集型领域。
+      description: Lexio 出生于 2025 年 4 月
+      mission: Lexio 致力于在 AI 时代扩大高质量教育机会的平等可及性，通过更低成本地提供尽可能接近真人教师的学习体验，覆盖语言学习、医学以及其他知识密集型领域。
       analytics:
         title: 帮助改进用户体验
-        tooltip: 开启后，Read Frog 会发送匿名的产品使用信号，用于验证功能是否稳定、优化性能与交互细节，并帮助我们决定接下来优先投入的方向。
+        tooltip: 开启后，Lexio 会发送匿名的产品使用信号，用于验证功能是否稳定、优化性能与交互细节，并帮助我们决定接下来优先投入的方向。
     sync:
       title: 手动配置同步
       description: 手动导入和导出您的配置设置
@@ -749,7 +749,7 @@ options:
       importSuccess: 配置导入成功
       exportSuccess: 配置导出成功
       importError: 导入失败
-      versionTooNew: 导入的配置版本较新，请升级 Read Frog 到最新版本
+      versionTooNew: 导入的配置版本较新，请升级 Lexio 到最新版本
       migrationError: 迁移失败
       validationError: 配置验证失败
       exportOptions:
@@ -999,12 +999,14 @@ action:
   copied: 已复制
   regenerate: 重新生成
   viewContextDetails: 上下文
+  viewDetailedExplanation: 详细释义
+  hideDetailedExplanation: 收起详细释义
   savedToVocabulary: 已收藏到单词本
   saveToNotebase: 保存到笔记库
   saveToNotebaseSaving: 保存中...
   saveToNotebaseSuccess: 已保存到笔记库
   saveToNotebaseFailed: 保存到笔记库失败
-  saveToNotebaseLoginRequired: 请先在 readfrog.app 登录后再保存到笔记库
+  saveToNotebaseLoginRequired: 请先在 Lexio 登录后再保存到笔记库
   saveToNotebaseBetaRequired: 当前账号尚未加入 Notebase Beta
   saveToNotebaseTableUnavailable: 选中的笔记库已不可用
   saveToNotebaseConnectionInvalid: 当前笔记库连接已经过期，请到 Custom AI Actions 中刷新并修复映射
@@ -1025,7 +1027,7 @@ subtitles:
   actions:
     downloadSource: 下载原字幕
   state:
-    loading: Read Frog 字幕加载中
+    loading: Lexio 字幕加载中
     error: 发生错误
   errors:
     http429: 429 youtube 字幕接口请求次数过多，请稍后再试

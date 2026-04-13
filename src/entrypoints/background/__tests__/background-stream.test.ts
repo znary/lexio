@@ -165,6 +165,45 @@ describe("background-stream", () => {
     }).success).toBe(false)
   })
 
+  it("falls back to prompt-constrained JSON parsing for volcengine structured output", async () => {
+    getModelByIdMock.mockResolvedValue("mock-model")
+    streamTextMock.mockReturnValue({
+      fullStream: (async function* () {
+        yield { type: "text-delta", text: "{\"score\":97," }
+        yield { type: "text-delta", text: "\"summary\":\"Strong argument structure\"}" }
+      })(),
+      output: Promise.resolve("{\"score\":97,\"summary\":\"Strong argument structure\"}"),
+    })
+
+    const { runStructuredObjectStreamInBackground } = await import("../background-stream")
+    const result = await runStructuredObjectStreamInBackground({
+      providerId: "volcengine-default",
+      providerType: "volcengine",
+      prompt: "Analyze selection",
+      outputSchema: [
+        { name: "score", type: "number" },
+        { name: "summary", type: "string" },
+      ],
+    })
+
+    expect(streamTextMock).toHaveBeenCalledWith(expect.objectContaining({
+      model: "mock-model",
+      prompt: "Analyze selection",
+    }))
+    expect(streamTextMock.mock.calls[0][0]).not.toHaveProperty("output")
+    expect(outputObjectMock).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      output: {
+        score: 97,
+        summary: "Strong argument structure",
+      },
+      thinking: {
+        status: "complete",
+        text: "",
+      },
+    })
+  })
+
   it("streams text via background stream port handler", async () => {
     getModelByIdMock.mockResolvedValue("mock-model")
     streamTextMock.mockReturnValue({

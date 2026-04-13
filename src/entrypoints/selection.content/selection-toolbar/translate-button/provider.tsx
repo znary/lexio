@@ -14,7 +14,9 @@ import { ANALYTICS_FEATURE, ANALYTICS_SURFACE } from "@/types/analytics"
 import { isLLMProviderConfig, isTranslateProviderConfig } from "@/types/config/provider"
 import { createFeatureUsageContext, trackFeatureUsed } from "@/utils/analytics"
 import { configFieldsAtomMap, writeConfigAtom } from "@/utils/atoms/config"
-import { filterEnabledProvidersConfig } from "@/utils/config/helpers"
+import { filterEnabledProvidersConfig, getProviderConfigById } from "@/utils/config/helpers"
+import { DEFAULT_DICTIONARY_ACTION_ID } from "@/utils/constants/custom-action"
+import { CUSTOM_ACTION_TEMPLATES } from "@/utils/constants/custom-action-templates"
 import { buildFeatureProviderPatch } from "@/utils/constants/feature-providers"
 import { streamBackgroundText } from "@/utils/content-script/background-stream-client"
 import { prepareTranslationText } from "@/utils/host/translate/text-preparation"
@@ -35,6 +37,7 @@ import {
   selectionSessionAtom,
   selectionToolbarTranslateRequestAtom,
 } from "../atoms"
+import { buildCustomActionExecutionPlan, useCustomActionExecution, useCustomActionWebPageContext } from "../custom-action-button/use-custom-action-execution"
 import {
   createSelectionToolbarPrecheckError,
   createSelectionToolbarRuntimeError,
@@ -179,11 +182,14 @@ export function SelectionTranslationProvider({
 }: {
   children: ReactNode
 }) {
+  const bodyRef = useRef<HTMLDivElement>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [anchor, setAnchor] = useState<{ x: number, y: number } | null>(null)
   const [popoverSessionKey, setPopoverSessionKey] = useState(0)
   const [translatedText, setTranslatedText] = useState<string | undefined>(undefined)
   const [savedVocabularyText, setSavedVocabularyText] = useState<string | null>(null)
+  const [isDetailedExplanationVisible, setIsDetailedExplanationVisible] = useState(false)
+  const [hasRequestedDetailedExplanation, setHasRequestedDetailedExplanation] = useState(false)
   const [thinking, setThinking] = useState<ThinkingSnapshot | null>(null)
   const [error, setError] = useState<SelectionToolbarInlineError | null>(null)
   const [isTranslating, setIsTranslating] = useState(false)
@@ -195,6 +201,7 @@ export function SelectionTranslationProvider({
   const selectionSession = useAtomValue(selectionSessionAtom)
   const translateRequest = useAtomValue(selectionToolbarTranslateRequestAtom)
   const providersConfig = useAtomValue(configFieldsAtomMap.providersConfig)
+  const selectionToolbarConfig = useAtomValue(configFieldsAtomMap.selectionToolbar)
   const vocabularySettings = useAtomValue(configFieldsAtomMap.vocabulary)
   const setIsSelectionToolbarVisible = useSetAtom(isSelectionToolbarVisibleAtom)
   const setConfig = useSetAtom(writeConfigAtom)
@@ -207,14 +214,83 @@ export function SelectionTranslationProvider({
   const selectionText = activeSession?.selectionSnapshot.text ?? null
   const paragraphsText = activeSession?.contextSnapshot.text ?? selectionText
   const titleText = document.title || null
+  const cleanedSelectionText = useMemo(
+    () => prepareTranslationText(selectionText),
+    [selectionText],
+  )
   const translateProviders = useMemo(
     () => filterEnabledProvidersConfig(providersConfig).filter(isTranslateProviderConfig),
+    [providersConfig],
+  )
+  const llmProviders = useMemo(
+    () => filterEnabledProvidersConfig(providersConfig).filter(isLLMProviderConfig),
     [providersConfig],
   )
   const translateRequestKey = useMemo(
     () => JSON.stringify(translateRequest),
     [translateRequest],
   )
+  const defaultDictionaryTemplate = useMemo(
+    () => CUSTOM_ACTION_TEMPLATES.find(template => template.id === "dictionary") ?? null,
+    [],
+  )
+  const dictionaryFallbackAction = useMemo(() => {
+    if (!defaultDictionaryTemplate || llmProviders.length === 0) {
+      return null
+    }
+
+    const fallbackAction = defaultDictionaryTemplate.createAction(llmProviders[0].id)
+    return {
+      ...fallbackAction,
+      id: DEFAULT_DICTIONARY_ACTION_ID,
+    }
+  }, [defaultDictionaryTemplate, llmProviders])
+  const dictionaryAction = useMemo(
+    () => selectionToolbarConfig.customActions.find(action => action.id === DEFAULT_DICTIONARY_ACTION_ID) ?? dictionaryFallbackAction,
+    [dictionaryFallbackAction, selectionToolbarConfig.customActions],
+  )
+  const dictionaryProviderConfig = useMemo(
+    () => dictionaryAction ? getProviderConfigById(providersConfig, dictionaryAction.providerId) ?? null : null,
+    [dictionaryAction, providersConfig],
+  )
+  const dictionaryWebPageContext = useCustomActionWebPageContext(
+    isOpen && hasRequestedDetailedExplanation,
+    popoverSessionKey,
+  )
+  const dictionaryExecutionPlan = useMemo(
+    () => buildCustomActionExecutionPlan(
+      {
+        language: translateRequest.language,
+        action: dictionaryAction,
+        providerConfig: dictionaryProviderConfig,
+      },
+      cleanedSelectionText,
+      paragraphsText || cleanedSelectionText,
+      dictionaryWebPageContext,
+    ),
+    [
+      cleanedSelectionText,
+      dictionaryAction,
+      dictionaryProviderConfig,
+      dictionaryWebPageContext,
+      paragraphsText,
+      translateRequest.language,
+    ],
+  )
+  const {
+    error: detailedExplanationRuntimeError,
+    isRunning: isDetailedExplanationRunning,
+    resetSessionState: resetDetailedExplanationState,
+    result: detailedExplanationResult,
+    thinking: detailedExplanationThinking,
+  } = useCustomActionExecution({
+    analyticsSurface: sourceSurface,
+    bodyRef,
+    executionContext: dictionaryExecutionPlan.executionContext,
+    open: isOpen && hasRequestedDetailedExplanation,
+    popoverSessionKey,
+    rerunNonce: 0,
+  })
 
   const resetPopoverSession = useCallback((options?: { clearAnchor?: boolean }) => {
     setActiveSession(null)
@@ -223,13 +299,20 @@ export function SelectionTranslationProvider({
     }
   }, [])
 
+  const resetDetailedExplanation = useCallback(() => {
+    setIsDetailedExplanationVisible(false)
+    setHasRequestedDetailedExplanation(false)
+    resetDetailedExplanationState()
+  }, [resetDetailedExplanationState])
+
   const resetTranslationState = useCallback(() => {
     setIsTranslating(false)
     setTranslatedText(undefined)
     setSavedVocabularyText(null)
     setThinking(null)
     setError(null)
-  }, [])
+    resetDetailedExplanation()
+  }, [resetDetailedExplanation])
 
   const cancelCurrentTranslation = useCallback((runId?: number) => {
     if (runId !== undefined && runIdRef.current !== runId) {
@@ -254,8 +337,19 @@ export function SelectionTranslationProvider({
 
   const handleRegenerate = useCallback(() => {
     cancelCurrentTranslation()
+    resetDetailedExplanation()
     setRerunNonce(prev => prev + 1)
-  }, [cancelCurrentTranslation])
+  }, [cancelCurrentTranslation, resetDetailedExplanation])
+
+  const toggleDetailedExplanation = useCallback(() => {
+    setIsDetailedExplanationVisible((prev) => {
+      const nextVisible = !prev
+      if (nextVisible) {
+        setHasRequestedDetailedExplanation(true)
+      }
+      return nextVisible
+    })
+  }, [])
 
   const runTranslation = useCallback(async (runId: number) => {
     const preparedText = prepareTranslationText(selectionText)
@@ -406,12 +500,13 @@ export function SelectionTranslationProvider({
     const runId = runIdRef.current + 1
     runIdRef.current = runId
 
+    resetDetailedExplanation()
     startTranslation(runId)
 
     return () => {
       cancelCurrentTranslation(runId)
     }
-  }, [activeSession?.id, cancelCurrentTranslation, isOpen, popoverSessionKey, rerunNonce, translateRequestKey])
+  }, [activeSession?.id, cancelCurrentTranslation, isOpen, popoverSessionKey, rerunNonce, resetDetailedExplanation, translateRequestKey])
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     cancelCurrentTranslation()
@@ -505,6 +600,16 @@ export function SelectionTranslationProvider({
     }
   }, [])
 
+  const detailedExplanationError = hasRequestedDetailedExplanation
+    ? (detailedExplanationRuntimeError ?? dictionaryExecutionPlan.error)
+    : null
+  const detailedExplanationLoading = hasRequestedDetailedExplanation
+    && (
+      (dictionaryExecutionPlan.executionContext ? isDetailedExplanationRunning : false)
+      || dictionaryWebPageContext === undefined
+    )
+  const detailedExplanationValue = dictionaryExecutionPlan.executionContext ? detailedExplanationResult : null
+  const detailedExplanationThinkingValue = dictionaryExecutionPlan.executionContext ? detailedExplanationThinking : null
   const contextValue = useMemo<SelectionTranslationContextValue>(() => ({
     prepareToolbarOpen,
   }), [prepareToolbarOpen])
@@ -535,8 +640,19 @@ export function SelectionTranslationProvider({
             </div>
           </SelectionPopover.Header>
 
-          <SelectionPopover.Body>
+          <SelectionPopover.Body ref={bodyRef}>
             <TranslationContent
+              detailedExplanation={dictionaryAction
+                ? {
+                    error: detailedExplanationError,
+                    isExpanded: isDetailedExplanationVisible,
+                    isLoading: detailedExplanationLoading,
+                    onToggle: toggleDetailedExplanation,
+                    outputSchema: dictionaryAction.outputSchema,
+                    result: detailedExplanationValue,
+                    thinking: detailedExplanationThinkingValue,
+                  }
+                : null}
               selectionContent={selectionText}
               translatedText={translatedText}
               isTranslating={isTranslating}

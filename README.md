@@ -1,6 +1,6 @@
 <div align="center"><a name="readme-top"></a>
 
-[![Read Frog banner][image-banner]][website]
+[![Lexio banner][image-banner]][website]
 
 An open-source AI-powered language learning extension for browsers.<br/>
 Supports immersive translation, article analysis, multiple AI models, and more.<br/>
@@ -58,18 +58,18 @@ Master languages effortlessly and deeply with AI, right in your browser.
 
 ## 📺 Demo
 
-![Read Frog](/assets/read-demo.gif)
+![Lexio](/assets/read-demo.gif)
 
 <div align="center">
-  <img src="assets/node-translation-demo.gif" width="38%" alt="Read Frog Popup Interface" />
-  <img src="assets/page-translation-demo.gif" width="60%" alt="Read Frog Translation Interface" />
+  <img src="assets/node-translation-demo.gif" width="38%" alt="Lexio Popup Interface" />
+  <img src="assets/page-translation-demo.gif" width="60%" alt="Lexio Translation Interface" />
 </div>
 
 ## 👋🏻 Getting Started & Join Our Community
 
-Read Frog's vision is to provide an easy-to-use, intelligent, and personalized language learning experience for language learners of all levels. This has become possible in the AI era, but there are few products on the market that meet this demand. Therefore, we decided to take matters into our own hands and ultimately make the world no longer reliant on human language instructors.
+Lexio's vision is to provide an easy-to-use, intelligent, and personalized language learning experience for language learners of all levels. This has become possible in the AI era, but there are few products on the market that meet this demand. Therefore, we decided to take matters into our own hands and ultimately make the world no longer reliant on human language instructors.
 
-Whether you are a user or a developer, Read Frog will be an important part of your journey toward this vision. Please be aware that Read Frog is currently under active development, and feedback is welcome for any [issues][issues-link] encountered.
+Whether you are a user or a developer, Lexio will be an important part of your journey toward this vision. Please be aware that Lexio is currently under active development, and feedback is welcome for any [issues][issues-link] encountered.
 
 ### Download
 
@@ -89,7 +89,7 @@ Whether you are a user or a developer, Read Frog will be an important part of yo
 >
 > **⭐️ Star Us**, You will receive all release notifications from GitHub without any delay \~
 
-[![Star Read Frog on GitHub][image-star]][github-star-link]
+[![Star Lexio on GitHub][image-star]][github-star-link]
 
 <details>
 <summary>
@@ -114,7 +114,7 @@ Whether you are a user or a developer, Read Frog will be an important part of yo
 
 ## ✨ Features
 
-Transform your everyday web reading into an immersive language learning journey with Read Frog's powerful features.
+Transform your everyday web reading into an immersive language learning journey with Lexio's powerful features.
 
 <!-- ![][image-feat-bilingual] -->
 
@@ -134,7 +134,7 @@ The extension automatically re-translates all visible content when you switch mo
 
 ### 🧠 [Context-Aware Translation][docs-tutorial]
 
-Enable AI to understand the full context of what you're reading. When activated, Read Frog uses Mozilla's Readability library to extract the article's title and content, providing this context to the AI for more accurate, contextually-appropriate translations.
+Enable AI to understand the full context of what you're reading. When activated, Lexio uses Mozilla's Readability library to extract the article's title and content, providing this context to the AI for more accurate, contextually-appropriate translations.
 
 This means technical terms get translated correctly within their domain, literary expressions maintain their nuance, and ambiguous phrases are interpreted based on the surrounding content rather than in isolation.
 
@@ -176,7 +176,7 @@ Save multiple prompt patterns and switch between them based on what you're readi
 
 ### 📦 [Batch Requests][docs-tutorial]
 
-Save up to 70% on API costs with intelligent request batching. Read Frog groups multiple translation requests into single API calls, reducing overhead and token usage while maintaining translation quality.
+Save up to 70% on API costs with intelligent request batching. Lexio groups multiple translation requests into single API calls, reducing overhead and token usage while maintaining translation quality.
 
 The system includes smart retry logic with exponential backoff and automatic fallback to individual requests if batch processing fails. All handled transparently in the background.
 
@@ -230,7 +230,7 @@ Automatic language detection (basic or LLM-powered) with per-language voice mapp
 
 ### 📖 [Read Article][docs-tutorial]
 
-One-click deep article analysis. Read Frog extracts the main content using Mozilla's Readability, detects the source language, and generates a summary and introduction in your target language.
+One-click deep article analysis. Lexio extracts the main content using Mozilla's Readability, detects the source language, and generates a summary and introduction in your target language.
 
 Then it provides sentence-by-sentence translations with vocabulary explanations tailored to your language level (beginner, intermediate, or advanced). Each sentence includes key word definitions, grammatical analysis, and contextual explanations. It's like having a personal language tutor analyze every article you read.
 
@@ -244,7 +244,7 @@ Then it provides sentence-by-sentence translations with vocabulary explanations 
 
 Contributions of all types are more than welcome.
 
-1. Promote Read Frog to your friends and family.
+1. Promote Lexio to your friends and family.
 2. Report [issues][issues-link] and feedback.
 3. Contribute code.
 
@@ -256,7 +256,7 @@ Ask AI to understand the project: [Dosu](https://app.dosu.dev/29569286-71ba-47dd
 
 Check out the [Contribution Guide](https://readfrog.app/en/tutorial/code-contribution/contribution-guide) for more details.
 
-ReadFrog is dual-licensed under GPLv3 and a commercial license.
+Lexio is dual-licensed under GPLv3 and a commercial license.
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for contributor licensing terms.
 
@@ -265,7 +265,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for contributor licensing terms.
     <tr>
       <th colspan="2">
         <br>
-        <img src="https://contrib.rocks/image?repo=mengxi-ream/read-frog" alt="Read Frog contributors"><br>
+        <img src="https://contrib.rocks/image?repo=mengxi-ream/read-frog" alt="Lexio contributors"><br>
         <br>
       </th>
     </tr>

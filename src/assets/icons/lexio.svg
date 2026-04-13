@@ -1,0 +1,15 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="lexio-bg" x1="168" y1="144" x2="856" y2="880" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FDE68A"/>
+      <stop offset="0.48" stop-color="#A7F3D0"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="144" y="144" width="736" height="736" rx="212" fill="url(#lexio-bg)"/>
+  <rect x="162" y="162" width="700" height="700" rx="194" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="18"/>
+  <path d="M378 320C378 292.49 400.49 270 428 270H494V658H378V320Z" fill="#08111D"/>
+  <path d="M578 278H650.791C682.618 278 713.141 290.646 735.669 313.169L794 371.5V388H680.5C623.339 388 577 341.661 577 284.5V278H578Z" fill="#08111D"/>
+  <path d="M578 412H806V644C806 671.51 783.51 694 756 694H578V412Z" fill="#08111D"/>
+</svg>

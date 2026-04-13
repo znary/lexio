@@ -121,6 +121,12 @@ describe("getProviderOptions", () => {
       const volcengineOptions = getProviderOptions("doubao-seed-1-6-flash-250828", "volcengine")
       expect(volcengineOptions.volcengine?.thinking).toEqual({ type: "disabled" })
 
+      const volcengineEndpointOptions = getProviderOptions("ep-20260326213836-ms45r", "volcengine")
+      expect(volcengineEndpointOptions.volcengine?.thinking).toEqual({ type: "disabled" })
+
+      const volcengineUnknownOptions = getProviderOptions("some-random-model", "volcengine")
+      expect(volcengineUnknownOptions.volcengine?.thinking).toEqual({ type: "disabled" })
+
       const cohereReasoningOptions = getProviderOptions("command-a-reasoning-08-2025", "cohere")
       expect(cohereReasoningOptions.cohere?.thinking).toEqual({ type: "disabled" })
 
@@ -198,7 +204,7 @@ describe("getProviderOptions", () => {
       expect(huggingfaceOptions.huggingface?.reasoningHistory).toBe("disabled")
     })
 
-    it("should return empty object for non-matching models", () => {
+    it("should return empty object for non-matching models on providers without defaults", () => {
       const options = getProviderOptions("some-random-model", "openai")
       expect(options).toEqual({})
     })
@@ -308,6 +314,14 @@ describe("getProviderOptions", () => {
 
       expect(getRecommendedProviderOptionsMatch("qwen3.5-flash")?.options).toEqual({
         enableThinking: false,
+      })
+
+      expect(getRecommendedProviderOptionsMatch("ep-20260326213836-ms45r", "volcengine")?.options).toEqual({
+        thinking: { type: "disabled" },
+      })
+
+      expect(getRecommendedProviderOptionsMatch("plain-model", "volcengine")?.options).toEqual({
+        thinking: { type: "disabled" },
       })
     })
   })

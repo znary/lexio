@@ -44,20 +44,6 @@ const CONFIG_SEARCH_ITEMS = [
     pageKey: "options.config.title",
   },
   {
-    sectionId: "vocabulary-settings",
-    route: "/config",
-    titleKey: "options.vocabulary.title",
-    descriptionKey: "options.vocabulary.description",
-    pageKey: "options.config.title",
-  },
-  {
-    sectionId: "vocabulary-library",
-    route: "/config",
-    titleKey: "options.vocabulary.library.title",
-    descriptionKey: "options.vocabulary.library.description",
-    pageKey: "options.config.title",
-  },
-  {
     sectionId: "manual-config-sync",
     route: "/config",
     titleKey: "options.config.sync.title",
@@ -77,6 +63,23 @@ const CONFIG_SEARCH_ITEMS = [
     titleKey: "options.config.resetConfig.title",
     descriptionKey: "options.config.resetConfig.description",
     pageKey: "options.config.title",
+  },
+] satisfies SearchItemDefinition[]
+
+const VOCABULARY_SEARCH_ITEMS = [
+  {
+    sectionId: "vocabulary-settings",
+    route: "/vocabulary",
+    titleKey: "options.vocabulary.title",
+    descriptionKey: "options.vocabulary.description",
+    pageKey: "options.vocabulary.title",
+  },
+  {
+    sectionId: "vocabulary-library",
+    route: "/vocabulary",
+    titleKey: "options.vocabulary.library.title",
+    descriptionKey: "options.vocabulary.library.description",
+    pageKey: "options.vocabulary.title",
   },
 ] satisfies SearchItemDefinition[]
 
@@ -351,6 +354,9 @@ export const SEARCH_ITEMS: SearchItem[] = [
 
   // Text to Speech page
   ...TTS_SEARCH_ITEMS,
+
+  // Vocabulary page
+  ...VOCABULARY_SEARCH_ITEMS,
 
   // Config page
   ...CONFIG_SEARCH_ITEMS,

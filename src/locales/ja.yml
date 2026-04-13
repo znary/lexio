@@ -1,6 +1,6 @@
-name: 読書カエル [TEST]
-extName: 読書カエル [TEST] - オープンソースインビジブル翻訳
-extDescription: 読書カエルは、あらゆるウェブサイトから言語を深く学ぶために設計されたオープンソースのブラウザ拡張機能です。
+name: Lexio
+extName: Lexio - オープンソースインビジブル翻訳
+extDescription: Lexioは、あらゆるウェブサイトから言語を深く学ぶために設計されたオープンソースのブラウザ拡張機能です。
 uninstallSurveyUrl: https://tally.so/r/nPK6Ob
 dataTypes:
   string: テキスト
@@ -29,7 +29,7 @@ popup:
   discord:
     tooltip: Discordに参加して開発者とつながり、新機能を先行体験しましょう
   blog:
-    notification: 読書カエルの最新情報
+    notification: Lexioの最新情報
   aiSmartContext: AI スマートコンテキスト
   aiSmartContextDescription: ウェブページのコンテキストを使用して翻訳品質を向上させます。LLM翻訳プロバイダーが必要です。
   more:
@@ -275,7 +275,7 @@ options:
     floatingButton:
       globalToggle:
         title: フローティングボタンを有効化
-        description: ウェブページにフローティングボタンを表示し、Read Frog機能に素早くアクセス
+        description: ウェブページにフローティングボタンを表示し、Lexio機能に素早くアクセス
       closeMenu:
         disableForSite: このサイトで無効化
         disableGlobally: グローバルで無効化
@@ -374,14 +374,14 @@ options:
             title: Notebase 接続
             description: このアクションの構造化された結果をリモート Notebase に保存します。
             loginRequiredTitle: Notebase を設定するにはログインが必要です
-            loginRequiredDescription: notebase を選択したりマッピングを編集したりする前に、readfrog.app にログインしてください。
+            loginRequiredDescription: notebase を選択したりマッピングを編集したりする前に、Lexio にログインしてください。
             loginAction: ログイン
             tableLabel: Notebase
             tablePlaceholder: notebase を選択
             tableClearOption: notebase を接続しない
             refreshAction: 更新
             emptyTitle: Notebase がまだありません
-            emptyDescription: readfrog.app で notebase を作成してから、ここに戻ってフィールドをマッピングしてください。
+            emptyDescription: Lexio で notebase を作成してから、ここに戻ってフィールドをマッピングしてください。
             openNotebaseAction: Notebase を開く
             betaLockedTitle: このアカウントは Notebase ベータ対象外です
             betaLockedDescription: このアクション設定は保持できますが、Notebase の選択と結果の同期は現在一部のベータアカウントのみに提供されています。
@@ -599,7 +599,7 @@ options:
       fallback: フォールバック
       selectPlaceholder: ボイスを選択
       preview: 試聴
-      previewSample: Read Frog からこんにちは！朗読するときはこのように聞こえます。
+      previewSample: Lexio からこんにちは！朗読するときはこのように聞こえます。
     languageVoice:
       label: 言語別ボイス
       reset: デフォルトにリセット
@@ -624,12 +624,12 @@ options:
   config:
     title: 設定
     about:
-      title: Read Frog について
-      description: Read Frog は 2025 年 4 月に生まれました
-      mission: Read Frog は、AI 時代における質の高い教育機会への平等なアクセスを広げるため、語学学習、医学、その他の知識集約型分野で、実際の教師に近い学習体験を手頃な価格で提供することを目指しています。
+      title: Lexio について
+      description: Lexio は 2025 年 4 月に生まれました
+      mission: Lexio は、AI 時代における質の高い教育機会への平等なアクセスを広げるため、語学学習、医学、その他の知識集約型分野で、実際の教師に近い学習体験を手頃な価格で提供することを目指しています。
       analytics:
         title: ユーザー体験の改善に協力する
-        tooltip: 有効にすると、Read Frog は匿名の利用シグナルを送信し、機能の安定性確認、性能や UX の改善、今後優先すべき機能の判断に役立てます。
+        tooltip: 有効にすると、Lexio は匿名の利用シグナルを送信し、機能の安定性確認、性能や UX の改善、今後優先すべき機能の判断に役立てます。
     sync:
       title: 手動設定同期
       description: 手動で設定をインポート・エクスポート
@@ -638,7 +638,7 @@ options:
       importSuccess: 設定のインポートが完了しました
       exportSuccess: 設定のエクスポートが完了しました
       importError: インポートに失敗しました
-      versionTooNew: インポートされた設定のバージョンが新しいため、Read Frogを最新バージョンにアップグレードしてください
+      versionTooNew: インポートされた設定のバージョンが新しいため、Lexioを最新バージョンにアップグレードしてください
       migrationError: 移行に失敗しました
       validationError: 設定の検証に失敗しました
       exportOptions:
@@ -856,11 +856,13 @@ action:
   copied: コピー済み
   regenerate: 再生成
   viewContextDetails: コンテキスト
+  viewDetailedExplanation: 詳しい解説
+  hideDetailedExplanation: 詳しい解説を閉じる
   saveToNotebase: Notebase に保存
   saveToNotebaseSaving: 保存中...
   saveToNotebaseSuccess: Notebase に保存しました
   saveToNotebaseFailed: Notebase への保存に失敗しました
-  saveToNotebaseLoginRequired: Notebase に保存するには readfrog.app にログインしてください
+  saveToNotebaseLoginRequired: Notebase に保存するには Lexio にログインしてください
   saveToNotebaseBetaRequired: このアカウントはまだ Notebase ベータに参加していません
   saveToNotebaseTableUnavailable: 選択した Notebase は利用できなくなりました
   saveToNotebaseConnectionInvalid: この Notebase 接続は古くなっています。Custom AI Actions で更新し、マッピングを修正してください。
@@ -881,7 +883,7 @@ subtitles:
   actions:
     downloadSource: 元字幕をダウンロード
   state:
-    loading: Read Frog 字幕読み込み中
+    loading: Lexio 字幕読み込み中
     error: エラーが発生しました
   errors:
     http429: 429 YouTube字幕APIへのリクエストが多すぎます。しばらくしてから再試行してください

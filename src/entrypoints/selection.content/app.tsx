@@ -2,6 +2,7 @@ import { useAtomValue } from "jotai"
 import { useEffect } from "react"
 import { Toaster } from "sonner"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
+import { VocabularyHoverCard } from "./components/vocabulary-hover-card"
 import { useInputTranslation } from "./input-translation"
 import {
   SELECTION_CONTENT_OVERLAY_LAYERS,
@@ -18,7 +19,7 @@ export default function App({
   uiContainer: HTMLElement
 }) {
   useInputTranslation()
-  useVocabularyHighlighting()
+  const vocabularyHoverPreview = useVocabularyHighlighting()
   const opacity = useAtomValue(configFieldsAtomMap.selectionToolbar).opacity / 100
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export default function App({
           <SelectionToolbar />
         </SelectionCustomActionProvider>
       </SelectionTranslationProvider>
+      <VocabularyHoverCard preview={vocabularyHoverPreview} />
       <Toaster
         richColors
         className={`${SELECTION_CONTENT_OVERLAY_LAYERS.selectionOverlay} notranslate`}

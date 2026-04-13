@@ -242,6 +242,7 @@ export function useCustomActionExecution({
         const finalResult = await streamBackgroundStructuredObject(
           {
             providerId: providerConfig.id,
+            providerType: providerConfig.provider,
             system: systemPrompt,
             prompt,
             outputSchema: action.outputSchema.map(({ name, type }) => ({ name, type })),

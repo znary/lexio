@@ -72,6 +72,13 @@ export function SettingsNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
 
+          <SidebarMenuItem>
+            <SidebarMenuButton render={<Link to="/vocabulary" />} isActive={pathname === "/vocabulary"}>
+              <Icon icon="tabler:book-2" />
+              <span>{i18n.t("options.vocabulary.title")}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+
           <Collapsible defaultOpen={isOverlayToolsActive} className="group/collapsible">
             <SidebarMenuItem>
               <CollapsibleTrigger render={<SidebarMenuButton isActive={isOverlayToolsActive} />}>

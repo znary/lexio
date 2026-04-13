@@ -4,7 +4,7 @@
   "version": "1.32.2",
   "private": true,
   "packageManager": "pnpm@10.32.1",
-  "description": "Read Frog browser extension for language learning",
+  "description": "Lexio browser extension for immersive translation and language learning",
   "scripts": {
     "build": "DOTENV_CONFIG_QUIET=false wxt build",
     "build:edge": "DOTENV_CONFIG_QUIET=false wxt build -b edge",

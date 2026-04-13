@@ -1,6 +1,6 @@
-name: Read Frog [TEST]
-extName: Read Frog [TEST] - 오픈 소스 몰입형 번역
-extDescription: Read Frog는 모든 웹사이트에서 언어를 깊이 있게 학습할 수 있도록 도와주는 오픈 소스 브라우저 확장 프로그램입니다.
+name: Lexio
+extName: Lexio - 오픈 소스 몰입형 번역
+extDescription: Lexio는 모든 웹사이트에서 언어를 깊이 있게 학습할 수 있도록 도와주는 오픈 소스 브라우저 확장 프로그램입니다.
 uninstallSurveyUrl: https://tally.so/r/nPK6Ob
 dataTypes:
   string: 텍스트
@@ -29,7 +29,7 @@ popup:
   discord:
     tooltip: Discord에 참여하여 개발자와 소통하고 새 기능을 먼저 체험하세요
   blog:
-    notification: Read Frog의 새로운 소식
+    notification: Lexio의 새로운 소식
   aiSmartContext: AI 스마트 컨텍스트
   aiSmartContextDescription: 웹페이지 컨텍스트를 사용하여 번역 품질을 향상시킵니다. LLM 번역 제공자가 필요합니다.
   more:
@@ -275,7 +275,7 @@ options:
     floatingButton:
       globalToggle:
         title: 플로팅 버튼 활성화
-        description: 웹 페이지에 플로팅 버튼을 표시하여 Read Frog 기능에 빠르게 액세스
+        description: 웹 페이지에 플로팅 버튼을 표시하여 Lexio 기능에 빠르게 액세스
       closeMenu:
         disableForSite: 이 사이트에서 비활성화
         disableGlobally: 전역 비활성화
@@ -374,14 +374,14 @@ options:
             title: Notebase 연결
             description: 이 액션의 구조화된 결과를 원격 Notebase에 저장합니다.
             loginRequiredTitle: Notebase를 설정하려면 로그인하세요
-            loginRequiredDescription: notebase를 선택하거나 매핑을 편집하기 전에 readfrog.app에 로그인하세요.
+            loginRequiredDescription: notebase를 선택하거나 매핑을 편집하기 전에 Lexio에 로그인하세요.
             loginAction: 로그인
             tableLabel: Notebase
             tablePlaceholder: notebase 선택
             tableClearOption: notebase 연결 안 함
             refreshAction: 새로고침
             emptyTitle: 아직 Notebase가 없습니다
-            emptyDescription: readfrog.app에서 notebase를 만든 뒤 여기로 돌아와 필드를 매핑하세요.
+            emptyDescription: Lexio에서 notebase를 만든 뒤 여기로 돌아와 필드를 매핑하세요.
             openNotebaseAction: Notebase 열기
             betaLockedTitle: 이 계정은 Notebase 베타에 포함되어 있지 않습니다
             betaLockedDescription: 현재 action 설정은 유지할 수 있지만, Notebase 선택과 결과 동기화는 일부 베타 계정에만 제공됩니다.
@@ -599,7 +599,7 @@ options:
       fallback: 대체
       selectPlaceholder: 음성을 선택하세요
       preview: 미리 듣기
-      previewSample: Read Frog의 인사입니다! 제가 읽어 드릴 때 이렇게 들립니다.
+      previewSample: Lexio의 인사입니다! 제가 읽어 드릴 때 이렇게 들립니다.
     languageVoice:
       label: 언어별 음성
       reset: 기본값으로 재설정
@@ -625,11 +625,11 @@ options:
     title: 설정
     about:
       title: 소개
-      description: Read Frog는 2025년 4월에 태어났습니다
-      mission: Read Frog는 언어 학습, 의학 등 지식 집약적 분야에서 AI 시대의 고품질 교육 기회에 더 평등하게 접근할 수 있도록, 실제 교사에 가까운 학습 경험을 더 낮은 비용으로 제공하는 것을 목표로 합니다.
+      description: Lexio는 2025년 4월에 태어났습니다
+      mission: Lexio는 언어 학습, 의학 등 지식 집약적 분야에서 AI 시대의 고품질 교육 기회에 더 평등하게 접근할 수 있도록, 실제 교사에 가까운 학습 경험을 더 낮은 비용으로 제공하는 것을 목표로 합니다.
       analytics:
         title: 사용자 경험 개선에 기여
-        tooltip: 켜면 Read Frog가 익명 사용 신호를 전송하여 기능 안정성을 검증하고, 성능과 UX 디테일을 개선하며, 앞으로 무엇을 우선적으로 만들지 결정하는 데 활용합니다.
+        tooltip: 켜면 Lexio가 익명 사용 신호를 전송하여 기능 안정성을 검증하고, 성능과 UX 디테일을 개선하며, 앞으로 무엇을 우선적으로 만들지 결정하는 데 활용합니다.
     sync:
       title: 수동 설정 동기화
       description: 수동으로 설정 가져오기 및 내보내기
@@ -638,7 +638,7 @@ options:
       importSuccess: 설정 가져오기 완료
       exportSuccess: 설정 내보내기 완료
       importError: 가져오기 실패
-      versionTooNew: 가져온 설정 버전이 최신이므로 Read Frog를 최신 버전으로 업그레이드해 주세요
+      versionTooNew: 가져온 설정 버전이 최신이므로 Lexio를 최신 버전으로 업그레이드해 주세요
       migrationError: 마이그레이션 실패
       validationError: 설정 검증 실패
       exportOptions:
@@ -856,11 +856,13 @@ action:
   copied: 복사됨
   regenerate: 다시 생성
   viewContextDetails: 컨텍스트
+  viewDetailedExplanation: 자세한 풀이
+  hideDetailedExplanation: 자세한 풀이 닫기
   saveToNotebase: Notebase에 저장
   saveToNotebaseSaving: 저장 중...
   saveToNotebaseSuccess: Notebase에 저장했습니다
   saveToNotebaseFailed: Notebase에 저장하지 못했습니다
-  saveToNotebaseLoginRequired: Notebase에 저장하려면 readfrog.app에 로그인하세요
+  saveToNotebaseLoginRequired: Notebase에 저장하려면 Lexio에 로그인하세요
   saveToNotebaseBetaRequired: 이 계정은 아직 Notebase 베타 대상이 아닙니다
   saveToNotebaseTableUnavailable: 선택한 Notebase를 더 이상 사용할 수 없습니다
   saveToNotebaseConnectionInvalid: 현재 Notebase 연결이 오래되었습니다. Custom AI Actions에서 새로고침하고 매핑을 수정하세요.
@@ -881,7 +883,7 @@ subtitles:
   actions:
     downloadSource: 원본 자막 다운로드
   state:
-    loading: Read Frog 자막 로딩 중
+    loading: Lexio 자막 로딩 중
     error: 오류 발생
   errors:
     http429: 429 유튜브 자막 인터페이스 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요

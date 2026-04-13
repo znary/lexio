@@ -5,6 +5,7 @@ import {
   SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE,
 } from "@/entrypoints/selection.content/overlay-layers"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
+import { isSelectionToolbarInternalAction } from "@/utils/constants/custom-action"
 import { NOTRANSLATE_CLASS } from "@/utils/constants/dom-labels"
 import { MARGIN } from "@/utils/constants/selection"
 import { cn } from "@/utils/styles/utils"
@@ -431,7 +432,9 @@ export function SelectionToolbar() {
   const hasAnyEnabledFeature
     = features.translate.enabled
       || (!isFirefox && features.speak.enabled)
-      || selectionToolbar.customActions.some(a => a.enabled !== false)
+      || selectionToolbar.customActions.some(action =>
+        action.enabled !== false && !isSelectionToolbarInternalAction(action),
+      )
 
   return (
     <div

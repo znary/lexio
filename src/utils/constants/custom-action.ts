@@ -1,4 +1,5 @@
 import type {
+  SelectionToolbarCustomAction,
   SelectionToolbarCustomActionOutputField,
   SelectionToolbarCustomActionOutputType,
 } from "@/types/config/selection-toolbar"
@@ -7,6 +8,8 @@ import { getUniqueName } from "@/utils/name"
 
 export const ICON_PATTERN = /^[^:\s]+:[^:\s]+$/
 export const DEFAULT_ACTION_NAME = "Custom AI Action"
+export const DEFAULT_DICTIONARY_ACTION_ID = "default-dictionary"
+
 export function createOutputSchemaField(
   name: string,
   type: SelectionToolbarCustomActionOutputType = "string",
@@ -70,4 +73,9 @@ export type SelectionToolbarCustomActionToken = (typeof SELECTION_TOOLBAR_CUSTOM
 
 export function getSelectionToolbarCustomActionTokenCellText(token: SelectionToolbarCustomActionToken) {
   return `{{${token}}}`
+}
+
+export function isSelectionToolbarInternalAction(action: Pick<SelectionToolbarCustomAction, "id"> | string) {
+  const actionId = typeof action === "string" ? action : action.id
+  return actionId === DEFAULT_DICTIONARY_ACTION_ID
 }

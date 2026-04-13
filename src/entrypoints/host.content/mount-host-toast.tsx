@@ -1,6 +1,6 @@
 import ReactDOM from "react-dom/client"
 import themeCSS from "@/assets/styles/theme.css?inline"
-import FrogToast from "@/components/frog-toast"
+import BrandToast from "@/components/brand-toast"
 import { NOTRANSLATE_CLASS, REACT_SHADOW_HOST_CLASS } from "@/utils/constants/dom-labels"
 import { ShadowHostBuilder } from "@/utils/react-shadow-host/shadow-host-builder"
 import { addStyleToShadow } from "@/utils/styles"
@@ -24,7 +24,7 @@ export function mountHostToast(): () => void {
   const root = ReactDOM.createRoot(reactContainer)
   root.render(
     <div className={NOTRANSLATE_CLASS}>
-      <FrogToast />
+      <BrandToast />
     </div>,
   )
 

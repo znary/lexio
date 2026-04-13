@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import type { ReactElement } from "react"
 import type {
   BackgroundStructuredObjectStreamSnapshot,
@@ -8,6 +7,8 @@ import type { Config } from "@/types/config/config"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { createStore, Provider } from "jotai"
+// @vitest-environment jsdom
+import { useRef } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/base-ui/tooltip"
 import { isLLMProviderConfig, isTranslateProviderConfig } from "@/types/config/provider"
@@ -20,7 +21,10 @@ import {
 } from "../../utils"
 import { setSelectionStateAtom } from "../atoms"
 import { SelectionToolbarCustomActionButtons } from "../custom-action-button"
-import { SelectionCustomActionProvider } from "../custom-action-button/provider"
+import {
+  SelectionCustomActionProvider,
+  useSelectionCustomActionPopover,
+} from "../custom-action-button/provider"
 import { SelectionToolbar } from "../index"
 import { TranslateButton } from "../translate-button"
 import { SelectionTranslationProvider } from "../translate-button/provider"
@@ -269,6 +273,35 @@ function cloneConfig(config: Config): Config {
   return JSON.parse(JSON.stringify(config)) as Config
 }
 
+function createVisibleCustomActionConfig() {
+  const config = cloneConfig(DEFAULT_CONFIG)
+  const [defaultAction] = config.selectionToolbar.customActions
+  if (!defaultAction) {
+    throw new Error("Default custom action is missing")
+  }
+
+  const visibleAction = {
+    ...defaultAction,
+    id: "visible-custom-action",
+    name: "Visible Custom Action",
+  }
+
+  config.selectionToolbar.customActions = [visibleAction]
+  return {
+    action: visibleAction,
+    config,
+  }
+}
+
+function getDefaultCustomAction(config: Config = DEFAULT_CONFIG) {
+  const [action] = config.selectionToolbar.customActions
+  if (!action) {
+    throw new Error("Default custom action is missing")
+  }
+
+  return action
+}
+
 function createRangeFor(node: Node) {
   const range = document.createRange()
   range.selectNodeContents(node)
@@ -410,6 +443,27 @@ function renderWithProviders(ui: ReactElement, store = createStore()) {
     queryClient,
     store,
   }
+}
+
+function ToolbarCustomActionTestTrigger({
+  actionId,
+  label,
+}: {
+  actionId: string
+  label: string
+}) {
+  const { openToolbarCustomAction } = useSelectionCustomActionPopover()
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  return (
+    <button
+      ref={triggerRef}
+      type="button"
+      onClick={() => openToolbarCustomAction(actionId, triggerRef.current)}
+    >
+      {label}
+    </button>
+  )
 }
 
 async function openTooltip(trigger: HTMLElement) {
@@ -956,10 +1010,7 @@ describe("selection toolbar requests", () => {
     setSelectionState(store, { text: "Selected text", range: createRangeFor(paragraph) })
     renderWithProviders(<SelectionToolbarCustomActionButtons />, store)
 
-    const action = DEFAULT_CONFIG.selectionToolbar.customActions[0]
-    if (!action) {
-      throw new Error("Default custom action is missing")
-    }
+    const action = getDefaultCustomAction()
 
     act(() => {
       paragraph.dispatchEvent(new MouseEvent("contextmenu", {
@@ -1008,33 +1059,19 @@ describe("selection toolbar requests", () => {
     )
   })
 
-  it("renders the custom action tooltip as non-interactive and closes it on hover leave", async () => {
+  it("renders a visible custom action trigger when the action is not internal", () => {
     streamBackgroundStructuredObjectMock.mockResolvedValue(
       createStructuredObjectSnapshot({ summary: "done" }),
     )
 
-    const actionName = DEFAULT_CONFIG.selectionToolbar.customActions[0]?.name
-    if (!actionName) {
-      throw new Error("Default custom action is missing")
-    }
+    const { action, config } = createVisibleCustomActionConfig()
 
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, config)
     setSelectionState(store, { text: "Selected text" })
     renderWithProviders(<SelectionToolbarCustomActionButtons />, store)
 
-    const trigger = screen.getByRole("button", { name: actionName })
-    await openTooltip(trigger)
-
-    const tooltip = document.querySelector("[data-slot='tooltip-content']")
-    expect(tooltip).toHaveTextContent(actionName)
-    expect(tooltip).toHaveClass("pointer-events-none")
-
-    fireEvent.mouseLeave(trigger)
-    fireEvent.blur(trigger)
-    await waitFor(() => {
-      expect(document.querySelector("[data-slot='tooltip-content']")).toBeNull()
-    })
+    expect(screen.getByRole("button", { name: action.name })).toBeInTheDocument()
   })
 
   it("shows a toast when a custom action context menu request cannot recover a selection snapshot", async () => {
@@ -1042,10 +1079,7 @@ describe("selection toolbar requests", () => {
     store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
     renderWithProviders(<SelectionToolbarCustomActionButtons />, store)
 
-    const action = DEFAULT_CONFIG.selectionToolbar.customActions[0]
-    if (!action) {
-      throw new Error("Default custom action is missing")
-    }
+    const action = getDefaultCustomAction()
 
     const handler = getRegisteredMessageHandler<{ actionId: string, selectionText: string }>(
       "openSelectionCustomActionFromContextMenu",
@@ -1080,22 +1114,17 @@ describe("selection toolbar requests", () => {
 
   it("does not rerun custom action requests on passive config refresh, but reruns when request values change", async () => {
     streamBackgroundStructuredObjectMock.mockResolvedValue(createStructuredObjectSnapshot({ summary: "done" }))
-
-    const paragraph = document.createElement("p")
-    paragraph.textContent = "Selected text inside a paragraph."
-    document.body.appendChild(paragraph)
+    const action = getDefaultCustomAction()
 
     const store = createStore()
     store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
-    setSelectionState(store, { text: "Selected text", range: createRangeFor(paragraph) })
-    renderWithProviders(<SelectionToolbarCustomActionButtons />, store)
+    setSelectionState(store, { text: "Selected text" })
+    renderWithProviders(
+      <ToolbarCustomActionTestTrigger actionId={action.id} label={action.name} />,
+      store,
+    )
 
-    const actionName = DEFAULT_CONFIG.selectionToolbar.customActions[0]?.name
-    if (!actionName) {
-      throw new Error("Default custom action is missing")
-    }
-
-    fireEvent.click(screen.getByRole("button", { name: actionName }))
+    fireEvent.click(screen.getByRole("button", { name: action.name }))
 
     await waitFor(() => {
       expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(1)
@@ -1149,21 +1178,17 @@ describe("selection toolbar requests", () => {
         return secondRun.promise
       })
 
-    const paragraph = document.createElement("p")
-    paragraph.textContent = "Selected text inside a paragraph."
-    document.body.appendChild(paragraph)
+    const action = getDefaultCustomAction()
 
     const store = createStore()
     store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
-    setSelectionState(store, { text: "Selected text", range: createRangeFor(paragraph) })
-    renderWithProviders(<SelectionToolbarCustomActionButtons />, store)
+    setSelectionState(store, { text: "Selected text" })
+    renderWithProviders(
+      <ToolbarCustomActionTestTrigger actionId={action.id} label={action.name} />,
+      store,
+    )
 
-    const actionName = DEFAULT_CONFIG.selectionToolbar.customActions[0]?.name
-    if (!actionName) {
-      throw new Error("Default custom action is missing")
-    }
-
-    fireEvent.click(screen.getByRole("button", { name: actionName }))
+    fireEvent.click(screen.getByRole("button", { name: action.name }))
 
     await waitFor(() => {
       expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(1)
@@ -1188,21 +1213,17 @@ describe("selection toolbar requests", () => {
   })
 
   it("shows a precheck alert when a custom action has no selected text", async () => {
-    const paragraph = document.createElement("p")
-    paragraph.textContent = "Selected text inside a paragraph."
-    document.body.appendChild(paragraph)
+    const action = getDefaultCustomAction()
 
     const store = createStore()
     store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
-    setSelectionState(store, { text: "   ", range: createRangeFor(paragraph) })
-    renderWithProviders(<SelectionToolbarCustomActionButtons />, store)
+    setSelectionState(store, { text: "   " })
+    renderWithProviders(
+      <ToolbarCustomActionTestTrigger actionId={action.id} label={action.name} />,
+      store,
+    )
 
-    const actionName = DEFAULT_CONFIG.selectionToolbar.customActions[0]?.name
-    if (!actionName) {
-      throw new Error("Default custom action is missing")
-    }
-
-    fireEvent.click(screen.getByRole("button", { name: actionName }))
+    fireEvent.click(screen.getByRole("button", { name: action.name }))
 
     const alert = await screen.findByRole("alert")
     expect(alert).toHaveTextContent("options.floatingButtonAndToolbar.selectionToolbar.errors.customActionFailed")
@@ -1216,8 +1237,8 @@ describe("selection toolbar requests", () => {
         feature: "custom_ai_action",
         surface: "selection_toolbar",
         outcome: "failure",
-        action_id: DEFAULT_CONFIG.selectionToolbar.customActions[0]?.id,
-        action_name: DEFAULT_CONFIG.selectionToolbar.customActions[0]?.name,
+        action_id: action.id,
+        action_name: action.name,
       }),
     )
   })
@@ -1226,22 +1247,17 @@ describe("selection toolbar requests", () => {
     streamBackgroundStructuredObjectMock
       .mockRejectedValueOnce(new Error("Structured output failed"))
       .mockResolvedValueOnce(createStructuredObjectSnapshot({ summary: "fresh" }))
-
-    const paragraph = document.createElement("p")
-    paragraph.textContent = "Selected text inside a paragraph."
-    document.body.appendChild(paragraph)
+    const action = getDefaultCustomAction()
 
     const store = createStore()
     store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
-    setSelectionState(store, { text: "Selected text", range: createRangeFor(paragraph) })
-    renderWithProviders(<SelectionToolbarCustomActionButtons />, store)
+    setSelectionState(store, { text: "Selected text" })
+    renderWithProviders(
+      <ToolbarCustomActionTestTrigger actionId={action.id} label={action.name} />,
+      store,
+    )
 
-    const actionName = DEFAULT_CONFIG.selectionToolbar.customActions[0]?.name
-    if (!actionName) {
-      throw new Error("Default custom action is missing")
-    }
-
-    fireEvent.click(screen.getByRole("button", { name: actionName }))
+    fireEvent.click(screen.getByRole("button", { name: action.name }))
 
     const alert = await screen.findByRole("alert")
     expect(alert).toHaveTextContent("options.floatingButtonAndToolbar.selectionToolbar.errors.customActionFailed")

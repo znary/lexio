@@ -4,6 +4,7 @@ declare module "mark.js" {
     accuracy?: "exactly" | "partially" | "complementary" | { value: string, limiters?: string[] }
     caseSensitive?: boolean
     className?: string
+    each?: (element: HTMLElement) => void
     exclude?: string[]
     ignoreJoiners?: boolean
     separateWordSearch?: boolean

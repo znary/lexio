@@ -3,15 +3,15 @@ import { kebabCase } from "case-anything"
 import * as React from "react"
 
 import { Toaster } from "sonner"
-import frogIcon from "@/assets/icons/read-frog.png?url&no-inline"
+import brandIcon from "@/assets/icons/lexio.svg?url&no-inline"
 import { APP_NAME } from "@/utils/constants/app"
 
-const frogIconUrl = new URL(frogIcon, browser.runtime.getURL("/")).href
+const brandIconUrl = new URL(brandIcon, browser.runtime.getURL("/")).href
 
-const frogIconElement = (
+const brandIconElement = (
   <img
-    src={frogIconUrl}
-    alt="🐸"
+    src={brandIconUrl}
+    alt={APP_NAME}
     style={{
       maxWidth: "100%",
       height: "auto",
@@ -21,18 +21,18 @@ const frogIconElement = (
   />
 )
 
-function FrogToast({ position = "bottom-left", toastOptions, ...props }: React.ComponentProps<typeof Toaster>) {
+function BrandToast({ position = "bottom-left", toastOptions, ...props }: React.ComponentProps<typeof Toaster>) {
   return (
     <Toaster
       {...props}
       position={position}
       richColors
       icons={{
-        warning: frogIconElement,
-        success: frogIconElement,
-        error: frogIconElement,
-        info: frogIconElement,
-        loading: frogIconElement,
+        warning: brandIconElement,
+        success: brandIconElement,
+        error: brandIconElement,
+        info: brandIconElement,
+        loading: brandIconElement,
       }}
       toastOptions={{
         ...toastOptions,
@@ -43,4 +43,4 @@ function FrogToast({ position = "bottom-left", toastOptions, ...props }: React.C
   )
 }
 
-export default FrogToast
+export default BrandToast

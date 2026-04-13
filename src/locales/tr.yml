@@ -1,6 +1,6 @@
-name: Read Frog [TEST]
-extName: Read Frog [TEST] - Açık Kaynak Sürükleyici Çeviri
-extDescription: Read Frog, herhangi bir web sitesinden dilleri derinlemesine öğrenmenize yardımcı olmak için tasarlanmış açık kaynaklı bir tarayıcı uzantısıdır.
+name: Lexio
+extName: Lexio - Açık Kaynak Sürükleyici Çeviri
+extDescription: Lexio, herhangi bir web sitesinden dilleri derinlemesine öğrenmenize yardımcı olmak için tasarlanmış açık kaynaklı bir tarayıcı uzantısıdır.
 uninstallSurveyUrl: https://tally.so/r/nPK6Ob
 dataTypes:
   string: Metin
@@ -29,7 +29,7 @@ popup:
   discord:
     tooltip: Geliştiricilerle bağlantı kurmak ve yeni özelliklere erken erişim sağlamak için Discord'a katılın
   blog:
-    notification: Read Frog'da yenilikler
+    notification: Lexio'da yenilikler
   aiSmartContext: AI Akıllı Bağlam
   aiSmartContextDescription: Çeviri kalitesini artırmak için web sayfası bağlamını kullanır. LLM çeviri sağlayıcısı gerektirir.
   more:
@@ -275,7 +275,7 @@ options:
     floatingButton:
       globalToggle:
         title: Yüzen Butonu Etkinleştir
-        description: Read Frog özelliklerine hızlı erişim için web sayfalarında yüzen butonu görüntüle
+        description: Lexio özelliklerine hızlı erişim için web sayfalarında yüzen butonu görüntüle
       closeMenu:
         disableForSite: Bu site için devre dışı bırak
         disableGlobally: Genel olarak devre dışı bırak
@@ -374,14 +374,14 @@ options:
             title: Notebase Bağlantısı
             description: Bu eylemin yapılandırılmış sonuçlarını uzak bir Notebase'e kaydedin.
             loginRequiredTitle: Notebase yapılandırmak için giriş yapın
-            loginRequiredDescription: notebase seçmeden veya eşlemeleri düzenlemeden önce readfrog.app'te oturum açın.
+            loginRequiredDescription: notebase seçmeden veya eşlemeleri düzenlemeden önce Lexio'te oturum açın.
             loginAction: Giriş yap
             tableLabel: Notebase
             tablePlaceholder: Bir notebase seçin
             tableClearOption: Notebase bağlama
             refreshAction: Yenile
             emptyTitle: Henüz Notebase yok
-            emptyDescription: readfrog.app'te bir notebase oluşturun, sonra alanları eşlemek için buraya dönün.
+            emptyDescription: Lexio'te bir notebase oluşturun, sonra alanları eşlemek için buraya dönün.
             openNotebaseAction: Notebase'i Aç
             betaLockedTitle: Bu hesap Notebase beta programında değil
             betaLockedDescription: Bu action yapılandırmasını koruyabilirsiniz, ancak Notebase seçimi ve sonuç senkronizasyonu şimdilik yalnızca seçili beta hesapları için açık.
@@ -599,7 +599,7 @@ options:
       fallback: Yedek
       selectPlaceholder: Bir ses seçin
       preview: Önizleme
-      previewSample: Read Frog'dan merhaba! Yüksek sesle okurken böyle ses çıkaracağım.
+      previewSample: Lexio'dan merhaba! Yüksek sesle okurken böyle ses çıkaracağım.
     languageVoice:
       label: Dil Sesi
       reset: Varsayılana Sıfırla
@@ -625,11 +625,11 @@ options:
     title: Yapılandırma
     about:
       title: Hakkında
-      description: Read Frog Nisan 2025'te doğdu
-      mission: Read Frog, yapay zeka çağında yüksek kaliteli eğitime daha eşit erişimi genişletmek için, dil öğrenimi, tıp ve bilgi yoğun diğer alanlarda gerçek bir öğretmene daha yakın hissettiren öğrenme deneyimlerini daha ulaşılabilir maliyetlerle sunmayı hedefler.
+      description: Lexio Nisan 2025'te doğdu
+      mission: Lexio, yapay zeka çağında yüksek kaliteli eğitime daha eşit erişimi genişletmek için, dil öğrenimi, tıp ve bilgi yoğun diğer alanlarda gerçek bir öğretmene daha yakın hissettiren öğrenme deneyimlerini daha ulaşılabilir maliyetlerle sunmayı hedefler.
       analytics:
         title: Kullanıcı deneyimini geliştirmemize yardımcı ol
-        tooltip: Açık olduğunda Read Frog, özelliklerin güvenilir çalıştığını doğrulamak, performansı ve UX ayrıntılarını iyileştirmek ve sıradaki önceliklerimizi belirlemek için anonim kullanım sinyalleri gönderir.
+        tooltip: Açık olduğunda Lexio, özelliklerin güvenilir çalıştığını doğrulamak, performansı ve UX ayrıntılarını iyileştirmek ve sıradaki önceliklerimizi belirlemek için anonim kullanım sinyalleri gönderir.
     sync:
       title: Manuel Yapılandırma Senkronizasyonu
       description: Yapılandırma ayarlarınızı manuel olarak içe ve dışa aktarın
@@ -638,7 +638,7 @@ options:
       importSuccess: Yapılandırma başarıyla içe aktarıldı
       exportSuccess: Yapılandırma başarıyla dışa aktarıldı
       importError: İçe aktarma başarısız
-      versionTooNew: İçe aktarılan yapılandırma sürümü daha yeni, lütfen Read Frog'u en son sürüme yükseltin
+      versionTooNew: İçe aktarılan yapılandırma sürümü daha yeni, lütfen Lexio'u en son sürüme yükseltin
       migrationError: Geçiş başarısız
       validationError: Yapılandırma doğrulaması başarısız
       exportOptions:
@@ -856,11 +856,13 @@ action:
   copied: Kopyalandı
   regenerate: Yeniden oluştur
   viewContextDetails: Bağlam
+  viewDetailedExplanation: Ayrıntılı açıklama
+  hideDetailedExplanation: Ayrıntılı açıklamayı gizle
   saveToNotebase: Notebase'e Kaydet
   saveToNotebaseSaving: Kaydediliyor...
   saveToNotebaseSuccess: Notebase'e kaydedildi
   saveToNotebaseFailed: Notebase'e kaydetme başarısız oldu
-  saveToNotebaseLoginRequired: Notebase'e kaydetmek için readfrog.app'te oturum açın
+  saveToNotebaseLoginRequired: Notebase'e kaydetmek için Lexio'te oturum açın
   saveToNotebaseBetaRequired: Bu hesap henüz Notebase beta erişimine sahip değil
   saveToNotebaseTableUnavailable: Seçilen Notebase artık kullanılamıyor
   saveToNotebaseConnectionInvalid: Bu Notebase bağlantısı güncel değil. Custom AI Actions içinde yenileyin ve eşlemeleri düzeltin.
@@ -881,7 +883,7 @@ subtitles:
   actions:
     downloadSource: Kaynak altyazıları indir
   state:
-    loading: Read Frog altyazılar yükleniyor
+    loading: Lexio altyazılar yükleniyor
     error: Bir hata oluştu
   errors:
     http429: 429 YouTube altyazı API'sine çok fazla istek gönderildi. Lütfen biraz bekleyip tekrar deneyin.

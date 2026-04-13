@@ -225,6 +225,52 @@ function createStreamSnapshot<TOutput>(
   }
 }
 
+function supportsResponseFormatJson(providerType?: string): boolean {
+  return providerType !== "volcengine"
+}
+
+const JSON_FENCE_START_REGEX = /^```(?:json)?\s*/i
+const JSON_FENCE_END_REGEX = /\s*```$/
+
+function sanitizeStructuredObjectText(text: string): string {
+  const trimmed = text.trim()
+  if (!trimmed) {
+    return trimmed
+  }
+
+  const withoutFences = trimmed
+    .replace(JSON_FENCE_START_REGEX, "")
+    .replace(JSON_FENCE_END_REGEX, "")
+    .trim()
+
+  const objectStart = withoutFences.indexOf("{")
+  const objectEnd = withoutFences.lastIndexOf("}")
+  if (objectStart >= 0 && objectEnd > objectStart) {
+    return withoutFences.slice(objectStart, objectEnd + 1)
+  }
+
+  return withoutFences
+}
+
+function tryParseStructuredObject(
+  text: string,
+  schema: z.ZodObject<Record<string, z.ZodTypeAny>>,
+): Record<string, unknown> | null {
+  const sanitized = sanitizeStructuredObjectText(text)
+  if (!sanitized) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(sanitized)
+    const result = schema.safeParse(parsed)
+    return result.success ? result.data : null
+  }
+  catch {
+    return null
+  }
+}
+
 export async function runStreamTextInBackground(
   serializablePayload: BackgroundStreamTextSerializablePayload,
   options: StreamRuntimeOptions<BackgroundTextStreamSnapshot> = {},
@@ -295,7 +341,7 @@ export async function runStructuredObjectStreamInBackground(
   serializablePayload: BackgroundStreamStructuredObjectSerializablePayload,
   options: StreamRuntimeOptions<BackgroundStructuredObjectStreamSnapshot> = {},
 ): Promise<BackgroundStructuredObjectStreamSnapshot> {
-  const { providerId, outputSchema, ...streamParams } = serializablePayload
+  const { providerId, providerType, outputSchema, ...streamParams } = serializablePayload
   const { signal, onChunk, onError } = options
 
   if (signal?.aborted) {
@@ -319,11 +365,73 @@ export async function runStructuredObjectStreamInBackground(
     schemaShape[field.name] = fieldTypeToZodSchema[field.type] ?? z.string().nullable()
   }
 
+  const objectSchema = z.object(schemaShape).strict()
+
+  if (!supportsResponseFormatJson(providerType)) {
+    let cumulativeText = ""
+
+    const result = streamText({
+      ...(streamParams as Parameters<typeof streamText>[0]),
+      model,
+      abortSignal: signal,
+      onError: ({ error }) => {
+        onError?.(error)
+      },
+    })
+
+    for await (const part of result.fullStream) {
+      if (signal?.aborted) {
+        throw new DOMException("stream aborted", "AbortError")
+      }
+
+      switch (part.type) {
+        case "text-delta": {
+          cumulativeText += part.text
+          const parsed = tryParseStructuredObject(cumulativeText, objectSchema)
+          if (parsed) {
+            cumulativeValue = parsed
+          }
+          onChunk?.(createStreamSnapshot(cumulativeValue, thinking))
+          break
+        }
+        case "reasoning-delta": {
+          thinking = {
+            status: "thinking",
+            text: thinking.text + part.text,
+          }
+          onChunk?.(createStreamSnapshot(cumulativeValue, thinking))
+          break
+        }
+        case "reasoning-end": {
+          thinking = {
+            ...thinking,
+            status: "complete",
+          }
+          onChunk?.(createStreamSnapshot(cumulativeValue, thinking))
+          break
+        }
+      }
+    }
+
+    const finalText = await result.output
+    const parsedFinal = tryParseStructuredObject(finalText, objectSchema)
+    if (!parsedFinal) {
+      throw new Error("Failed to parse structured JSON output")
+    }
+
+    thinking = {
+      ...thinking,
+      status: "complete",
+    }
+
+    return createStreamSnapshot(parsedFinal, thinking)
+  }
+
   const result = streamText({
     ...(streamParams as Parameters<typeof streamText>[0]),
     model,
     output: Output.object({
-      schema: z.object(schemaShape).strict(),
+      schema: objectSchema,
     }),
     abortSignal: signal,
     onError: ({ error }) => {

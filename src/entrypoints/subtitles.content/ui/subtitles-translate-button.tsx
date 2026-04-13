@@ -1,5 +1,5 @@
 import { useAtomValue, useSetAtom } from "jotai"
-import logo from "@/assets/icons/read-frog.png"
+import logo from "@/assets/icons/lexio.svg"
 import { TRANSLATE_BUTTON_CLASS } from "@/utils/constants/subtitles"
 import { cn } from "@/utils/styles/utils"
 import {
@@ -28,7 +28,7 @@ export function SubtitlesTranslateButton() {
     >
       <img
         src={logo}
-        alt="Subtitle Toggle"
+        alt="Lexio subtitle toggle"
         className={cn(
           "w-8 h-8 transition-all duration-200 object-contain block",
           isVisible ? "opacity-100 saturate-110" : "opacity-75 saturate-90",

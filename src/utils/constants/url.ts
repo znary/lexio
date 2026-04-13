@@ -1,4 +1,4 @@
-const DEFAULT_WEBSITE_URL = "https://english-companion.example.com"
+const DEFAULT_WEBSITE_URL = "https://lexio.example.com"
 
 export const WEBSITE_URL = import.meta.env.WXT_WEBSITE_URL || DEFAULT_WEBSITE_URL
 

@@ -1,6 +1,6 @@
-name: Read Frog [TEST]
-extName: Read Frog [TEST] - Dịch Nhúng Mã Nguồn Mở
-extDescription: Read Frog là tiện ích mở rộng trình duyệt mã nguồn mở được thiết kế để giúp bạn học ngôn ngữ sâu từ bất kỳ trang web nào.
+name: Lexio
+extName: Lexio - Dịch Nhúng Mã Nguồn Mở
+extDescription: Lexio là tiện ích mở rộng trình duyệt mã nguồn mở được thiết kế để giúp bạn học ngôn ngữ sâu từ bất kỳ trang web nào.
 uninstallSurveyUrl: https://tally.so/r/nPK6Ob
 dataTypes:
   string: Văn bản
@@ -29,7 +29,7 @@ popup:
   discord:
     tooltip: Tham gia Discord để kết nối với các nhà phát triển và truy cập sớm các tính năng mới
   blog:
-    notification: Có gì mới trong Read Frog
+    notification: Có gì mới trong Lexio
   aiSmartContext: Ngữ cảnh thông minh AI
   aiSmartContextDescription: Sử dụng ngữ cảnh trang web để cải thiện chất lượng dịch. Yêu cầu nhà cung cấp dịch LLM.
   more:
@@ -275,7 +275,7 @@ options:
     floatingButton:
       globalToggle:
         title: Bật nút nổi
-        description: Hiển thị nút nổi trên các trang web để truy cập nhanh các tính năng Read Frog
+        description: Hiển thị nút nổi trên các trang web để truy cập nhanh các tính năng Lexio
       closeMenu:
         disableForSite: Tắt cho trang web này
         disableGlobally: Tắt toàn cục
@@ -374,14 +374,14 @@ options:
             title: Kết nối Notebase
             description: Lưu kết quả có cấu trúc của hành động này vào Notebase từ xa.
             loginRequiredTitle: Đăng nhập để cấu hình Notebase
-            loginRequiredDescription: Hãy đăng nhập trên readfrog.app trước khi chọn notebase hoặc chỉnh sửa ánh xạ.
+            loginRequiredDescription: Hãy đăng nhập trên Lexio trước khi chọn notebase hoặc chỉnh sửa ánh xạ.
             loginAction: Đăng nhập
             tableLabel: Notebase
             tablePlaceholder: Chọn một notebase
             tableClearOption: Không kết nối notebase
             refreshAction: Làm mới
             emptyTitle: Chưa có Notebase nào
-            emptyDescription: Hãy tạo một notebase trên readfrog.app rồi quay lại đây để ánh xạ các trường.
+            emptyDescription: Hãy tạo một notebase trên Lexio rồi quay lại đây để ánh xạ các trường.
             openNotebaseAction: Mở Notebase
             betaLockedTitle: Tài khoản này chưa nằm trong beta Notebase
             betaLockedDescription: Bạn vẫn có thể giữ cấu hình action hiện tại, nhưng việc chọn Notebase và đồng bộ kết quả hiện chỉ mở cho một số tài khoản beta.
@@ -599,7 +599,7 @@ options:
       fallback: Dự phòng
       selectPlaceholder: Chọn giọng nói
       preview: Xem trước
-      previewSample: Xin chào từ Read Frog! Đây là cách tôi sẽ phát âm khi đọc to.
+      previewSample: Xin chào từ Lexio! Đây là cách tôi sẽ phát âm khi đọc to.
     languageVoice:
       label: Giọng nói theo ngôn ngữ
       reset: Đặt lại mặc định
@@ -625,11 +625,11 @@ options:
     title: Cấu hình
     about:
       title: Giới thiệu
-      description: Read Frog ra đời vào tháng 4 năm 2025
-      mission: Read Frog hướng tới việc mở rộng cơ hội tiếp cận bình đẳng với giáo dục chất lượng cao trong thời đại AI bằng cách mang lại trải nghiệm học tập gần với cảm giác được giáo viên thật hướng dẫn, nhưng với chi phí hợp lý hơn trong học ngôn ngữ, y học và các lĩnh vực giàu tri thức khác.
+      description: Lexio ra đời vào tháng 4 năm 2025
+      mission: Lexio hướng tới việc mở rộng cơ hội tiếp cận bình đẳng với giáo dục chất lượng cao trong thời đại AI bằng cách mang lại trải nghiệm học tập gần với cảm giác được giáo viên thật hướng dẫn, nhưng với chi phí hợp lý hơn trong học ngôn ngữ, y học và các lĩnh vực giàu tri thức khác.
       analytics:
         title: Giúp cải thiện trải nghiệm người dùng
-        tooltip: Khi bật, Read Frog sẽ gửi các tín hiệu sử dụng ẩn danh để xác minh tính ổn định của tính năng, tối ưu hiệu năng và độ tinh chỉnh UX, đồng thời giúp chúng tôi ưu tiên những gì cần xây tiếp theo.
+        tooltip: Khi bật, Lexio sẽ gửi các tín hiệu sử dụng ẩn danh để xác minh tính ổn định của tính năng, tối ưu hiệu năng và độ tinh chỉnh UX, đồng thời giúp chúng tôi ưu tiên những gì cần xây tiếp theo.
     sync:
       title: Đồng bộ cấu hình thủ công
       description: Nhập và xuất cài đặt cấu hình thủ công
@@ -638,7 +638,7 @@ options:
       importSuccess: Nhập cấu hình thành công
       exportSuccess: Xuất cấu hình thành công
       importError: Nhập thất bại
-      versionTooNew: Phiên bản cấu hình đã nhập mới hơn, vui lòng nâng cấp Read Frog lên phiên bản mới nhất
+      versionTooNew: Phiên bản cấu hình đã nhập mới hơn, vui lòng nâng cấp Lexio lên phiên bản mới nhất
       migrationError: Di chuyển thất bại
       validationError: Xác thực cấu hình thất bại
       exportOptions:
@@ -856,11 +856,13 @@ action:
   copied: Đã sao chép
   regenerate: Tạo lại
   viewContextDetails: Ngữ cảnh
+  viewDetailedExplanation: Giải nghĩa chi tiết
+  hideDetailedExplanation: Ẩn giải nghĩa chi tiết
   saveToNotebase: Lưu vào Notebase
   saveToNotebaseSaving: Đang lưu...
   saveToNotebaseSuccess: Đã lưu vào Notebase
   saveToNotebaseFailed: Không thể lưu vào Notebase
-  saveToNotebaseLoginRequired: Hãy đăng nhập trên readfrog.app để lưu vào Notebase
+  saveToNotebaseLoginRequired: Hãy đăng nhập trên Lexio để lưu vào Notebase
   saveToNotebaseBetaRequired: Tài khoản này chưa được mở quyền beta Notebase
   saveToNotebaseTableUnavailable: Notebase đã chọn không còn khả dụng
   saveToNotebaseConnectionInvalid: Kết nối Notebase này đã lỗi thời. Hãy làm mới trong Custom AI Actions và sửa các ánh xạ.
@@ -881,7 +883,7 @@ subtitles:
   actions:
     downloadSource: Tải phụ đề gốc
   state:
-    loading: Read Frog đang tải phụ đề
+    loading: Lexio đang tải phụ đề
     error: Đã xảy ra lỗi
   errors:
     http429: 429 Đã gửi quá nhiều yêu cầu đến API phụ đề Youtube, vui lòng thử lại sau

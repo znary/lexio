@@ -10,16 +10,16 @@ export const DOWNLOAD_FILE_ITEMS = {
 export const PARAGRAPH_DEPTH = 3
 
 export enum MARKDOWN_TEMPLATE_TOKEN {
-  title = "{{ Read Frog: title }}",
-  sentence = "{{ Read Frog:sentence }}",
-  words = "{{ Read Frog:words }}",
-  explanation = "{{ Read Frog:explanation }}",
-  originalSentence = "{{ Read Frog:originalSentence }}",
-  translatedSentence = "{{ Read Frog:translatedSentence }}",
-  word = "{{ Read Frog:word }}",
-  syntacticCategory = "{{ Read Frog:syntacticCategory }}",
-  wIndex = "{{ Read Frog:wIndex }}",
-  globalIndex = "{{ Read Frog:globalIndex }}",
+  title = "{{ Lexio: title }}",
+  sentence = "{{ Lexio:sentence }}",
+  words = "{{ Lexio:words }}",
+  explanation = "{{ Lexio:explanation }}",
+  originalSentence = "{{ Lexio:originalSentence }}",
+  translatedSentence = "{{ Lexio:translatedSentence }}",
+  word = "{{ Lexio:word }}",
+  syntacticCategory = "{{ Lexio:syntacticCategory }}",
+  wIndex = "{{ Lexio:wIndex }}",
+  globalIndex = "{{ Lexio:globalIndex }}",
 }
 
 export const AST_TEMPLATE = `

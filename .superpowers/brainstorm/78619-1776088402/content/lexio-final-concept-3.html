@@ -1,0 +1,269 @@
+<style>
+  .wrap {
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 20px;
+  }
+
+  .panel {
+    border-radius: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+  }
+
+  .hero-card {
+    min-height: 560px;
+    padding: 34px;
+    background:
+      radial-gradient(circle at 78% 18%, rgba(56, 189, 248, 0.18), transparent 26%),
+      radial-gradient(circle at 18% 12%, rgba(253, 230, 138, 0.16), transparent 24%),
+      linear-gradient(160deg, #07101c 0%, #10253f 48%, #0d1727 100%);
+    color: #f8fafc;
+    position: relative;
+  }
+
+  .hero-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 28px 28px;
+    opacity: 0.18;
+    pointer-events: none;
+  }
+
+  .hero-inner {
+    position: relative;
+    z-index: 1;
+  }
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 22px;
+  }
+
+  .app-demo {
+    margin-top: 26px;
+    background: rgba(4, 9, 16, 0.56);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    padding: 22px;
+    backdrop-filter: blur(6px);
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    border-radius: 20px;
+    background: linear-gradient(180deg, rgba(16, 37, 63, 0.98), rgba(11, 23, 38, 0.98));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .mark-box {
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, #fde68a 0%, #a7f3d0 48%, #38bdf8 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    flex: none;
+  }
+
+  .wordmark {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .wordmark strong {
+    font-size: 28px;
+    line-height: 1;
+    letter-spacing: -0.05em;
+  }
+
+  .wordmark span {
+    color: rgba(248, 250, 252, 0.72);
+    font-size: 14px;
+  }
+
+  .floating {
+    margin-top: 18px;
+    display: grid;
+    gap: 14px;
+  }
+
+  .bubble {
+    padding: 16px 18px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(248, 250, 252, 0.88);
+  }
+
+  .bubble strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 14px;
+    color: #ffffff;
+  }
+
+  .spec-card {
+    min-height: 560px;
+    padding: 28px;
+    background: linear-gradient(180deg, #0a111d 0%, #101826 100%);
+    color: #d9e5f2;
+  }
+
+  .spec-card h3 {
+    margin: 0 0 14px;
+    font-size: 24px;
+    letter-spacing: -0.03em;
+  }
+
+  .spec-block {
+    padding: 16px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    margin-bottom: 14px;
+  }
+
+  .spec-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(217, 229, 242, 0.58);
+  }
+
+  .palette {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .swatch {
+    border-radius: 16px;
+    padding: 12px;
+    min-height: 100px;
+    display: flex;
+    align-items: flex-end;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .ink {
+    background: #0b1220;
+    color: #dbeafe;
+  }
+
+  .glow {
+    background: linear-gradient(135deg, #fde68a, #38bdf8);
+    color: #08111d;
+  }
+
+  .mist {
+    background: #dbeafe;
+    color: #0b1220;
+  }
+
+  @media (max-width: 980px) {
+    .wrap {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<h2>Lexio Final Direction</h2>
+<p class="subtitle">
+  This is the locked direction after your picks: pure English name, folded-page `L` mark, no mascot, no cute tone.
+</p>
+
+<div class="wrap">
+  <div class="panel hero-card">
+    <div class="hero-inner">
+      <div class="status">Locked direction</div>
+      <h3 style="font-size: 56px; line-height: 0.95; letter-spacing: -0.06em; margin: 0 0 14px">Lexio</h3>
+      <p style="max-width: 520px; font-size: 18px; line-height: 1.55; color: rgba(248, 250, 252, 0.78); margin: 0">
+        AI reading companion for immersive translation, vocabulary capture, and cross-device language learning.
+      </p>
+
+      <div class="app-demo">
+        <div class="toolbar">
+          <div class="mark-box">
+            <svg width="34" height="34" viewBox="0 0 132 132" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M45 38C45 34.6863 47.6863 32 51 32H59V86H45V38Z" fill="#07111D" />
+              <path
+                d="M72 33H82.5C86.2132 33 89.7612 34.5458 92.2812 37.2658L100 45V47H86.5C82.3579 47 79 43.6421 79 39.5V33H72Z"
+                fill="#07111D"
+              />
+              <path d="M72 49H98V81C98 84.3137 95.3137 87 92 87H72V49Z" fill="#07111D" />
+            </svg>
+          </div>
+          <div class="wordmark">
+            <strong>Lexio</strong>
+            <span>AI reading companion</span>
+          </div>
+        </div>
+
+        <div class="floating">
+          <div class="bubble">
+            <strong>Why this feels better</strong>
+            The icon now reads as a tool for reading and language, not a cute mascot.
+          </div>
+          <div class="bubble">
+            <strong>What stays memorable</strong>
+            The bright gradient keeps energy, but the geometry is clean enough for browser icons and screenshots.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel spec-card">
+    <h3>Brand Notes</h3>
+
+    <div class="spec-block">
+      <span class="spec-label">Name</span>
+      <strong style="font-size: 22px; letter-spacing: -0.04em">Lexio</strong>
+      <p style="margin: 8px 0 0; color: rgba(217, 229, 242, 0.76); line-height: 1.55">
+        Short, easy to say, and clearly tied to language without sounding like a classroom product.
+      </p>
+    </div>
+
+    <div class="spec-block">
+      <span class="spec-label">Logo rule</span>
+      Use the mark alone for extension icons and favicons. Use mark + wordmark for store assets, onboarding, and website
+      headers.
+    </div>
+
+    <div class="spec-block">
+      <span class="spec-label">Color system</span>
+      <div class="palette">
+        <div class="swatch ink">Ink Base<br />#0B1220</div>
+        <div class="swatch glow">Signal Glow<br />#FDE68A → #38BDF8</div>
+        <div class="swatch mist">Mist Text<br />#DBEAFE</div>
+      </div>
+    </div>
+
+    <div class="spec-block">
+      <span class="spec-label">Tone</span>
+      Calm, sharp, helpful. More product confidence, less mascot energy.
+    </div>
+  </div>
+</div>

@@ -2,7 +2,7 @@ import { browser, i18n } from "#imports"
 import { IconSettings, IconX } from "@tabler/icons-react"
 import { useAtom, useAtomValue } from "jotai"
 import { useEffect, useRef, useState } from "react"
-import readFrogLogo from "@/assets/icons/read-frog.png?url&no-inline"
+import lexioLogo from "@/assets/icons/lexio.svg?url&no-inline"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,7 +21,7 @@ import { shadowWrapper } from "../../index"
 import HiddenButton from "./components/hidden-button"
 import TranslateButton from "./translate-button"
 
-const readFrogLogoUrl = new URL(readFrogLogo, browser.runtime.getURL("/")).href
+const lexioLogoUrl = new URL(lexioLogo, browser.runtime.getURL("/")).href
 
 export default function FloatingButton() {
   const [floatingButton, setFloatingButton] = useAtom(
@@ -192,9 +192,9 @@ export default function FloatingButton() {
           </DropdownMenuContent>
         </DropdownMenu>
         <img
-          src={readFrogLogoUrl}
+          src={lexioLogoUrl}
           alt={APP_NAME}
-          className="ml-1 h-8 w-8 rounded-full"
+          className="ml-1 h-8 w-8 rounded-[14px]"
         />
       </div>
       <HiddenButton

@@ -14,6 +14,16 @@ const OPENAI_COMPATIBLE_OPTION_ALIASES = {
   verbosity: "textVerbosity",
 } as const satisfies Record<string, string>
 
+const PROVIDER_SCOPED_OPTIONS: Array<{
+  provider: string
+  options: Record<string, JSONValue>
+}> = [
+  {
+    provider: "volcengine",
+    options: { thinking: { type: "disabled" } },
+  },
+]
+
 function normalizeUserProviderOptions(
   provider: string,
   userOptions: Record<string, JSONValue>,
@@ -43,6 +53,7 @@ function normalizeUserProviderOptions(
 
 function mergeRecommendedProviderOptions(
   model: string,
+  provider: string,
   baseOptions: Record<string, JSONValue> | undefined,
   disableThinking?: boolean,
 ): Record<string, JSONValue> | undefined {
@@ -50,7 +61,7 @@ function mergeRecommendedProviderOptions(
     return baseOptions
   }
 
-  const recommendedOptions = getRecommendedProviderOptions(model)
+  const recommendedOptions = getRecommendedProviderOptions(model, provider)
   if (!recommendedOptions) {
     return baseOptions
   }
@@ -64,7 +75,22 @@ function mergeRecommendedProviderOptions(
  * Detect the recommended provider options for a given model.
  * First match wins - more specific patterns should be placed first in MODEL_OPTIONS.
  */
-export function getRecommendedProviderOptionsMatch(model: string): RecommendedProviderOptionsMatch | undefined {
+export function getRecommendedProviderOptionsMatch(
+  model: string,
+  provider?: string,
+): RecommendedProviderOptionsMatch | undefined {
+  const scopedMatchIndex = provider === undefined
+    ? -1
+    : PROVIDER_SCOPED_OPTIONS.findIndex(rule => rule.provider === provider)
+
+  if (scopedMatchIndex >= 0) {
+    const scopedRule = PROVIDER_SCOPED_OPTIONS[scopedMatchIndex]
+    return {
+      matchIndex: scopedMatchIndex,
+      options: scopedRule.options,
+    }
+  }
+
   for (const [matchIndex, { pattern, options }] of LLM_MODEL_OPTIONS.entries()) {
     if (pattern.test(model)) {
       return { matchIndex, options }
@@ -75,8 +101,11 @@ export function getRecommendedProviderOptionsMatch(model: string): RecommendedPr
 /**
  * Get the recommended provider options payload without wrapping it by provider id.
  */
-export function getRecommendedProviderOptions(model: string): Record<string, JSONValue> | undefined {
-  return getRecommendedProviderOptionsMatch(model)?.options
+export function getRecommendedProviderOptions(
+  model: string,
+  provider?: string,
+): Record<string, JSONValue> | undefined {
+  return getRecommendedProviderOptionsMatch(model, provider)?.options
 }
 
 /**
@@ -87,7 +116,7 @@ export function getProviderOptions(
   provider: string,
   disableThinking?: boolean,
 ): Record<string, Record<string, JSONValue>> {
-  const options = mergeRecommendedProviderOptions(model, undefined, disableThinking)
+  const options = mergeRecommendedProviderOptions(model, provider, undefined, disableThinking)
   if (!options) {
     return {}
   }
@@ -113,6 +142,7 @@ export function getProviderOptionsWithOverride(
   if (userOptions !== undefined) {
     const mergedOptions = mergeRecommendedProviderOptions(
       model,
+      provider,
       normalizedUserOptions,
       disableThinking,
     )
@@ -122,7 +152,7 @@ export function getProviderOptionsWithOverride(
     }
   }
 
-  const recommendedOptions = mergeRecommendedProviderOptions(model, undefined, disableThinking)
+  const recommendedOptions = mergeRecommendedProviderOptions(model, provider, undefined, disableThinking)
   if (!recommendedOptions) {
     return undefined
   }

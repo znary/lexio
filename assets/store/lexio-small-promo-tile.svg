@@ -1,0 +1,29 @@
+<svg width="440" height="280" viewBox="0 0 440 280" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="42" y1="18" x2="352" y2="280" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#07101C"/>
+      <stop offset="0.54" stop-color="#10253F"/>
+      <stop offset="1" stop-color="#0D1727"/>
+    </linearGradient>
+    <linearGradient id="mark-bg" x1="0" y1="0" x2="88" y2="88" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FDE68A"/>
+      <stop offset="0.48" stop-color="#A7F3D0"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="440" height="280" rx="28" fill="url(#bg)"/>
+  <circle cx="84" cy="50" r="86" fill="#FDE68A" fill-opacity="0.12"/>
+  <circle cx="382" cy="54" r="96" fill="#38BDF8" fill-opacity="0.14"/>
+
+  <g transform="translate(42 48)">
+    <rect width="88" height="88" rx="24" fill="url(#mark-bg)"/>
+    <path d="M26 21C26 14.3726 31.3726 9 38 9H53V67H26V21Z" fill="#08111D"/>
+    <path d="M69 13H79.6644C88.5675 13 97.1062 16.5366 103.403 22.8302L112 31.4239V35H82.5C73.3873 35 66 27.6127 66 18.5V13H69Z" fill="#08111D"/>
+    <path d="M69 45H115V80C115 86.6274 109.627 92 103 92H69V45Z" fill="#08111D"/>
+  </g>
+
+  <text x="150" y="96" fill="#F8FAFC" font-family="Helvetica, Arial, sans-serif" font-size="50" font-weight="800" letter-spacing="-2">Lexio</text>
+  <text x="150" y="132" fill="#B7CCE4" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="500">AI reading companion</text>
+  <text x="42" y="206" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="760" letter-spacing="-1">Understand while you read</text>
+</svg>

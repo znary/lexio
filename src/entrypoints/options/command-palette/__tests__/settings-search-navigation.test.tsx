@@ -48,6 +48,12 @@ vi.mock("../search-items", () => ({
       titleKey: "translation-mode-title",
       pageKey: "translation-page",
     },
+    {
+      sectionId: "vocabulary-settings",
+      route: "/vocabulary",
+      titleKey: "vocabulary-title",
+      pageKey: "vocabulary-page",
+    },
   ],
 }))
 
@@ -104,6 +110,19 @@ describe("settings search navigation", () => {
     expect(mockedRouter.navigate).toHaveBeenCalledWith({
       pathname: "/translation",
       search: "?section=translation-mode",
+    })
+    expect(mockedSectionScroll.scrollToSectionWhenReady).not.toHaveBeenCalled()
+  })
+
+  it("navigates to the vocabulary page when the selected item is on a different route", () => {
+    renderSettingsSearch()
+
+    fireEvent.click(screen.getByRole("button", { name: "vocabulary-title" }))
+
+    expect(mockedSectionScroll.buildSectionSearch).toHaveBeenCalledWith("vocabulary-settings")
+    expect(mockedRouter.navigate).toHaveBeenCalledWith({
+      pathname: "/vocabulary",
+      search: "?section=vocabulary-settings",
     })
     expect(mockedSectionScroll.scrollToSectionWhenReady).not.toHaveBeenCalled()
   })
