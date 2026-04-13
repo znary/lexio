@@ -858,6 +858,8 @@ action:
   viewContextDetails: コンテキスト
   viewDetailedExplanation: 詳しい解説
   hideDetailedExplanation: 詳しい解説を閉じる
+  viewDetailedExplanationHint: 語義の分解、文脈、補足説明を見る
+  hideDetailedExplanationHint: 語義の分解と文脈の説明をさらに表示
   saveToNotebase: Notebase に保存
   saveToNotebaseSaving: 保存中...
   saveToNotebaseSuccess: Notebase に保存しました

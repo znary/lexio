@@ -858,6 +858,8 @@ action:
   viewContextDetails: Ngữ cảnh
   viewDetailedExplanation: Giải nghĩa chi tiết
   hideDetailedExplanation: Ẩn giải nghĩa chi tiết
+  viewDetailedExplanationHint: Mở phân tích nghĩa, ngữ cảnh và giải thích thêm
+  hideDetailedExplanationHint: Xem thêm phân tích nghĩa và ngữ cảnh
   saveToNotebase: Lưu vào Notebase
   saveToNotebaseSaving: Đang lưu...
   saveToNotebaseSuccess: Đã lưu vào Notebase

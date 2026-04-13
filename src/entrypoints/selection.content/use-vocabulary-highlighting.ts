@@ -41,6 +41,10 @@ interface ActiveHoverHighlight {
   itemId: string
 }
 
+export function shouldHighlightAcrossElements(item: Pick<VocabularyItem, "kind" | "wordCount">) {
+  return item.kind === "phrase" || item.wordCount > 1
+}
+
 function ensureHighlightStyle(color: string) {
   let styleElement = document.getElementById(VOCABULARY_HIGHLIGHT_STYLE_ID) as HTMLStyleElement | null
 
@@ -68,7 +72,7 @@ function markVocabularyItem(
 ): Promise<void> {
   return new Promise((resolve) => {
     markInstance.mark(item.sourceText.trim(), {
-      acrossElements: true,
+      acrossElements: shouldHighlightAcrossElements(item),
       accuracy: "exactly",
       caseSensitive: false,
       className: VOCABULARY_HIGHLIGHT_CLASS_NAME,

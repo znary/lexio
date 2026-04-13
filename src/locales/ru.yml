@@ -858,6 +858,8 @@ action:
   viewContextDetails: Контекст
   viewDetailedExplanation: Подробное объяснение
   hideDetailedExplanation: Скрыть подробное объяснение
+  viewDetailedExplanationHint: Открыть разбор значения, контекст и пояснения
+  hideDetailedExplanationHint: Показать больше о значении и контексте
   saveToNotebase: Сохранить в Notebase
   saveToNotebaseSaving: Сохранение...
   saveToNotebaseSuccess: Сохранено в Notebase

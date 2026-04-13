@@ -1001,6 +1001,8 @@ action:
   viewContextDetails: 上下文
   viewDetailedExplanation: 详细释义
   hideDetailedExplanation: 收起详细释义
+  viewDetailedExplanationHint: 点开查看词义拆解、语境和补充说明
+  hideDetailedExplanationHint: 查看更多词义拆解与上下文说明
   savedToVocabulary: 已收藏到单词本
   saveToNotebase: 保存到笔记库
   saveToNotebaseSaving: 保存中...

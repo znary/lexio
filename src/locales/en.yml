@@ -1001,6 +1001,8 @@ action:
   viewContextDetails: Context
   viewDetailedExplanation: Detailed explanation
   hideDetailedExplanation: Hide detailed explanation
+  viewDetailedExplanationHint: Open meanings, context, and extra notes
+  hideDetailedExplanationHint: Show more meaning breakdown and context
   savedToVocabulary: Saved to vocabulary
   saveToNotebase: Save to Notebase
   saveToNotebaseSaving: Saving...

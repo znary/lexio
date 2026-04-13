@@ -143,7 +143,7 @@ export default function FloatingButton() {
       <div
         className={cn(
           "border-border flex h-10 w-11 items-center rounded-l-full border border-r-0 bg-white opacity-60 shadow-lg group-hover:opacity-100 dark:bg-neutral-900",
-          "translate-x-6 transition-transform duration-300 group-hover:translate-x-0",
+          "translate-x-2 transition-transform duration-300 group-hover:translate-x-0",
           (isSideOpen || isDropdownOpen) && "opacity-100",
           isDraggingButton ? "cursor-move" : "cursor-pointer",
           attachSideClassName,

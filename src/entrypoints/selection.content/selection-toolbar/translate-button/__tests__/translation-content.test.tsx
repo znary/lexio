@@ -61,6 +61,7 @@ describe("translationContent", () => {
     fireEvent.click(screen.getByRole("button", { name: "action.viewDetailedExplanation" }))
 
     expect(onToggle).toHaveBeenCalledOnce()
+    expect(screen.getByText("action.viewDetailedExplanationHint")).toBeInTheDocument()
   })
 
   it("renders the inline detailed explanation block when expanded", () => {
@@ -83,6 +84,7 @@ describe("translationContent", () => {
     )
 
     expect(screen.getByRole("button", { name: "action.hideDetailedExplanation" })).toBeInTheDocument()
+    expect(screen.getByText("action.hideDetailedExplanationHint")).toBeInTheDocument()
     expect(screen.getByText("{\"Definition\":\"插图\"}")).toBeInTheDocument()
     expect(screen.getByText("missing provider")).toBeInTheDocument()
   })

@@ -858,6 +858,8 @@ action:
   viewContextDetails: Bağlam
   viewDetailedExplanation: Ayrıntılı açıklama
   hideDetailedExplanation: Ayrıntılı açıklamayı gizle
+  viewDetailedExplanationHint: Anlam çözümlemesi, bağlam ve ek açıklamaları aç
+  hideDetailedExplanationHint: Anlam çözümlemesi ve bağlamı daha fazla göster
   saveToNotebase: Notebase'e Kaydet
   saveToNotebaseSaving: Kaydediliyor...
   saveToNotebaseSuccess: Notebase'e kaydedildi

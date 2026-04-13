@@ -64,6 +64,16 @@ beforeAll(() => {
 })
 
 describe("floatingButton close trigger", () => {
+  it("keeps enough of the main trigger visible while collapsed", () => {
+    render(<FloatingButton />)
+
+    const mainTrigger = screen.getByRole("img").closest("div")
+
+    expect(mainTrigger).toHaveClass("w-11")
+    expect(mainTrigger).toHaveClass("translate-x-2")
+    expect(mainTrigger).not.toHaveClass("translate-x-6")
+  })
+
   it("keeps the close trigger in the layout with visibility classes instead of display:none", () => {
     render(<FloatingButton />)
 

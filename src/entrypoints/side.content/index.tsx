@@ -3,7 +3,6 @@ import type { Config } from "@/types/config/config"
 import type { ThemeMode } from "@/types/config/theme"
 import { createShadowRootUi, defineContentScript } from "#imports"
 import { QueryClientProvider } from "@tanstack/react-query"
-import { kebabCase } from "case-anything"
 import { Provider as JotaiProvider } from "jotai/react"
 import { useHydrateAtoms } from "jotai/utils"
 import { lazy, Suspense } from "react"
@@ -13,7 +12,7 @@ import { TooltipProvider } from "@/components/ui/base-ui/tooltip"
 import { configAtom } from "@/utils/atoms/config"
 import { baseThemeModeAtom } from "@/utils/atoms/theme"
 import { getLocalConfig } from "@/utils/config/storage"
-import { APP_NAME } from "@/utils/constants/app"
+import { APP_SIDE_CONTENT_HOST_NAME } from "@/utils/constants/app"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
 import { protectSelectAllShadowRoot } from "@/utils/select-all"
 import { insertShadowRootUIWrapperInto } from "@/utils/shadow-root"
@@ -47,7 +46,8 @@ export default defineContentScript({
     const themeMode = await getLocalThemeMode()
 
     const ui = await createShadowRootUi(ctx, {
-      name: kebabCase(APP_NAME),
+      // Keep a hyphen in the host name so the shadow host remains stable after brand changes.
+      name: APP_SIDE_CONTENT_HOST_NAME,
       position: "overlay",
       anchor: "body",
       append: "last",

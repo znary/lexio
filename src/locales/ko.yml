@@ -858,6 +858,8 @@ action:
   viewContextDetails: 컨텍스트
   viewDetailedExplanation: 자세한 풀이
   hideDetailedExplanation: 자세한 풀이 닫기
+  viewDetailedExplanationHint: 의미 풀이, 문맥, 추가 설명 보기
+  hideDetailedExplanationHint: 의미 풀이와 문맥 설명 더 보기
   saveToNotebase: Notebase에 저장
   saveToNotebaseSaving: 저장 중...
   saveToNotebaseSuccess: Notebase에 저장했습니다
