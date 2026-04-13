@@ -7,6 +7,7 @@ import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { VOCABULARY_ITEMS_STORAGE_KEY } from "@/utils/constants/config"
 import { NOTRANSLATE_CLASS } from "@/utils/constants/dom-labels"
 import {
+  VOCABULARY_HIGHLIGHT_BOUNDARY_LIMITERS,
   VOCABULARY_HIGHLIGHT_CLASS_NAME,
   VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE,
   VOCABULARY_HIGHLIGHT_STYLE_ID,
@@ -73,7 +74,10 @@ function markVocabularyItem(
   return new Promise((resolve) => {
     markInstance.mark(item.sourceText.trim(), {
       acrossElements: shouldHighlightAcrossElements(item),
-      accuracy: "exactly",
+      accuracy: {
+        value: "exactly",
+        limiters: VOCABULARY_HIGHLIGHT_BOUNDARY_LIMITERS,
+      },
       caseSensitive: false,
       className: VOCABULARY_HIGHLIGHT_CLASS_NAME,
       each: (element) => {

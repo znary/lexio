@@ -2,7 +2,10 @@
 import type { VocabularyItem } from "@/types/vocabulary"
 import Mark from "mark.js"
 import { describe, expect, it } from "vitest"
-import { VOCABULARY_HIGHLIGHT_CLASS_NAME } from "@/utils/constants/vocabulary"
+import {
+  VOCABULARY_HIGHLIGHT_BOUNDARY_LIMITERS,
+  VOCABULARY_HIGHLIGHT_CLASS_NAME,
+} from "@/utils/constants/vocabulary"
 import { shouldHighlightAcrossElements } from "../use-vocabulary-highlighting"
 
 function createVocabularyItem(overrides: Partial<VocabularyItem>): VocabularyItem {
@@ -30,7 +33,10 @@ function markVocabularyItem(item: VocabularyItem, html: string) {
   return new Promise<void>((resolve) => {
     new Mark(document.body).mark(item.sourceText.trim(), {
       acrossElements: shouldHighlightAcrossElements(item),
-      accuracy: "exactly",
+      accuracy: {
+        value: "exactly",
+        limiters: VOCABULARY_HIGHLIGHT_BOUNDARY_LIMITERS,
+      },
       caseSensitive: false,
       className: VOCABULARY_HIGHLIGHT_CLASS_NAME,
       separateWordSearch: false,
@@ -75,5 +81,23 @@ describe("shouldHighlightAcrossElements", () => {
     const highlights = [...document.querySelectorAll("p mark")]
     expect(highlights).toHaveLength(2)
     expect(highlights.map(node => node.textContent)).toEqual(["payment ", "link"])
+  })
+
+  it("treats adjacent punctuation as a valid boundary for exact word matches", async () => {
+    const item = createVocabularyItem({
+      sourceText: "please",
+      normalizedText: "please",
+      kind: "word",
+      wordCount: 1,
+    })
+
+    await markVocabularyItem(item, `
+      <p>cmon tibo..please</p>
+      <p>pleased to help</p>
+    `)
+
+    const highlights = [...document.querySelectorAll("mark")]
+    expect(highlights).toHaveLength(1)
+    expect(highlights[0]?.textContent).toBe("please")
   })
 })
