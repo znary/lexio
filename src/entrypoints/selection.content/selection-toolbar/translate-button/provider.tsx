@@ -3,10 +3,12 @@ import type { SelectionSession, SelectionToolbarTranslateRequestSlice } from "..
 import type { SelectionToolbarInlineError } from "../inline-error"
 import type { BackgroundTextStreamSnapshot, ThinkingSnapshot } from "@/types/background-stream"
 import type { LLMProviderConfig, ProviderConfig } from "@/types/config/provider"
+import { i18n } from "#imports"
 import { LANG_CODE_TO_EN_NAME } from "@read-frog/definitions"
 import { useAtomValue, useSetAtom } from "jotai"
 import { createContext, use, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
+import { Badge } from "@/components/ui/base-ui/badge"
 import { SelectionPopover } from "@/components/ui/selection-popover"
 import { ANALYTICS_FEATURE, ANALYTICS_SURFACE } from "@/types/analytics"
 import { isLLMProviderConfig, isTranslateProviderConfig } from "@/types/config/provider"
@@ -23,6 +25,7 @@ import { onMessage } from "@/utils/message"
 import { getTranslatePromptFromConfig } from "@/utils/prompts/translate"
 import { resolveModelId } from "@/utils/providers/model-id"
 import { getProviderOptionsWithOverride } from "@/utils/providers/options"
+import { saveTranslatedSelectionToVocabulary } from "@/utils/vocabulary/service"
 import { shadowWrapper } from "../.."
 import { SelectionToolbarErrorAlert } from "../../components/selection-toolbar-error-alert"
 import { SelectionToolbarFooterContent } from "../../components/selection-toolbar-footer-content"
@@ -179,6 +182,7 @@ export function SelectionTranslationProvider({
   const [anchor, setAnchor] = useState<{ x: number, y: number } | null>(null)
   const [popoverSessionKey, setPopoverSessionKey] = useState(0)
   const [translatedText, setTranslatedText] = useState<string | undefined>(undefined)
+  const [savedVocabularyText, setSavedVocabularyText] = useState<string | null>(null)
   const [thinking, setThinking] = useState<ThinkingSnapshot | null>(null)
   const [error, setError] = useState<SelectionToolbarInlineError | null>(null)
   const [isTranslating, setIsTranslating] = useState(false)
@@ -190,6 +194,7 @@ export function SelectionTranslationProvider({
   const selectionSession = useAtomValue(selectionSessionAtom)
   const translateRequest = useAtomValue(selectionToolbarTranslateRequestAtom)
   const providersConfig = useAtomValue(configFieldsAtomMap.providersConfig)
+  const vocabularySettings = useAtomValue(configFieldsAtomMap.vocabulary)
   const setIsSelectionToolbarVisible = useSetAtom(isSelectionToolbarVisibleAtom)
   const setConfig = useSetAtom(writeConfigAtom)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -220,6 +225,7 @@ export function SelectionTranslationProvider({
   const resetTranslationState = useCallback(() => {
     setIsTranslating(false)
     setTranslatedText(undefined)
+    setSavedVocabularyText(null)
     setThinking(null)
     setError(null)
   }, [])
@@ -336,6 +342,20 @@ export function SelectionTranslationProvider({
         setTranslatedText(nextTranslatedText)
       }
 
+      if (selectionText && nextTranslatedText) {
+        const savedItem = await saveTranslatedSelectionToVocabulary({
+          sourceText: selectionText,
+          translatedText: nextTranslatedText,
+          sourceLang: translateRequest.language.sourceCode,
+          targetLang: translateRequest.language.targetCode,
+          settings: vocabularySettings,
+        })
+
+        if (runIdRef.current === runId) {
+          setSavedVocabularyText(savedItem?.sourceText ?? null)
+        }
+      }
+
       void trackFeatureUsed({
         ...analyticsContext,
         outcome: "success",
@@ -360,7 +380,7 @@ export function SelectionTranslationProvider({
         setIsTranslating(false)
       }
     }
-  }, [resetTranslationState, selectionText, sourceSurface, translateRequest])
+  }, [resetTranslationState, selectionText, sourceSurface, translateRequest, vocabularySettings])
 
   const startTranslation = useEffectEvent((runId: number) => {
     void runTranslation(runId)
@@ -530,7 +550,13 @@ export function SelectionTranslationProvider({
             value={translateRequest.providerConfig?.id ?? ""}
             onProviderChange={handleProviderChange}
             onRegenerate={handleRegenerate}
-          />
+          >
+            {savedVocabularyText && (
+              <Badge variant="secondary">
+                {i18n.t("action.savedToVocabulary")}
+              </Badge>
+            )}
+          </SelectionToolbarFooterContent>
         </SelectionPopover.Content>
       </SelectionPopover.Root>
     </SelectionTranslationContext>

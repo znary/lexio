@@ -1,6 +1,7 @@
 import { browser, storage } from "#imports"
 import { semanticVersionSchema } from "@read-frog/definitions"
 import { z } from "zod"
+import { WEBSITE_URL } from "./constants/url"
 import { logger } from "./logger"
 import { sendMessage } from "./message"
 
@@ -133,7 +134,7 @@ export function getBlogLocaleFromUILanguage(): BlogLocale {
 }
 
 /**
- * Fetches the latest blog post from the Read Frog blog API.
+ * Fetches the latest blog post from the official blog API.
  * Uses background fetch with optional 1-day cache.
  *
  * @param apiUrl - The URL of the blog API endpoint (default: production URL)
@@ -160,7 +161,7 @@ export function getBlogLocaleFromUILanguage(): BlogLocale {
  * ```
  */
 export async function getLatestBlogDate(
-  apiUrl: string = "https://readfrog.app/api/blog/latest",
+  apiUrl: string = `${WEBSITE_URL}/api/blog/latest`,
   locale: string = "en",
   extensionVersion?: string,
   useCache: boolean = true,

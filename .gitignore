@@ -39,6 +39,11 @@ coverage/
 tsconfig.local.json
 
 docs/
+!docs/
+docs/*
+!docs/specs/
+docs/specs/*
+!docs/specs/2026-04-13-read-frog-google-drive-sync.md
 
 /repos
 

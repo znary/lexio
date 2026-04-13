@@ -10,15 +10,21 @@ import { DEFAULT_BACKGROUND_OPACITY, DEFAULT_DISPLAY_MODE, DEFAULT_FONT_FAMILY, 
 import { DEFAULT_AUTO_TRANSLATE_SHORTCUT_KEY, DEFAULT_BATCH_CONFIG, DEFAULT_MIN_CHARACTERS_PER_NODE, DEFAULT_MIN_WORDS_PER_NODE, DEFAULT_PRELOAD_MARGIN, DEFAULT_PRELOAD_THRESHOLD, DEFAULT_REQUEST_CAPACITY, DEFAULT_REQUEST_RATE } from "./translate"
 import { TRANSLATION_NODE_STYLE_ON_INSTALLED } from "./translation-node-style"
 import { DEFAULT_TTS_CONFIG } from "./tts"
+import { DEFAULT_VOCABULARY_SETTINGS } from "./vocabulary"
 
 export const CONFIG_STORAGE_KEY = "config"
 export const LAST_SYNCED_CONFIG_STORAGE_KEY = "lastSyncedConfig"
 export const GOOGLE_DRIVE_TOKEN_STORAGE_KEY = "__googleDriveToken"
+export const VOCABULARY_ITEMS_STORAGE_KEY = "vocabularyItems"
+export const LAST_SYNCED_VOCABULARY_ITEMS_STORAGE_KEY = "lastSyncedVocabularyItems"
+export const GOOGLE_DRIVE_PENDING_SYNC_STORAGE_KEY = "__googleDrivePendingSync"
+export const GOOGLE_DRIVE_SYNC_CONFLICT_STORAGE_KEY = "__googleDriveSyncConflict"
+export const GOOGLE_DRIVE_SYNC_RETRY_ALARM_NAME = "google-drive-sync-retry"
 
 export const THEME_STORAGE_KEY = "theme"
 export const DETECTED_CODE_STORAGE_KEY = "detectedCode"
 export const DEFAULT_DETECTED_CODE = "eng" as const
-export const CONFIG_SCHEMA_VERSION = 67
+export const CONFIG_SCHEMA_VERSION = 68
 
 export const DEFAULT_FLOATING_BUTTON_POSITION = 0.66
 
@@ -168,6 +174,7 @@ export const DEFAULT_CONFIG: Config = {
     blacklistPatterns: [],
     whitelistPatterns: [],
   },
+  vocabulary: DEFAULT_VOCABULARY_SETTINGS,
 }
 
 export const PAGE_TRANSLATE_RANGE_ITEMS: Record<

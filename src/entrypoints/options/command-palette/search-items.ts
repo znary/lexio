@@ -44,6 +44,20 @@ const CONFIG_SEARCH_ITEMS = [
     pageKey: "options.config.title",
   },
   {
+    sectionId: "vocabulary-settings",
+    route: "/config",
+    titleKey: "options.vocabulary.title",
+    descriptionKey: "options.vocabulary.description",
+    pageKey: "options.config.title",
+  },
+  {
+    sectionId: "vocabulary-library",
+    route: "/config",
+    titleKey: "options.vocabulary.library.title",
+    descriptionKey: "options.vocabulary.library.description",
+    pageKey: "options.config.title",
+  },
+  {
     sectionId: "manual-config-sync",
     route: "/config",
     titleKey: "options.config.sync.title",

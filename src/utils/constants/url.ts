@@ -1,11 +1,15 @@
-import { LOCALHOST_DOMAIN, READFROG_DOMAIN, WEBSITE_CADDY_DEV_URL, WEBSITE_PROD_URL } from "@read-frog/definitions"
+const DEFAULT_WEBSITE_URL = "https://english-companion.example.com"
 
-export const OFFICIAL_SITE_URL_PATTERNS = [
-  `https://*.${READFROG_DOMAIN}/*`,
-  `http://${LOCALHOST_DOMAIN}/*`,
-  `https://${LOCALHOST_DOMAIN}/*`,
-]
+export const WEBSITE_URL = import.meta.env.WXT_WEBSITE_URL || DEFAULT_WEBSITE_URL
 
-export const WEBSITE_URL = (import.meta.env.DEV && import.meta.env.WXT_USE_LOCAL_PACKAGES === "true")
-  ? WEBSITE_CADDY_DEV_URL
-  : WEBSITE_PROD_URL
+function buildOfficialSitePatterns(websiteUrl: string): string[] {
+  try {
+    const url = new URL(websiteUrl)
+    return [`${url.origin}/*`]
+  }
+  catch {
+    return []
+  }
+}
+
+export const OFFICIAL_SITE_URL_PATTERNS = buildOfficialSitePatterns(WEBSITE_URL)

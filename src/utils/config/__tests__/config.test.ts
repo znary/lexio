@@ -1,3 +1,4 @@
+import type { VersionTestData } from "./example/types"
 import { describe, expect, it } from "vitest"
 import { DEFAULT_PROVIDER_CONFIG, DEFAULT_PROVIDER_CONFIG_LIST } from "@/utils/constants/providers"
 import { getObjectWithoutAPIKeys, hasAPIKey } from "../api"
@@ -9,11 +10,12 @@ describe("config utilities", () => {
       const currentVersionStr = String(version).padStart(3, "0")
 
       it(`should remove api keys from config v${currentVersionStr}`, async () => {
-        const currentConfigModule = await import(`./example/v${currentVersionStr}.ts`)
-        const currentConfig = currentConfigModule.configExample
+        const currentConfigModule = await import(`./example/v${currentVersionStr}.ts`) as VersionTestData
 
-        const result = getObjectWithoutAPIKeys(currentConfig)
-        expect(hasAPIKey(result)).toBe(false)
+        for (const seriesData of Object.values(currentConfigModule.testSeries)) {
+          const result = getObjectWithoutAPIKeys(seriesData.config)
+          expect(hasAPIKey(result)).toBe(false)
+        }
       })
     }
 

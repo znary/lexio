@@ -1,6 +1,6 @@
-name: Read Frog
-extName: Read Frog - Open Source Immersive Translate
-extDescription: Read Frog is an open source browser extension designed to help you learn languages deeply from any website.
+name: English Companion
+extName: English Companion - Immersive Translate and Vocabulary Sync
+extDescription: English Companion is a browser extension for immersive translation, vocabulary capture, and Google Drive sync across devices.
 uninstallSurveyUrl: https://tally.so/r/nPK6Ob
 dataTypes:
   string: Text
@@ -35,11 +35,7 @@ popup:
   more:
     title: More
     translationHub: Translation Hub
-    joinDiscord: Join Discord
-    joinWechat: Join WeChat Group
-    starGithub: Star on Github
-    rateUs: Rate Us
-    ebook: Third-party E-book Reader
+    vocabulary: Vocabulary
     tutorial: Tutorial
 errorRecovery:
   title: Something went wrong
@@ -764,8 +760,10 @@ options:
         collapse: Collapse Config
       googleDrive:
         title: Google Drive Cloud Sync
-        description: Downloads config when remote is newer, uploads config when local is newer
+        description: Sync settings and vocabulary items through your own Google Drive app data folder
+        connect: Connect Google Drive
         sync: Sync to Google Drive
+        syncNow: Sync now
         syncing: Syncing...
         syncSuccess:
           uploaded: Local config uploaded to cloud
@@ -844,6 +842,36 @@ options:
         confirm: Confirm
         cancel: Cancel
         description: This operation will clear all your custom configurations and reset them to default values. Please confirm.
+  vocabulary:
+    title: Vocabulary
+    description: Control auto-save, page highlighting, and your synced vocabulary list.
+    autoSave:
+      title: Auto-save selection translations
+      description: Save English words and short phrases automatically after manual selection translation succeeds.
+    highlight:
+      title: Highlight saved items on web pages
+      description: Highlight saved words and phrases when they appear again in original page text.
+    maxPhraseWords:
+      title: Maximum words per phrase
+      description: Selections longer than this limit are ignored by auto-save.
+    highlightColor:
+      title: Highlight color
+      description: Color used when saved items are highlighted on the page.
+    library:
+      title: Vocabulary Library
+      description: Search, remove, clear, and export the saved words and phrases synced with Google Drive.
+      searchPlaceholder: Search saved words or translations
+      export: Export JSON
+      clear: Clear all
+      empty: No saved words yet. Translate a word or short phrase to start building your vocabulary list.
+      noResults: No saved words match the current search.
+      columns:
+        source: Source
+        translation: Translation
+        type: Type
+        hitCount: Hits
+        lastSeenAt: Last seen
+        actions: Actions
   videoSubtitles:
     title: Video Subtitles
     description: Currently only supports YouTube video subtitles
@@ -968,6 +996,7 @@ action:
   copied: Copied
   regenerate: Regenerate
   viewContextDetails: Context
+  savedToVocabulary: Saved to vocabulary
   saveToNotebase: Save to Notebase
   saveToNotebaseSaving: Saving...
   saveToNotebaseSuccess: Saved to Notebase

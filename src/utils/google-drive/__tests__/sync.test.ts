@@ -1,4 +1,5 @@
 import type { ConfigMeta, ConfigValueAndMeta, LastSyncedConfigMeta, LastSyncedConfigValueAndMeta } from "@/types/config/meta"
+import type { VocabularyItem } from "@/types/vocabulary"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { ConfigVersionTooNewError } from "@/utils/config/errors"
 import {
@@ -9,6 +10,12 @@ import {
   getLastSyncedConfigAndMeta,
   setLastSyncConfigAndMeta,
 } from "@/utils/config/sync"
+import {
+  getLastSyncedVocabularyItemsAndMeta,
+  getLocalVocabularyItemsAndMeta,
+  setLastSyncedVocabularyItemsAndMeta,
+  setLocalVocabularyItemsAndMeta,
+} from "@/utils/vocabulary/storage"
 import { getRemoteConfigAndMetaWithUserEmail, setRemoteConfigAndMeta } from "../storage"
 import { syncConfig } from "../sync"
 
@@ -22,6 +29,17 @@ vi.mock("@/utils/config/sync", () => ({
   getLastSyncedConfigAndMeta: vi.fn(),
   setLastSyncConfigAndMeta: vi.fn(),
 }))
+
+vi.mock("@/utils/vocabulary/storage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/utils/vocabulary/storage")>()
+  return {
+    ...actual,
+    getLocalVocabularyItemsAndMeta: vi.fn(),
+    setLocalVocabularyItemsAndMeta: vi.fn(),
+    getLastSyncedVocabularyItemsAndMeta: vi.fn(),
+    setLastSyncedVocabularyItemsAndMeta: vi.fn(),
+  }
+})
 
 vi.mock("../storage", () => ({
   getRemoteConfigAndMetaWithUserEmail: vi.fn(),
@@ -41,6 +59,25 @@ vi.mock("@/utils/logger", () => ({
 interface TestConfig {
   setting1: string
   setting2: number
+}
+
+function createVocabularyItem(overrides: Partial<VocabularyItem> = {}): VocabularyItem {
+  return {
+    id: "item-1",
+    sourceText: "apple",
+    normalizedText: "apple",
+    translatedText: "苹果",
+    sourceLang: "en",
+    targetLang: "zh-CN",
+    kind: "word",
+    wordCount: 1,
+    createdAt: 1000,
+    lastSeenAt: 1000,
+    hitCount: 1,
+    updatedAt: 1000,
+    deletedAt: null,
+    ...overrides,
+  }
 }
 
 function createTestConfig(overrides: Partial<TestConfig> = {}): TestConfig {
@@ -81,9 +118,57 @@ function createLastSyncedConfigValueAndMeta(
   }
 }
 
+function createVocabularyItemsValueAndMeta(
+  items: VocabularyItem[] = [],
+  meta: { schemaVersion?: number, lastModifiedAt?: number } = {},
+) {
+  return {
+    value: items,
+    meta: {
+      schemaVersion: 68,
+      lastModifiedAt: 1000,
+      ...meta,
+    },
+  }
+}
+
+function createLastSyncedVocabularyItemsValueAndMeta(
+  items: VocabularyItem[] = [],
+  meta: { schemaVersion?: number, lastModifiedAt?: number, lastSyncedAt?: number, email?: string } = {},
+) {
+  return {
+    value: items,
+    meta: {
+      schemaVersion: 68,
+      lastModifiedAt: 1000,
+      lastSyncedAt: 1000,
+      email: "a@test.com",
+      ...meta,
+    },
+  }
+}
+
+function createRemoteSyncState({
+  configValueAndMeta,
+  email = "a@test.com",
+  vocabularyItems = [],
+}: {
+  configValueAndMeta: ConfigValueAndMeta | null
+  email?: string
+  vocabularyItems?: VocabularyItem[]
+}) {
+  return {
+    configValueAndMeta,
+    vocabularyItems,
+    email,
+  }
+}
+
 describe("syncConfig", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(getLocalVocabularyItemsAndMeta).mockResolvedValue(createVocabularyItemsValueAndMeta())
+    vi.mocked(getLastSyncedVocabularyItemsAndMeta).mockResolvedValue(null)
   })
 
   describe("1. First Login (No Previous Sync)", () => {
@@ -95,10 +180,11 @@ describe("syncConfig", () => {
         createConfigValueAndMeta(localConfig, { lastModifiedAt: 1000 }),
       )
       vi.mocked(getLastSyncedConfigAndMeta).mockResolvedValue(null)
-      vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue({
-        configValueAndMeta: createConfigValueAndMeta(remoteConfig, { lastModifiedAt: 2000 }),
-        email: "a@test.com",
-      })
+      vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue(
+        createRemoteSyncState({
+          configValueAndMeta: createConfigValueAndMeta(remoteConfig, { lastModifiedAt: 2000 }),
+        }),
+      )
 
       const result = await syncConfig()
 
@@ -118,16 +204,16 @@ describe("syncConfig", () => {
         createConfigValueAndMeta(localConfig, { lastModifiedAt: 1000 }),
       )
       vi.mocked(getLastSyncedConfigAndMeta).mockResolvedValue(null)
-      vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue({
-        configValueAndMeta: null,
-        email: "a@test.com",
-      })
+      vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue(
+        createRemoteSyncState({ configValueAndMeta: null }),
+      )
 
       const result = await syncConfig()
 
       expect(result).toEqual({ status: "success", action: "uploaded" })
       expect(setRemoteConfigAndMeta).toHaveBeenCalledWith(
         createConfigValueAndMeta(localConfig, { lastModifiedAt: 1000 }),
+        [],
       )
       expect(setLastSyncConfigAndMeta).toHaveBeenCalledWith(
         localConfig,
@@ -148,10 +234,12 @@ describe("syncConfig", () => {
       vi.mocked(getLastSyncedConfigAndMeta).mockResolvedValue(
         createLastSyncedConfigValueAndMeta(localConfig, { email: "a@test.com", lastModifiedAt: 1000 }),
       )
-      vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue({
-        configValueAndMeta: createConfigValueAndMeta(remoteBConfig, { lastModifiedAt: 3000 }),
-        email: "b@test.com",
-      })
+      vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue(
+        createRemoteSyncState({
+          configValueAndMeta: createConfigValueAndMeta(remoteBConfig, { lastModifiedAt: 3000 }),
+          email: "b@test.com",
+        }),
+      )
 
       const result = await syncConfig()
 
@@ -173,10 +261,12 @@ describe("syncConfig", () => {
       vi.mocked(getLastSyncedConfigAndMeta).mockResolvedValue(
         createLastSyncedConfigValueAndMeta(localConfig, { email: "a@test.com", lastModifiedAt: 1000 }),
       )
-      vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue({
-        configValueAndMeta: null,
-        email: "b@test.com",
-      })
+      vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue(
+        createRemoteSyncState({
+          configValueAndMeta: null,
+          email: "b@test.com",
+        }),
+      )
 
       const result = await syncConfig()
 
@@ -202,10 +292,11 @@ describe("syncConfig", () => {
         vi.mocked(getLastSyncedConfigAndMeta).mockResolvedValue(
           createLastSyncedConfigValueAndMeta(baseConfig, { email: "a@test.com", lastModifiedAt: 1000 }),
         )
-        vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue({
-          configValueAndMeta: createConfigValueAndMeta(changedConfig, { lastModifiedAt: 2500 }),
-          email: "a@test.com",
-        })
+        vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue(
+          createRemoteSyncState({
+            configValueAndMeta: createConfigValueAndMeta(changedConfig, { lastModifiedAt: 2500 }),
+          }),
+        )
 
         const result = await syncConfig()
 
@@ -229,10 +320,11 @@ describe("syncConfig", () => {
         vi.mocked(getLastSyncedConfigAndMeta).mockResolvedValue(
           createLastSyncedConfigValueAndMeta(baseConfig, { email: "a@test.com", lastModifiedAt: 1000 }),
         )
-        vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue({
-          configValueAndMeta: createConfigValueAndMeta(remoteConfig, { lastModifiedAt: 2500 }),
-          email: "a@test.com",
-        })
+        vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue(
+          createRemoteSyncState({
+            configValueAndMeta: createConfigValueAndMeta(remoteConfig, { lastModifiedAt: 2500 }),
+          }),
+        )
 
         const result = await syncConfig()
 
@@ -261,10 +353,11 @@ describe("syncConfig", () => {
       vi.mocked(getLastSyncedConfigAndMeta).mockResolvedValue(
         createLastSyncedConfigValueAndMeta(baseConfig, { email: "a@test.com", lastModifiedAt: 1000 }),
       )
-      vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue({
-        configValueAndMeta: createConfigValueAndMeta(remoteConfig, { lastModifiedAt: 2000 }),
-        email: "a@test.com",
-      })
+      vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue(
+        createRemoteSyncState({
+          configValueAndMeta: createConfigValueAndMeta(remoteConfig, { lastModifiedAt: 2000 }),
+        }),
+      )
 
       const result = await syncConfig()
 
@@ -284,10 +377,11 @@ describe("syncConfig", () => {
       vi.mocked(getLastSyncedConfigAndMeta).mockResolvedValue(
         createLastSyncedConfigValueAndMeta(baseConfig, { email: "a@test.com", lastModifiedAt: 1000 }),
       )
-      vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue({
-        configValueAndMeta: createConfigValueAndMeta(baseConfig, { lastModifiedAt: 1000 }),
-        email: "a@test.com",
-      })
+      vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue(
+        createRemoteSyncState({
+          configValueAndMeta: createConfigValueAndMeta(baseConfig, { lastModifiedAt: 1000 }),
+        }),
+      )
 
       const result = await syncConfig()
 
@@ -306,10 +400,11 @@ describe("syncConfig", () => {
       vi.mocked(getLastSyncedConfigAndMeta).mockResolvedValue(
         createLastSyncedConfigValueAndMeta(config, { email: "a@test.com", lastModifiedAt: 1000 }),
       )
-      vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue({
-        configValueAndMeta: createConfigValueAndMeta(config, { lastModifiedAt: 1000 }),
-        email: "a@test.com",
-      })
+      vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue(
+        createRemoteSyncState({
+          configValueAndMeta: createConfigValueAndMeta(config, { lastModifiedAt: 1000 }),
+        }),
+      )
 
       const result = await syncConfig()
 
@@ -331,10 +426,9 @@ describe("syncConfig", () => {
         vi.mocked(getLastSyncedConfigAndMeta).mockResolvedValue(
           createLastSyncedConfigValueAndMeta(baseConfig, { email: "a@test.com", lastModifiedAt: 1000 }),
         )
-        vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue({
-          configValueAndMeta: null,
-          email: "a@test.com",
-        })
+        vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue(
+          createRemoteSyncState({ configValueAndMeta: null }),
+        )
 
         const result = await syncConfig()
 
@@ -352,10 +446,9 @@ describe("syncConfig", () => {
         vi.mocked(getLastSyncedConfigAndMeta).mockResolvedValue(
           createLastSyncedConfigValueAndMeta(config, { email: "a@test.com", lastModifiedAt: 1000 }),
         )
-        vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue({
-          configValueAndMeta: null,
-          email: "a@test.com",
-        })
+        vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue(
+          createRemoteSyncState({ configValueAndMeta: null }),
+        )
 
         const result = await syncConfig()
 
@@ -363,6 +456,85 @@ describe("syncConfig", () => {
         expect(setLastSyncConfigAndMeta).toHaveBeenCalled()
         expect(setLocalConfigAndMeta).not.toHaveBeenCalled()
         expect(setRemoteConfigAndMeta).not.toHaveBeenCalled()
+      })
+    })
+
+    describe("3.6 Vocabulary Sync", () => {
+      it("3.6.1 should upload when only local vocabulary changed", async () => {
+        const config = createTestConfig({ setting1: "unchanged" })
+        const localVocabularyItem = createVocabularyItem({ updatedAt: 2000, lastSeenAt: 2000 })
+
+        vi.mocked(getLocalConfigAndMeta).mockResolvedValue(
+          createConfigValueAndMeta(config, { lastModifiedAt: 1000 }),
+        )
+        vi.mocked(getLastSyncedConfigAndMeta).mockResolvedValue(
+          createLastSyncedConfigValueAndMeta(config, { email: "a@test.com", lastModifiedAt: 1000 }),
+        )
+        vi.mocked(getLocalVocabularyItemsAndMeta).mockResolvedValue(
+          createVocabularyItemsValueAndMeta([localVocabularyItem], { lastModifiedAt: 2000 }),
+        )
+        vi.mocked(getLastSyncedVocabularyItemsAndMeta).mockResolvedValue(
+          createLastSyncedVocabularyItemsValueAndMeta([], { email: "a@test.com", lastModifiedAt: 1000 }),
+        )
+        vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue(
+          createRemoteSyncState({
+            configValueAndMeta: createConfigValueAndMeta(config, { lastModifiedAt: 1000 }),
+            vocabularyItems: [],
+          }),
+        )
+
+        const result = await syncConfig()
+
+        expect(result).toEqual({ status: "success", action: "uploaded" })
+        expect(setRemoteConfigAndMeta).toHaveBeenCalledWith(
+          createConfigValueAndMeta(config, { lastModifiedAt: 1000 }),
+          [localVocabularyItem],
+        )
+        expect(setLocalVocabularyItemsAndMeta).toHaveBeenCalledWith(
+          [localVocabularyItem],
+          expect.objectContaining({ schemaVersion: 68 }),
+        )
+        expect(setLastSyncedVocabularyItemsAndMeta).toHaveBeenCalledWith(
+          [localVocabularyItem],
+          expect.objectContaining({ email: "a@test.com" }),
+        )
+      })
+
+      it("3.6.2 should download when only remote vocabulary changed", async () => {
+        const config = createTestConfig({ setting1: "unchanged" })
+        const remoteVocabularyItem = createVocabularyItem({ id: "item-2", sourceText: "banana", normalizedText: "banana" })
+
+        vi.mocked(getLocalConfigAndMeta).mockResolvedValue(
+          createConfigValueAndMeta(config, { lastModifiedAt: 1000 }),
+        )
+        vi.mocked(getLastSyncedConfigAndMeta).mockResolvedValue(
+          createLastSyncedConfigValueAndMeta(config, { email: "a@test.com", lastModifiedAt: 1000 }),
+        )
+        vi.mocked(getLocalVocabularyItemsAndMeta).mockResolvedValue(
+          createVocabularyItemsValueAndMeta([], { lastModifiedAt: 1000 }),
+        )
+        vi.mocked(getLastSyncedVocabularyItemsAndMeta).mockResolvedValue(
+          createLastSyncedVocabularyItemsValueAndMeta([], { email: "a@test.com", lastModifiedAt: 1000 }),
+        )
+        vi.mocked(getRemoteConfigAndMetaWithUserEmail).mockResolvedValue(
+          createRemoteSyncState({
+            configValueAndMeta: createConfigValueAndMeta(config, { lastModifiedAt: 1000 }),
+            vocabularyItems: [remoteVocabularyItem],
+          }),
+        )
+
+        const result = await syncConfig()
+
+        expect(result).toEqual({ status: "success", action: "downloaded" })
+        expect(setRemoteConfigAndMeta).not.toHaveBeenCalled()
+        expect(setLocalVocabularyItemsAndMeta).toHaveBeenCalledWith(
+          [remoteVocabularyItem],
+          expect.objectContaining({ schemaVersion: 68 }),
+        )
+        expect(setLastSyncedVocabularyItemsAndMeta).toHaveBeenCalledWith(
+          [remoteVocabularyItem],
+          expect.objectContaining({ email: "a@test.com" }),
+        )
       })
     })
   })

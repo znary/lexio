@@ -14,6 +14,7 @@ import {
   SidebarFooter,
   SidebarHeader,
 } from "@/components/ui/base-ui/sidebar"
+import { WEBSITE_URL } from "@/utils/constants/url"
 import { getCommandPaletteShortcutHint } from "@/utils/os"
 import { version } from "../../../../package.json"
 import { commandPaletteOpenAtom } from "../command-palette/atoms"
@@ -29,7 +30,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="group-data-[state=expanded]:px-5 group-data-[state=expanded]:pt-4 transition-all">
-        <a href="https://readfrog.app" className="flex items-center gap-2">
+        <a href={WEBSITE_URL} className="flex items-center gap-2">
           <img src={readFrogLogo} alt="Logo" className="h-8 w-8 shrink-0" />
           <span className="text-md font-bold overflow-hidden truncate">{i18n.t("name")}</span>
           <span className="text-xs text-muted-foreground overflow-hidden truncate">

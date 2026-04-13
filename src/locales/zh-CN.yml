@@ -1,6 +1,6 @@
-name: 陪读蛙
-extName: 陪读蛙 - 开源沉浸式翻译
-extDescription: 陪读蛙是一款开放源代码的浏览器插件，旨在帮助您从任何网站深入学习语言。
+name: 英语伴读
+extName: 英语伴读 - 沉浸式翻译与单词同步
+extDescription: 英语伴读是一款浏览器插件，用来做沉浸式翻译、单词短句收藏，以及基于 Google Drive 的多端同步。
 uninstallSurveyUrl: https://tally.so/r/3E9XDL
 dataTypes:
   string: 文本
@@ -35,11 +35,7 @@ popup:
   more:
     title: 更多
     translationHub: 翻译中心
-    joinDiscord: 加入 Discord
-    joinWechat: 加入微信群
-    starGithub: Github 加星
-    rateUs: 好评支持
-    ebook: 第三方电子书阅读器
+    vocabulary: 单词本
     tutorial: 使用教程
 errorRecovery:
   title: 应用发生异常
@@ -764,8 +760,10 @@ options:
         collapse: 收起配置
       googleDrive:
         title: Google Drive 云端同步
-        description: 远端配置较新时下载，本地配置较新时上传
+        description: 通过你自己的 Google Drive 应用私有目录同步设置和单词本
+        connect: 连接 Google Drive
         sync: 同步到 Google Drive
+        syncNow: 立即同步
         syncing: 同步中...
         syncSuccess:
           uploaded: 本地配置已上传至云端
@@ -844,6 +842,36 @@ options:
         confirm: 确认
         cancel: 取消
         description: 该操作将清空您的所有自定义配置，并将其重置为默认值，请确认是否清除。
+  vocabulary:
+    title: 单词本
+    description: 控制自动收藏、网页高亮，以及已经同步到 Google Drive 的单词和短句。
+    autoSave:
+      title: 自动收藏划词翻译结果
+      description: 当手动划词翻译成功后，自动保存英文单词和短句。
+    highlight:
+      title: 在网页里高亮已收藏内容
+      description: 当已收藏的单词或短句再次出现在原网页文本中时自动高亮。
+    maxPhraseWords:
+      title: 短句最大词数
+      description: 超过这个词数的划词结果不会自动收藏。
+    highlightColor:
+      title: 高亮颜色
+      description: 已收藏内容在网页中的高亮颜色。
+    library:
+      title: 单词本列表
+      description: 搜索、删除、清空和导出已经收藏并同步的单词与短句。
+      searchPlaceholder: 搜索已收藏的原文或译文
+      export: 导出 JSON
+      clear: 清空全部
+      empty: 还没有收藏内容。先翻译一个单词或短句，单词本就会开始积累。
+      noResults: 当前搜索没有匹配结果。
+      columns:
+        source: 原文
+        translation: 译文
+        type: 类型
+        hitCount: 命中次数
+        lastSeenAt: 最近出现
+        actions: 操作
   videoSubtitles:
     title: 视频字幕
     description: 当前仅支持 YouTube 视频字幕
@@ -968,6 +996,7 @@ action:
   copied: 已复制
   regenerate: 重新生成
   viewContextDetails: 上下文
+  savedToVocabulary: 已收藏到单词本
   saveToNotebase: 保存到笔记库
   saveToNotebaseSaving: 保存中...
   saveToNotebaseSuccess: 已保存到笔记库

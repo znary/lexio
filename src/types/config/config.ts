@@ -7,6 +7,7 @@ import {
   MIN_SELECTION_OVERLAY_OPACITY,
 } from "@/utils/constants/selection"
 import { MIN_SIDE_CONTENT_WIDTH } from "@/utils/constants/side"
+import { vocabularySettingsSchema } from "../vocabulary"
 import { languageDetectionConfigSchema } from "./language-detection"
 import { isLLMProvider, NON_API_TRANSLATE_PROVIDERS_MAP, providersConfigSchema } from "./provider"
 import { selectionToolbarCustomActionsSchema } from "./selection-toolbar"
@@ -93,6 +94,8 @@ const siteControlSchema = z.object({
   whitelistPatterns: z.array(z.string()),
 })
 
+const vocabularySchema = vocabularySettingsSchema
+
 // Complete config schema
 export const configSchema = z.object({
   language: languageSchema,
@@ -108,6 +111,7 @@ export const configSchema = z.object({
   inputTranslation: inputTranslationSchema,
   videoSubtitles: videoSubtitlesSchema,
   siteControl: siteControlSchema,
+  vocabulary: vocabularySchema,
 }).superRefine((data, ctx) => {
   const providerIdsSet = new Set(data.providersConfig.map(p => p.id))
 

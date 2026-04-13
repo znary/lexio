@@ -99,7 +99,9 @@ export function GoogleDriveSyncCard() {
                 <Icon icon="logos:google-drive" className="size-4" />
                 {isSyncing
                   ? i18n.t("options.config.sync.googleDrive.syncing")
-                  : i18n.t("options.config.sync.googleDrive.sync")}
+                  : authData?.isAuthenticated
+                    ? i18n.t("options.config.sync.googleDrive.syncNow")
+                    : i18n.t("options.config.sync.googleDrive.connect")}
               </Button>
             </div>
             <Activity mode={lastSyncTime ? "visible" : "hidden"}>

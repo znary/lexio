@@ -1,4 +1,5 @@
 import { i18n } from "#imports"
+import { WEBSITE_URL } from "@/utils/constants/url"
 import { sendMessage } from "@/utils/message"
 import { cn } from "@/utils/styles/utils"
 
@@ -13,7 +14,7 @@ export function APIConfigWarning({ className }: { className?: string }) {
       {i18n.t("noAPIKeyConfig.warningWithLink.youMust")}
       {" "}
       <a
-        href="https://readfrog.app/tutorial/api-key"
+        href={`${WEBSITE_URL}/tutorial/api-key`}
         target="_blank"
         rel="noreferrer"
         className="underline"
