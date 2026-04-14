@@ -11,9 +11,11 @@ import { createStore, Provider } from "jotai"
 import { useRef } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/base-ui/tooltip"
-import { isLLMProviderConfig, isTranslateProviderConfig } from "@/types/config/provider"
+import { isLLMProviderConfig } from "@/types/config/provider"
 import { configAtom } from "@/utils/atoms/config"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
+import { MANAGED_CLOUD_PROVIDER_ID } from "@/utils/constants/platform"
+import { DEFAULT_PROVIDER_CONFIG } from "@/utils/constants/providers"
 import {
   buildContextSnapshot,
   createRangeSnapshot,
@@ -36,6 +38,10 @@ const getOrCreateWebPageContextMock = vi.fn().mockResolvedValue(null)
 const getOrGenerateWebPageSummaryMock = vi.fn()
 const toastErrorMock = vi.fn()
 const onMessageMock = vi.fn()
+const storageAdapterGetMock = vi.fn()
+const storageAdapterSetMock = vi.fn()
+const storageAdapterSetMetaMock = vi.fn()
+const storageAdapterWatchMock = vi.fn()
 const originalGetSelection = window.getSelection
 
 vi.mock("@/components/ui/selection-popover", async () => {
@@ -168,40 +174,23 @@ vi.mock("../../components/selection-toolbar-title-content", () => ({
 
 vi.mock("../../components/selection-toolbar-footer-content", () => ({
   SelectionToolbarFooterContent: ({
+    children,
     paragraphsText,
-    onProviderChange,
     onRegenerate,
-    providers,
     titleText,
-    value,
   }: {
+    children?: React.ReactNode
     paragraphsText: string | null | undefined
-    onProviderChange: (id: string) => void
     onRegenerate: () => void
-    providers: Array<{ id: string }>
     titleText: string | null | undefined
-    value: string
   }) => {
-    const nextProvider = providers.find(provider => provider.id !== value)
-
     return (
       <div>
         <span data-testid="footer-title">{titleText}</span>
         <span data-testid="footer-paragraphs">{paragraphsText}</span>
+        {children}
         <button type="button" aria-label="Regenerate" onClick={onRegenerate}>
           Regenerate
-        </button>
-        <button
-          type="button"
-          aria-label="Change provider"
-          disabled={!nextProvider}
-          onClick={() => {
-            if (nextProvider) {
-              onProviderChange(nextProvider.id)
-            }
-          }}
-        >
-          Change provider
         </button>
       </div>
     )
@@ -269,6 +258,15 @@ vi.mock("@/utils/message", () => ({
   sendMessage: vi.fn(),
 }))
 
+vi.mock("@/utils/atoms/storage-adapter", () => ({
+  storageAdapter: {
+    get: (...args: unknown[]) => storageAdapterGetMock(...args),
+    set: (...args: unknown[]) => storageAdapterSetMock(...args),
+    setMeta: (...args: unknown[]) => storageAdapterSetMetaMock(...args),
+    watch: (...args: unknown[]) => storageAdapterWatchMock(...args),
+  },
+}))
+
 function cloneConfig(config: Config): Config {
   return JSON.parse(JSON.stringify(config)) as Config
 }
@@ -319,6 +317,7 @@ function createRangeAcrossNodes(
 }
 
 type TestStore = ReturnType<typeof createStore>
+let currentConfigStore: TestStore | null = null
 
 function setSelectionState(
   store: TestStore,
@@ -399,12 +398,6 @@ function createStructuredObjectSnapshot(output: Record<string, unknown>): Backgr
   }
 }
 
-function findAlternateTranslateProviderId(config: Config, currentProviderId: string) {
-  return config.providersConfig.find(provider =>
-    provider.id !== currentProviderId && isTranslateProviderConfig(provider),
-  )?.id
-}
-
 function findAlternateLLMProviderId(config: Config, currentProviderId: string) {
   return config.providersConfig.find(provider =>
     provider.id !== currentProviderId && isLLMProviderConfig(provider),
@@ -415,7 +408,38 @@ function setSelectionToolbarTranslateProvider(config: Config, providerId: string
   config.selectionToolbar.features.translate.providerId = providerId
 }
 
+function addAlternateManagedProvider(config: Config) {
+  const baseProvider = config.providersConfig.find(provider => provider.id === MANAGED_CLOUD_PROVIDER_ID)
+  if (!baseProvider) {
+    throw new Error("Managed cloud provider is missing from config")
+  }
+
+  config.providersConfig = [
+    baseProvider,
+    {
+      ...baseProvider,
+      id: "managed-cloud-backup",
+      name: `${baseProvider.name} Backup`,
+    },
+  ]
+}
+
+function createStandardTranslateConfig(includeAlternateProvider = false): Config {
+  const config = cloneConfig(DEFAULT_CONFIG)
+  const primaryProvider = DEFAULT_PROVIDER_CONFIG["microsoft-translate"]
+  const alternateProvider = DEFAULT_PROVIDER_CONFIG["google-translate"]
+
+  config.providersConfig = includeAlternateProvider
+    ? [primaryProvider, alternateProvider, ...config.providersConfig]
+    : [primaryProvider, ...config.providersConfig]
+  config.translate.providerId = primaryProvider.id
+  config.selectionToolbar.features.translate.providerId = primaryProvider.id
+
+  return config
+}
+
 function renderWithProviders(ui: ReactElement, store = createStore()) {
+  currentConfigStore = store
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -479,11 +503,16 @@ describe("selection toolbar requests", () => {
   beforeEach(() => {
     getOrCreateWebPageContextMock.mockResolvedValue(null)
     getOrGenerateWebPageSummaryMock.mockResolvedValue(undefined)
+    storageAdapterGetMock.mockImplementation(async (_key: string, fallback: Config) => currentConfigStore?.get(configAtom) ?? fallback)
+    storageAdapterSetMock.mockResolvedValue(undefined)
+    storageAdapterSetMetaMock.mockResolvedValue(undefined)
+    storageAdapterWatchMock.mockImplementation(() => () => {})
   })
 
   afterEach(() => {
     cleanup()
     document.body.innerHTML = ""
+    currentConfigStore = null
     window.getSelection = originalGetSelection
     vi.resetAllMocks()
   })
@@ -493,7 +522,8 @@ describe("selection toolbar requests", () => {
     getOrCreateWebPageContextMock.mockResolvedValue(null)
 
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    const initialConfig = createStandardTranslateConfig(true)
+    store.set(configAtom, initialConfig)
     setSelectionState(store, { text: "Selected text" })
     const view = renderWithProviders(<TranslateButton />, store)
 
@@ -528,13 +558,7 @@ describe("selection toolbar requests", () => {
     expect(translateTextCoreMock).toHaveBeenCalledTimes(1)
 
     const updatedConfig = cloneConfig(store.get(configAtom))
-    const nextProviderId = findAlternateTranslateProviderId(
-      updatedConfig,
-      updatedConfig.selectionToolbar.features.translate.providerId,
-    )
-    if (!nextProviderId) {
-      throw new Error("No alternate translate provider available for test")
-    }
+    const nextProviderId = DEFAULT_PROVIDER_CONFIG["google-translate"].id
     updatedConfig.selectionToolbar.features.translate.providerId = nextProviderId
 
     act(() => {
@@ -561,7 +585,7 @@ describe("selection toolbar requests", () => {
     getOrCreateWebPageContextMock.mockResolvedValue(null)
 
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, createStandardTranslateConfig())
     setSelectionState(store, { text: "Selected text" })
     renderWithProviders(<TranslateButton />, store)
 
@@ -584,7 +608,7 @@ describe("selection toolbar requests", () => {
     getOrCreateWebPageContextMock.mockResolvedValue(null)
 
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, createStandardTranslateConfig())
     setSelectionState(store, { text: "Selected text" })
     renderWithProviders(<TranslateButton />, store)
 
@@ -605,7 +629,7 @@ describe("selection toolbar requests", () => {
     getOrCreateWebPageContextMock.mockResolvedValue(null)
 
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, createStandardTranslateConfig())
     setSelectionState(store, { text: "Selected text" })
     renderWithProviders(<TranslateButton />, store)
 
@@ -649,7 +673,7 @@ describe("selection toolbar requests", () => {
     document.body.appendChild(paragraph)
 
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, createStandardTranslateConfig())
     setSelectionState(store, {
       text: "Original page selection",
       range: createRangeFor(paragraph),
@@ -726,12 +750,12 @@ describe("selection toolbar requests", () => {
     })
 
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, createStandardTranslateConfig())
     setSelectionState(store, { text: "Selected text" })
     renderWithProviders(<TranslateButton />, store)
 
     const updatedConfig = cloneConfig(store.get(configAtom))
-    setSelectionToolbarTranslateProvider(updatedConfig, "openai-default")
+    setSelectionToolbarTranslateProvider(updatedConfig, MANAGED_CLOUD_PROVIDER_ID)
     act(() => {
       store.set(configAtom, updatedConfig)
     })
@@ -773,7 +797,7 @@ describe("selection toolbar requests", () => {
 
     const store = createStore()
     const updatedConfig = cloneConfig(DEFAULT_CONFIG)
-    setSelectionToolbarTranslateProvider(updatedConfig, "openai-default")
+    setSelectionToolbarTranslateProvider(updatedConfig, MANAGED_CLOUD_PROVIDER_ID)
     store.set(configAtom, updatedConfig)
     setSelectionState(store, { text: "Selected text" })
     renderWithProviders(<TranslateButton />, store)
@@ -808,7 +832,7 @@ describe("selection toolbar requests", () => {
     getOrCreateWebPageContextMock.mockResolvedValue(null)
 
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, createStandardTranslateConfig())
     setSelectionState(store, { text: "Selected text" })
     renderWithProviders(<TranslateButton />, store)
 
@@ -821,7 +845,7 @@ describe("selection toolbar requests", () => {
 
     const translationContent = screen.getByTestId("translation-content")
     expect(translationContent.compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(alert.compareDocumentPosition(screen.getByRole("button", { name: "Change provider" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(alert.compareDocumentPosition(screen.getByRole("button", { name: "Regenerate" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
     fireEvent.click(screen.getByRole("button", { name: "Regenerate" }))
 
@@ -858,7 +882,7 @@ describe("selection toolbar requests", () => {
     getOrCreateWebPageContextMock.mockResolvedValue(null)
 
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, createStandardTranslateConfig())
     setSelectionState(store, { text: "Selected text" })
     renderWithProviders(<TranslateButton />, store)
 
@@ -884,7 +908,7 @@ describe("selection toolbar requests", () => {
     document.body.appendChild(paragraph)
 
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, createStandardTranslateConfig())
     setSelectionState(store, { text: "Selected text", range: createRangeFor(paragraph) })
     renderWithProviders(<TranslateButton />, store)
 
@@ -942,7 +966,7 @@ describe("selection toolbar requests", () => {
     }
 
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, createStandardTranslateConfig())
     setSelectionState(store, {
       text: "As long as you're alive, there's no bad ending.",
       range: createRangeAcrossNodes(startNode, endNode),
@@ -983,7 +1007,7 @@ describe("selection toolbar requests", () => {
 
   it("shows a toast when the context menu request cannot recover a selection snapshot", async () => {
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, createStandardTranslateConfig())
     renderWithProviders(<TranslateButton />, store)
 
     const handler = getRegisteredMessageHandler<{ selectionText: string }>("openSelectionTranslationFromContextMenu")
@@ -1006,7 +1030,7 @@ describe("selection toolbar requests", () => {
     document.body.appendChild(paragraph)
 
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, createStandardTranslateConfig())
     setSelectionState(store, { text: "Selected text", range: createRangeFor(paragraph) })
     renderWithProviders(<SelectionToolbarCustomActionButtons />, store)
 
@@ -1076,7 +1100,7 @@ describe("selection toolbar requests", () => {
 
   it("shows a toast when a custom action context menu request cannot recover a selection snapshot", async () => {
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, createStandardTranslateConfig())
     renderWithProviders(<SelectionToolbarCustomActionButtons />, store)
 
     const action = getDefaultCustomAction()
@@ -1141,6 +1165,7 @@ describe("selection toolbar requests", () => {
     expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(1)
 
     const updatedConfig = cloneConfig(store.get(configAtom))
+    addAlternateManagedProvider(updatedConfig)
     const currentProviderId = updatedConfig.selectionToolbar.customActions[0]?.providerId ?? ""
     const nextProviderId = findAlternateLLMProviderId(updatedConfig, currentProviderId)
     if (!nextProviderId) {

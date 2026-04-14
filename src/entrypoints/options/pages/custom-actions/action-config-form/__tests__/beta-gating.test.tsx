@@ -20,10 +20,6 @@ vi.mock("../icon-field", () => ({
   IconField: () => <div>IconField</div>,
 }))
 
-vi.mock("../provider-field", () => ({
-  ProviderField: () => <div>ProviderField</div>,
-}))
-
 vi.mock("../output-schema-field", () => ({
   OutputSchemaField: () => <div>OutputSchemaField</div>,
 }))

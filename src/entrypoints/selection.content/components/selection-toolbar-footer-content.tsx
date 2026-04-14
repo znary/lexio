@@ -1,8 +1,6 @@
-import type { ProviderConfig } from "@/types/config/provider"
 import { i18n } from "#imports"
 import { IconAspectRatio, IconRefresh } from "@tabler/icons-react"
 import { useCallback } from "react"
-import ProviderSelector from "@/components/llm-providers/provider-selector"
 import { buttonVariants } from "@/components/ui/base-ui/button"
 import {
   Field,
@@ -142,34 +140,18 @@ export function SelectionToolbarFooterContent({
   children,
   className,
   paragraphsText,
-  onProviderChange,
   onRegenerate,
-  providers,
   titleText,
-  value,
 }: {
   children?: React.ReactNode
   className?: string
   paragraphsText: string | null | undefined
-  onProviderChange: (id: string) => void
   onRegenerate: () => void
-  providers: ProviderConfig[]
   titleText: string | null | undefined
-  value: string
 }) {
-  const popoverOverlay = useSelectionPopoverOverlayProps()
-
   return (
     <SelectionPopover.Footer className={cn("justify-between gap-3 border-t", className)}>
-      <div className="min-w-0 max-w-52 flex-1">
-        <ProviderSelector
-          providers={providers}
-          value={value}
-          onChange={onProviderChange}
-          className="max-w-60"
-          selectContentProps={popoverOverlay}
-        />
-      </div>
+      <div />
       <div className="flex items-center gap-1">
         {children}
         <ContextDetailsButton titleText={titleText} paragraphsText={paragraphsText} />

@@ -1,0 +1,30 @@
+{
+  "name": "lexio-platform-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-14",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "lexio-platform",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "UsageGate",
+        "name": "USAGE_GATE"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["UsageGate"],
+      "tag": "v1"
+    }
+  ],
+  "vars": {
+    "PADDLE_ENV": "sandbox"
+  }
+}

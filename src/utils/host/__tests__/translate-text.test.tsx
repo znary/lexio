@@ -2,6 +2,8 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
+import { MANAGED_CLOUD_PROVIDER_ID } from "@/utils/constants/platform"
+import { DEFAULT_PROVIDER_CONFIG } from "@/utils/constants/providers"
 import { executeTranslate } from "@/utils/host/translate/execute-translate"
 import { translateTextForInput, translateTextForPage, translateTextForPageTitle } from "@/utils/host/translate/translate-variants"
 import { getTranslatePrompt } from "@/utils/prompts/translate"
@@ -38,6 +40,37 @@ let mockGetTranslatePrompt: any
 let mockGetOrCreateWebPageContext: any
 let mockGetOrGenerateWebPageSummary: any
 
+function createConfigWithProviderOverrides() {
+  const microsoftProvider = DEFAULT_PROVIDER_CONFIG["microsoft-translate"]
+
+  return {
+    ...DEFAULT_CONFIG,
+    providersConfig: [microsoftProvider, ...DEFAULT_CONFIG.providersConfig],
+    translate: {
+      ...DEFAULT_CONFIG.translate,
+      providerId: microsoftProvider.id,
+    },
+    inputTranslation: {
+      ...DEFAULT_CONFIG.inputTranslation,
+      providerId: microsoftProvider.id,
+    },
+    videoSubtitles: {
+      ...DEFAULT_CONFIG.videoSubtitles,
+      providerId: microsoftProvider.id,
+    },
+    selectionToolbar: {
+      ...DEFAULT_CONFIG.selectionToolbar,
+      features: {
+        ...DEFAULT_CONFIG.selectionToolbar.features,
+        translate: {
+          ...DEFAULT_CONFIG.selectionToolbar.features.translate,
+          providerId: microsoftProvider.id,
+        },
+      },
+    },
+  }
+}
+
 describe("translate-text", () => {
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -59,7 +92,7 @@ describe("translate-text", () => {
     mockGetOrGenerateWebPageSummary.mockResolvedValue("Generated summary")
 
     // Mock getConfigFromStorage to return DEFAULT_CONFIG
-    mockGetConfigFromStorage.mockResolvedValue(DEFAULT_CONFIG)
+    mockGetConfigFromStorage.mockResolvedValue(createConfigWithProviderOverrides())
 
     // Mock getTranslatePrompt to return a simple prompt pair
     mockGetTranslatePrompt.mockResolvedValue({
@@ -93,7 +126,7 @@ describe("translate-text", () => {
         ...DEFAULT_CONFIG,
         translate: {
           ...DEFAULT_CONFIG.translate,
-          providerId: "openai-default",
+          providerId: MANAGED_CLOUD_PROVIDER_ID,
           enableAIContentAware: false,
         },
       }
@@ -124,7 +157,7 @@ describe("translate-text", () => {
         ...DEFAULT_CONFIG,
         translate: {
           ...DEFAULT_CONFIG.translate,
-          providerId: "openai-default",
+          providerId: MANAGED_CLOUD_PROVIDER_ID,
           enableAIContentAware: true,
         },
       }
@@ -155,7 +188,7 @@ describe("translate-text", () => {
         ...DEFAULT_CONFIG,
         translate: {
           ...DEFAULT_CONFIG.translate,
-          providerId: "openai-default",
+          providerId: MANAGED_CLOUD_PROVIDER_ID,
           enableAIContentAware: false,
         },
       }
@@ -205,7 +238,7 @@ describe("translate-text", () => {
         },
         inputTranslation: {
           ...DEFAULT_CONFIG.inputTranslation,
-          providerId: "openai-default",
+          providerId: MANAGED_CLOUD_PROVIDER_ID,
         },
       }
 

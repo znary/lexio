@@ -27,6 +27,8 @@ import { isCustomLLMProvider } from "@/types/config/provider"
 import { compactObject } from "@/types/utils"
 import { getLLMProvidersConfig, getProviderConfigById } from "../config/helpers"
 import { CONFIG_STORAGE_KEY } from "../constants/config"
+import { MANAGED_CLOUD_PROVIDER_ID, PLATFORM_OPENAI_BASE_URL } from "../constants/platform"
+import { getPlatformAuthSession } from "../platform/storage"
 import { resolveModelId } from "./model-id"
 
 const CREATE_AI_MAPPER = {
@@ -77,6 +79,19 @@ async function getLanguageModelById(providerId: string) {
   const providerConfig = getProviderConfigById(LLMProvidersConfig, providerId)
   if (!providerConfig) {
     throw new Error(`Provider ${providerId} not found`)
+  }
+
+  if (providerId === MANAGED_CLOUD_PROVIDER_ID) {
+    const session = await getPlatformAuthSession()
+    if (!session?.token) {
+      throw new Error("No Lexio account token found. Sign in again.")
+    }
+
+    return createOpenAICompatible({
+      name: providerConfig.provider,
+      baseURL: PLATFORM_OPENAI_BASE_URL,
+      apiKey: session.token,
+    }).languageModel(resolveModelId(providerConfig.model) || MANAGED_CLOUD_PROVIDER_ID)
   }
 
   const customHeaders = CUSTOM_HEADER_MAP[providerConfig.provider]

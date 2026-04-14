@@ -1,6 +1,5 @@
 export const ROUTE_DEFS = [
   { path: "/" },
-  { path: "/api-providers" },
   { path: "/custom-actions" },
   { path: "/translation" },
   { path: "/video-subtitles" },

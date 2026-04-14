@@ -1,6 +1,6 @@
 name: Lexio
 extName: Lexio - Immersive Translate and Vocabulary Sync
-extDescription: Lexio is a browser extension for immersive translation, vocabulary capture, and Google Drive sync across devices.
+extDescription: Lexio is a browser extension for immersive translation, vocabulary capture, and account sync across devices.
 uninstallSurveyUrl: https://tally.so/r/nPK6Ob
 dataTypes:
   string: Text
@@ -31,7 +31,7 @@ popup:
   blog:
     notification: What's new in Lexio
   aiSmartContext: AI Smart Context
-  aiSmartContextDescription: Uses webpage context to improve translation quality. Requires LLM translation provider.
+  aiSmartContextDescription: Uses webpage context to improve translation quality when hosted AI analysis is enabled.
   more:
     title: More
     translationHub: Translation Hub
@@ -862,7 +862,7 @@ options:
       description: Color used when saved items are highlighted on the page.
     library:
       title: Vocabulary Library
-      description: Search, remove, clear, and export the saved words and phrases synced with Google Drive.
+      description: Search, remove, clear, and export the saved words and phrases in your synced vocabulary.
       searchPlaceholder: Search saved words or translations
       export: Export JSON
       clear: Clear all

@@ -37,9 +37,9 @@ vi.mock("react-router", async () => {
 vi.mock("../search-items", () => ({
   SEARCH_ITEMS: [
     {
-      sectionId: "feature-providers",
+      sectionId: "language-detection",
       route: "/",
-      titleKey: "feature-providers-title",
+      titleKey: "language-detection-title",
       pageKey: "general-page",
     },
     {
@@ -141,7 +141,7 @@ describe("settings search navigation", () => {
 
   it("updates search params when route matches but section differs", () => {
     mockedRouter.location.pathname = "/translation"
-    mockedRouter.location.search = "?section=feature-providers"
+    mockedRouter.location.search = "?section=language-detection"
 
     renderSettingsSearch()
 
@@ -154,13 +154,13 @@ describe("settings search navigation", () => {
   })
 
   it("scrolls from URL section param on location updates", async () => {
-    mockedRouter.location.search = "?section=feature-providers"
-    mockedSectionScroll.getSectionIdFromSearch.mockReturnValue("feature-providers")
+    mockedRouter.location.search = "?section=language-detection"
+    mockedSectionScroll.getSectionIdFromSearch.mockReturnValue("language-detection")
 
     renderSettingsSearch()
 
     await waitFor(() => {
-      expect(mockedSectionScroll.scrollToSectionWhenReady).toHaveBeenCalledWith("feature-providers")
+      expect(mockedSectionScroll.scrollToSectionWhenReady).toHaveBeenCalledWith("language-detection")
     })
   })
 })

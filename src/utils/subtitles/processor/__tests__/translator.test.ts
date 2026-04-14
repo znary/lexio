@@ -1,6 +1,8 @@
 import type { ProviderConfig } from "@/types/config/provider"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
+import { MANAGED_CLOUD_PROVIDER_ID } from "@/utils/constants/platform"
+import { MANAGED_CLOUD_PROVIDER_CONFIG } from "@/utils/constants/providers"
 
 const getLocalConfigMock = vi.fn()
 const sendMessageMock = vi.fn()
@@ -31,7 +33,7 @@ describe("subtitles translator", () => {
       },
       videoSubtitles: {
         ...DEFAULT_CONFIG.videoSubtitles,
-        providerId: "openai-default",
+        providerId: MANAGED_CLOUD_PROVIDER_ID,
       },
     })
 
@@ -102,7 +104,7 @@ describe("subtitles translator", () => {
     expect(sendMessageMock).toHaveBeenCalledWith("getSubtitlesSummary", expect.objectContaining({
       videoTitle: "Video title",
       subtitlesContext: "subtitle transcript",
-      providerConfig: expect.objectContaining({ id: "openai-default" }),
+      providerConfig: expect.objectContaining({ id: MANAGED_CLOUD_PROVIDER_ID }),
     }))
   })
 
@@ -125,7 +127,7 @@ describe("subtitles translator", () => {
       },
       videoSubtitles: {
         ...DEFAULT_CONFIG.videoSubtitles,
-        providerId: "openai-default",
+        providerId: MANAGED_CLOUD_PROVIDER_ID,
       },
     })
 
@@ -155,12 +157,7 @@ describe("subtitles translator", () => {
     const { buildSubtitlesSummaryContextHash } = await import("../translator")
 
     const baseProviderConfig: ProviderConfig = {
-      id: "openai-default",
-      name: "OpenAI",
-      provider: "openai",
-      enabled: true,
-      apiKey: "sk-test",
-      model: { model: "gpt-5-mini", isCustomModel: false, customModel: null },
+      ...MANAGED_CLOUD_PROVIDER_CONFIG,
     }
 
     const first = buildSubtitlesSummaryContextHash({
@@ -185,12 +182,7 @@ describe("subtitles translator", () => {
     const { buildSubtitlesSummaryContextHash } = await import("../translator")
 
     const baseProviderConfig: ProviderConfig = {
-      id: "openai-default",
-      name: "OpenAI",
-      provider: "openai",
-      enabled: true,
-      apiKey: "sk-test",
-      model: { model: "gpt-5-mini", isCustomModel: false, customModel: null },
+      ...MANAGED_CLOUD_PROVIDER_CONFIG,
     }
 
     const prefix = "a".repeat(3000)

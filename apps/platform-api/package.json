@@ -1,0 +1,21 @@
+{
+  "name": "@lexio/platform-api",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^3.0.52",
+    "@clerk/backend": "^2.10.0",
+    "ai": "^6.0.154",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250410.0",
+    "typescript": "^6.0.2",
+    "wrangler": "^4.24.3"
+  }
+}

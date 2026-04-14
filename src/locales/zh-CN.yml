@@ -1,6 +1,6 @@
 name: Lexio
 extName: Lexio - 沉浸式翻译与单词同步
-extDescription: Lexio是一款浏览器插件，用来做沉浸式翻译、单词短句收藏，以及基于 Google Drive 的多端同步。
+extDescription: Lexio是一款浏览器插件，用来做沉浸式翻译、单词短句收藏，以及账号多端同步。
 uninstallSurveyUrl: https://tally.so/r/3E9XDL
 dataTypes:
   string: 文本
@@ -31,7 +31,7 @@ popup:
   blog:
     notification: 陪读蛙更新动态
   aiSmartContext: AI 智能上下文
-  aiSmartContextDescription: 结合网页上下文提升翻译效果。需要配置 LLM 翻译服务商。
+  aiSmartContextDescription: 开启托管 AI 分析后，会结合网页上下文提升翻译效果。
   more:
     title: 更多
     translationHub: 翻译中心
@@ -847,7 +847,7 @@ options:
         description: 该操作将清空您的所有自定义配置，并将其重置为默认值，请确认是否清除。
   vocabulary:
     title: 单词本
-    description: 控制自动收藏、网页高亮，以及已经同步到 Google Drive 的单词和短句。
+    description: 控制自动收藏、网页高亮，以及已经同步的单词和短句。
     autoSave:
       title: 自动收藏划词翻译结果
       description: 当手动划词翻译成功后，自动保存英文单词和短句。

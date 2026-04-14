@@ -2,6 +2,7 @@ import type { Config } from "@/types/config/config"
 import type { SelectionToolbarCustomAction } from "@/types/config/selection-toolbar"
 import type { PageTranslateRange } from "@/types/config/translate"
 import { CUSTOM_ACTION_TEMPLATES } from "./custom-action-templates"
+import { MANAGED_CLOUD_PROVIDER_ID } from "./platform"
 import { DEFAULT_TRANSLATE_PROMPTS_CONFIG } from "./prompt"
 import { DEFAULT_PROVIDER_CONFIG_LIST } from "./providers"
 import { DEFAULT_SELECTION_OVERLAY_OPACITY } from "./selection"
@@ -14,17 +15,14 @@ import { DEFAULT_VOCABULARY_SETTINGS } from "./vocabulary"
 
 export const CONFIG_STORAGE_KEY = "config"
 export const LAST_SYNCED_CONFIG_STORAGE_KEY = "lastSyncedConfig"
-export const GOOGLE_DRIVE_TOKEN_STORAGE_KEY = "__googleDriveToken"
 export const VOCABULARY_ITEMS_STORAGE_KEY = "vocabularyItems"
 export const LAST_SYNCED_VOCABULARY_ITEMS_STORAGE_KEY = "lastSyncedVocabularyItems"
-export const GOOGLE_DRIVE_PENDING_SYNC_STORAGE_KEY = "__googleDrivePendingSync"
-export const GOOGLE_DRIVE_SYNC_CONFLICT_STORAGE_KEY = "__googleDriveSyncConflict"
-export const GOOGLE_DRIVE_SYNC_RETRY_ALARM_NAME = "google-drive-sync-retry"
+export const PLATFORM_AUTH_STORAGE_KEY = "__platformAuth"
 
 export const THEME_STORAGE_KEY = "theme"
 export const DETECTED_CODE_STORAGE_KEY = "detectedCode"
 export const DEFAULT_DETECTED_CODE = "eng" as const
-export const CONFIG_SCHEMA_VERSION = 68
+export const CONFIG_SCHEMA_VERSION = 69
 
 export const DEFAULT_FLOATING_BUTTON_POSITION = 0.66
 
@@ -33,7 +31,7 @@ function createDefaultDictionaryAction(): SelectionToolbarCustomAction | null {
   if (!template)
     return null
 
-  const action = template.createAction("openai-default")
+  const action = template.createAction(MANAGED_CLOUD_PROVIDER_ID)
   return {
     ...action,
     id: "default-dictionary",
@@ -56,7 +54,7 @@ export const DEFAULT_CONFIG: Config = {
   },
   providersConfig: DEFAULT_PROVIDER_CONFIG_LIST,
   translate: {
-    providerId: "microsoft-translate-default",
+    providerId: MANAGED_CLOUD_PROVIDER_ID,
     mode: "bilingual",
     node: {
       enabled: false,
@@ -109,7 +107,7 @@ export const DEFAULT_CONFIG: Config = {
     features: {
       translate: {
         enabled: true,
-        providerId: "microsoft-translate-default",
+        providerId: MANAGED_CLOUD_PROVIDER_ID,
       },
       speak: {
         enabled: true,
@@ -128,7 +126,7 @@ export const DEFAULT_CONFIG: Config = {
   },
   inputTranslation: {
     enabled: true,
-    providerId: "microsoft-translate-default",
+    providerId: MANAGED_CLOUD_PROVIDER_ID,
     fromLang: "targetCode",
     toLang: "sourceCode",
     enableCycle: false,
@@ -137,7 +135,7 @@ export const DEFAULT_CONFIG: Config = {
   videoSubtitles: {
     enabled: true,
     autoStart: false,
-    providerId: "microsoft-translate-default",
+    providerId: MANAGED_CLOUD_PROVIDER_ID,
     style: {
       displayMode: DEFAULT_DISPLAY_MODE,
       translationPosition: DEFAULT_TRANSLATION_POSITION,

@@ -28,7 +28,6 @@ import { IconField } from "./icon-field"
 import { NameField } from "./name-field"
 import { NotebaseConnectionField } from "./notebase-connection-field"
 import { OutputSchemaField } from "./output-schema-field"
-import { ProviderField } from "./provider-field"
 
 export function CustomActionConfigForm() {
   const selectionToolbarConfig = useAtomValue(configFieldsAtomMap.selectionToolbar)
@@ -108,8 +107,6 @@ function CustomActionConfigEditor({ selectedAction }: { selectedAction: Selectio
           <NameField form={form} />
 
           <IconField form={form} />
-
-          <ProviderField form={form} />
 
           <form.AppField name="systemPrompt">
             {() => (

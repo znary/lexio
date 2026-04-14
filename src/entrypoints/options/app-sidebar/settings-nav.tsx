@@ -38,13 +38,6 @@ export function SettingsNav() {
           </SidebarMenuItem>
 
           <SidebarMenuItem>
-            <SidebarMenuButton render={<Link to="/api-providers" />} isActive={pathname === "/api-providers"}>
-              <Icon icon="tabler:api" />
-              <span>{i18n.t("options.apiProviders.title")}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-
-          <SidebarMenuItem>
             <SidebarMenuButton render={<Link to="/custom-actions" />} isActive={pathname === "/custom-actions"}>
               <Icon icon="tabler:sparkles" />
               <span>{i18n.t("options.floatingButtonAndToolbar.selectionToolbar.customActions.title")}</span>

@@ -67,7 +67,11 @@ export default antfu({
     ignores: [".claude/**/*"],
     languageOptions: {
       parserOptions: {
-        project: "./tsconfig.json",
+        project: [
+          "./tsconfig.json",
+          "./apps/platform-api/tsconfig.json",
+          "./apps/platform-web/tsconfig.json",
+        ],
       },
     },
     rules: {

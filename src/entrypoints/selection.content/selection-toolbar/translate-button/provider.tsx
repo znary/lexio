@@ -13,11 +13,10 @@ import { SelectionPopover } from "@/components/ui/selection-popover"
 import { ANALYTICS_FEATURE, ANALYTICS_SURFACE } from "@/types/analytics"
 import { isLLMProviderConfig, isTranslateProviderConfig } from "@/types/config/provider"
 import { createFeatureUsageContext, trackFeatureUsed } from "@/utils/analytics"
-import { configFieldsAtomMap, writeConfigAtom } from "@/utils/atoms/config"
+import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { filterEnabledProvidersConfig, getProviderConfigById } from "@/utils/config/helpers"
 import { DEFAULT_DICTIONARY_ACTION_ID } from "@/utils/constants/custom-action"
 import { CUSTOM_ACTION_TEMPLATES } from "@/utils/constants/custom-action-templates"
-import { buildFeatureProviderPatch } from "@/utils/constants/feature-providers"
 import { streamBackgroundText } from "@/utils/content-script/background-stream-client"
 import { prepareTranslationText } from "@/utils/host/translate/text-preparation"
 import { translateTextCore } from "@/utils/host/translate/translate-text"
@@ -204,7 +203,6 @@ export function SelectionTranslationProvider({
   const selectionToolbarConfig = useAtomValue(configFieldsAtomMap.selectionToolbar)
   const vocabularySettings = useAtomValue(configFieldsAtomMap.vocabulary)
   const setIsSelectionToolbarVisible = useSetAtom(isSelectionToolbarVisibleAtom)
-  const setConfig = useSetAtom(writeConfigAtom)
   const abortControllerRef = useRef<AbortController | null>(null)
   const pendingOpenRequestRef = useRef<SelectionTranslatePendingOpenRequest | null>(null)
   const reopenFrameRef = useRef<number | null>(null)
@@ -217,10 +215,6 @@ export function SelectionTranslationProvider({
   const cleanedSelectionText = useMemo(
     () => prepareTranslationText(selectionText),
     [selectionText],
-  )
-  const translateProviders = useMemo(
-    () => filterEnabledProvidersConfig(providersConfig).filter(isTranslateProviderConfig),
-    [providersConfig],
   )
   const llmProviders = useMemo(
     () => filterEnabledProvidersConfig(providersConfig).filter(isLLMProviderConfig),
@@ -330,10 +324,6 @@ export function SelectionTranslationProvider({
       setAnchor(request.anchor)
     }
   }, [])
-
-  const handleProviderChange = useCallback((providerId: string) => {
-    void setConfig(buildFeatureProviderPatch({ "selectionToolbar.translate": providerId }))
-  }, [setConfig])
 
   const handleRegenerate = useCallback(() => {
     cancelCurrentTranslation()
@@ -662,10 +652,7 @@ export function SelectionTranslationProvider({
           </SelectionPopover.Body>
           <SelectionToolbarFooterContent
             paragraphsText={paragraphsText}
-            providers={translateProviders}
             titleText={titleText}
-            value={translateRequest.providerConfig?.id ?? ""}
-            onProviderChange={handleProviderChange}
             onRegenerate={handleRegenerate}
           >
             {savedVocabularyText && (

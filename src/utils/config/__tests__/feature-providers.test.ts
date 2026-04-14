@@ -2,6 +2,7 @@ import type { ProviderConfig } from "@/types/config/provider"
 import { describe, expect, it } from "vitest"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
 import { buildFeatureProviderPatch } from "@/utils/constants/feature-providers"
+import { MANAGED_CLOUD_PROVIDER_ID } from "@/utils/constants/platform"
 import {
   computeLanguageDetectionFallbackAfterDeletion,
   computeProviderFallbacksAfterDeletion,
@@ -17,34 +18,45 @@ function getProviderById(id: string): ProviderConfig {
   return provider
 }
 
+function createManagedProvider(
+  id: string,
+  overrides: Partial<ProviderConfig> = {},
+): ProviderConfig {
+  return {
+    ...getProviderById(MANAGED_CLOUD_PROVIDER_ID),
+    id,
+    ...overrides,
+  } as ProviderConfig
+}
+
 describe("feature providers", () => {
   describe("buildFeatureProviderPatch", () => {
     it("builds patch for a single feature assignment", () => {
       const patch = buildFeatureProviderPatch({
-        translate: "openai-default",
+        translate: MANAGED_CLOUD_PROVIDER_ID,
       })
 
       expect(patch).toEqual({
         translate: {
-          providerId: "openai-default",
+          providerId: MANAGED_CLOUD_PROVIDER_ID,
         },
       })
     })
 
     it("builds patch for multiple feature assignments", () => {
       const patch = buildFeatureProviderPatch({
-        "translate": "microsoft-translate-default",
-        "selectionToolbar.translate": "openai-default",
+        "translate": MANAGED_CLOUD_PROVIDER_ID,
+        "selectionToolbar.translate": "backup-managed-cloud",
       })
 
       expect(patch).toEqual({
         translate: {
-          providerId: "microsoft-translate-default",
+          providerId: MANAGED_CLOUD_PROVIDER_ID,
         },
         selectionToolbar: {
           features: {
             translate: {
-              providerId: "openai-default",
+              providerId: "backup-managed-cloud",
             },
           },
         },
@@ -78,17 +90,17 @@ describe("feature providers", () => {
       }
 
       const remainingProviders = [
-        getProviderById("microsoft-translate-default"),
-        getProviderById("openai-default"),
+        createManagedProvider("fallback-managed-cloud"),
+        createManagedProvider("backup-managed-cloud"),
       ]
 
       const fallbacks = computeProviderFallbacksAfterDeletion("deleted-provider", config, remainingProviders)
 
       expect(fallbacks).toEqual({
-        "translate": "microsoft-translate-default",
-        "videoSubtitles": "microsoft-translate-default",
-        "selectionToolbar.translate": "microsoft-translate-default",
-        "inputTranslation": "microsoft-translate-default",
+        "translate": "fallback-managed-cloud",
+        "videoSubtitles": "fallback-managed-cloud",
+        "selectionToolbar.translate": "fallback-managed-cloud",
+        "inputTranslation": "fallback-managed-cloud",
       })
     })
 
@@ -118,10 +130,9 @@ describe("feature providers", () => {
       }
 
       const remainingProviders = [
-        {
-          ...getProviderById("openai-default"),
+        createManagedProvider("disabled-managed-cloud", {
           enabled: false,
-        },
+        }),
       ]
 
       const fallbacks = computeProviderFallbacksAfterDeletion("deleted-provider", config, remainingProviders)
@@ -139,7 +150,7 @@ describe("feature providers", () => {
 
     it("returns null when all features have at least one compatible provider", () => {
       const remainingProviders = [
-        getProviderById("microsoft-translate-default"),
+        getProviderById(MANAGED_CLOUD_PROVIDER_ID),
       ]
 
       expect(findFeatureMissingProvider(remainingProviders)).toBeNull()
@@ -147,10 +158,9 @@ describe("feature providers", () => {
 
     it("treats disabled providers as unavailable", () => {
       const remainingProviders = [
-        {
-          ...getProviderById("openai-default"),
+        createManagedProvider("disabled-managed-cloud", {
           enabled: false,
-        },
+        }),
       ]
 
       expect(findFeatureMissingProvider(remainingProviders)).toBe("translate")
@@ -187,11 +197,10 @@ describe("feature providers", () => {
       }
 
       const remainingProviders = [
-        {
-          ...getProviderById("openai-default"),
+        createManagedProvider("disabled-managed-cloud", {
           enabled: false,
-        },
-        getProviderById("google-default"),
+        }),
+        createManagedProvider("fallback-llm-provider"),
       ]
 
       const result = computeSelectionToolbarCustomActionFallbacksAfterDeletion(
@@ -203,7 +212,7 @@ describe("feature providers", () => {
       expect(result).toEqual([
         expect.objectContaining({
           id: "action-a",
-          providerId: "google-default",
+          providerId: "fallback-llm-provider",
         }),
       ])
     })
@@ -237,10 +246,9 @@ describe("feature providers", () => {
       }
 
       const remainingProviders = [
-        {
-          ...getProviderById("openai-default"),
+        createManagedProvider("disabled-managed-cloud", {
           enabled: false,
-        },
+        }),
       ]
 
       const result = computeSelectionToolbarCustomActionFallbacksAfterDeletion(
@@ -263,7 +271,7 @@ describe("feature providers", () => {
 
       expect(result).toEqual({
         mode: "llm",
-        providerId: "openai-default",
+        providerId: MANAGED_CLOUD_PROVIDER_ID,
       })
     })
 
@@ -271,15 +279,17 @@ describe("feature providers", () => {
       const result = resolveLanguageDetectionConfigForModeChange(
         {
           mode: "basic",
-          providerId: "google-default",
+          providerId: "fallback-llm-provider",
         },
         "llm",
-        DEFAULT_CONFIG.providersConfig,
+        [
+          createManagedProvider("fallback-llm-provider"),
+        ],
       )
 
       expect(result).toEqual({
         mode: "llm",
-        providerId: "google-default",
+        providerId: "fallback-llm-provider",
       })
     })
 
@@ -288,14 +298,12 @@ describe("feature providers", () => {
         DEFAULT_CONFIG.languageDetection,
         "llm",
         [
-          {
-            ...getProviderById("openai-default"),
+          createManagedProvider("disabled-managed-cloud-a", {
             enabled: false,
-          },
-          {
-            ...getProviderById("google-default"),
+          }),
+          createManagedProvider("disabled-managed-cloud-b", {
             enabled: false,
-          },
+          }),
         ],
       )
 
@@ -317,15 +325,14 @@ describe("feature providers", () => {
         "deleted-provider",
         config,
         [
-          {
-            ...getProviderById("openai-default"),
+          createManagedProvider("disabled-managed-cloud", {
             enabled: false,
-          },
-          getProviderById("google-default"),
+          }),
+          createManagedProvider("fallback-llm-provider"),
         ],
       )
 
-      expect(result).toBe("google-default")
+      expect(result).toBe("fallback-llm-provider")
     })
   })
 })

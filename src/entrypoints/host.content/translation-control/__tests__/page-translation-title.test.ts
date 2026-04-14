@@ -2,6 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
+import { MANAGED_CLOUD_PROVIDER_ID } from "@/utils/constants/platform"
 import { PageTranslationManager } from "../page-translation"
 
 const {
@@ -141,7 +142,7 @@ describe("pageTranslationManager title handling", () => {
       ...DEFAULT_CONFIG,
       translate: {
         ...DEFAULT_CONFIG.translate,
-        providerId: "openai-default",
+        providerId: MANAGED_CLOUD_PROVIDER_ID,
         enableAIContentAware: true,
       },
     })

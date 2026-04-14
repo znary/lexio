@@ -1,6 +1,6 @@
 import type { VersionTestData } from "./example/types"
 import { describe, expect, it } from "vitest"
-import { DEFAULT_PROVIDER_CONFIG, DEFAULT_PROVIDER_CONFIG_LIST } from "@/utils/constants/providers"
+import { DEFAULT_PROVIDER_CONFIG } from "@/utils/constants/providers"
 import { getObjectWithoutAPIKeys, hasAPIKey } from "../api"
 import { LATEST_SCHEMA_VERSION } from "../migration"
 
@@ -20,7 +20,7 @@ describe("config utilities", () => {
     }
 
     it("should remove apiKey from OpenAI provider config", () => {
-      const openaiConfigFromConstants = DEFAULT_PROVIDER_CONFIG_LIST.find(config => config.provider === "openai")!
+      const openaiConfigFromConstants = DEFAULT_PROVIDER_CONFIG.openai
       const openaiConfigWithApiKey = {
         ...openaiConfigFromConstants,
         apiKey: "sk-1234567890abcdef",

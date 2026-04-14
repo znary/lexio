@@ -28,7 +28,7 @@ export function TranslationServiceDropdown() {
   const handleConfigureAPI = async () => {
     try {
       await browser.tabs.create({
-        url: browser.runtime.getURL("/options.html#/api-providers"),
+        url: browser.runtime.getURL("/options.html#/config"),
       })
     }
     catch (error) {
@@ -92,7 +92,7 @@ export function TranslationServiceDropdown() {
         </SelectContent>
       </Select>
 
-      <Button variant="outline" size="icon" onClick={handleConfigureAPI} title={i18n.t("translateService.configureAPI")}>
+      <Button variant="outline" size="icon" onClick={handleConfigureAPI} title="Open account settings">
         <IconSettings />
       </Button>
     </div>

@@ -37,13 +37,6 @@ const CONFIG_SEARCH_ITEMS = [
     pageKey: "options.config.title",
   },
   {
-    sectionId: "google-drive-sync",
-    route: "/config",
-    titleKey: "options.config.sync.googleDrive.title",
-    descriptionKey: "options.config.sync.googleDrive.description",
-    pageKey: "options.config.title",
-  },
-  {
     sectionId: "manual-config-sync",
     route: "/config",
     titleKey: "options.config.sync.title",
@@ -86,13 +79,6 @@ const VOCABULARY_SEARCH_ITEMS = [
 export const SEARCH_ITEMS: SearchItem[] = [
   // General page
   {
-    sectionId: "feature-providers",
-    route: "/",
-    titleKey: "options.general.featureProviders.title",
-    descriptionKey: "options.general.featureProviders.description",
-    pageKey: "options.general.title",
-  },
-  {
     sectionId: "site-control-mode",
     route: "/",
     titleKey: "options.siteControl.mode.title",
@@ -105,15 +91,6 @@ export const SEARCH_ITEMS: SearchItem[] = [
     titleKey: "options.general.appearance.title",
     descriptionKey: "options.general.appearance.theme",
     pageKey: "options.general.title",
-  },
-
-  // API Providers page
-  {
-    sectionId: "api-providers",
-    route: "/api-providers",
-    titleKey: "options.apiProviders.title",
-    descriptionKey: "options.apiProviders.description",
-    pageKey: "options.apiProviders.title",
   },
 
   // Custom Actions page

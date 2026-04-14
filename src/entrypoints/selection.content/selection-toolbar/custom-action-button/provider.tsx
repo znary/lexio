@@ -5,10 +5,9 @@ import { createContext, use, useCallback, useEffect, useMemo, useRef, useState }
 import { toast } from "sonner"
 import { SelectionPopover } from "@/components/ui/selection-popover"
 import { ANALYTICS_FEATURE, ANALYTICS_SURFACE } from "@/types/analytics"
-import { isLLMProviderConfig } from "@/types/config/provider"
 import { createFeatureUsageContext, trackFeatureUsed } from "@/utils/analytics"
-import { configFieldsAtomMap, writeConfigAtom } from "@/utils/atoms/config"
-import { filterEnabledProvidersConfig, getProviderConfigById } from "@/utils/config/helpers"
+import { configFieldsAtomMap } from "@/utils/atoms/config"
+import { getProviderConfigById } from "@/utils/config/helpers"
 import { onMessage } from "@/utils/message"
 import { shadowWrapper } from "../.."
 import { SelectionToolbarErrorAlert } from "../../components/selection-toolbar-error-alert"
@@ -78,7 +77,6 @@ export function SelectionCustomActionProvider({
   const providersConfig = useAtomValue(configFieldsAtomMap.providersConfig)
   const language = useAtomValue(configFieldsAtomMap.language)
   const setIsSelectionToolbarVisible = useSetAtom(isSelectionToolbarVisibleAtom)
-  const setConfig = useSetAtom(writeConfigAtom)
   const bodyRef = useRef<HTMLDivElement>(null)
   const pendingOpenRequestRef = useRef<SelectionCustomActionPendingOpenRequest | null>(null)
   const reopenFrameRef = useRef<number | null>(null)
@@ -112,10 +110,6 @@ export function SelectionCustomActionProvider({
       ? getProviderConfigById(providersConfig, activeAction.providerId) ?? null
       : null,
   }), [activeAction, language, providersConfig])
-  const llmProviders = useMemo(
-    () => filterEnabledProvidersConfig(providersConfig).filter(isLLMProviderConfig),
-    [providersConfig],
-  )
   const executionPlan = useMemo(
     () => buildCustomActionExecutionPlan(customActionRequest, cleanSelection, paragraphsText, webPageContext),
     [cleanSelection, customActionRequest, paragraphsText, webPageContext],
@@ -272,25 +266,6 @@ export function SelectionCustomActionProvider({
     })
   }, [openActionRequest, resolveContextMenuSelectionRequest, selectionToolbarConfig.customActions])
 
-  const handleProviderChange = useCallback((providerId: string) => {
-    if (!activeActionId) {
-      return
-    }
-
-    const updatedCustomActions = selectionToolbarConfig.customActions.map(action =>
-      action.id === activeActionId
-        ? { ...action, providerId }
-        : action,
-    )
-
-    void setConfig({
-      selectionToolbar: {
-        ...selectionToolbarConfig,
-        customActions: updatedCustomActions,
-      },
-    })
-  }, [activeActionId, selectionToolbarConfig, setConfig])
-
   const handleRegenerate = useCallback(() => {
     setRerunNonce(prev => prev + 1)
   }, [])
@@ -386,10 +361,7 @@ export function SelectionCustomActionProvider({
           </SelectionPopover.Body>
           <SelectionToolbarFooterContent
             paragraphsText={paragraphsText}
-            providers={llmProviders}
             titleText={titleText}
-            value={customActionRequest.providerConfig?.id ?? ""}
-            onProviderChange={handleProviderChange}
             onRegenerate={handleRegenerate}
           >
             {activeAction && (
