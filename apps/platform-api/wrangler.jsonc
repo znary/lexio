@@ -2,6 +2,8 @@
   "name": "lexio-platform-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-04-14",
+  // Keep the default database binding as a placeholder so production is not
+  // accidentally pointed at the dev database before real credentials are ready.
   "d1_databases": [
     {
       "binding": "DB",
@@ -26,5 +28,29 @@
   ],
   "vars": {
     "PADDLE_ENV": "sandbox"
+  },
+  "env": {
+    "dev": {
+      "name": "lexio-platform-api-dev",
+      "durable_objects": {
+        "bindings": [
+          {
+            "class_name": "UsageGate",
+            "name": "USAGE_GATE"
+          }
+        ]
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "lexio-platform-dev",
+          "database_id": "56e9c056-d4bc-4b4f-a73f-1adf9629027a",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "vars": {
+        "PADDLE_ENV": "sandbox"
+      }
+    }
   }
 }

@@ -2,6 +2,38 @@
 
 这份文档只写当前代码已经实现的内容，方便下一步本地联调和正式上线。
 
+## 已实际验证的结果
+
+2026-04-14 我已经实际跑过下面这些命令：
+
+```bash
+pnpm type-check
+pnpm --dir apps/platform-api type-check
+pnpm --dir apps/platform-web type-check
+pnpm --dir apps/platform-web build
+SKIP_FREE_API=true pnpm test
+pnpm --dir apps/platform-api d1:migrate:local
+pnpm --dir apps/platform-api exec wrangler whoami
+pnpm --dir apps/platform-api exec wrangler d1 create lexio-platform-dev
+pnpm --dir apps/platform-api exec wrangler d1 migrations apply lexio-platform-dev --remote --env dev
+pnpm --dir apps/platform-api deploy:dev
+curl https://lexio-platform-api-dev.lznwpu.workers.dev/health
+pnpm --dir apps/platform-api exec wrangler d1 execute lexio-platform-dev --remote --command "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
+```
+
+当前确认结果：
+
+- Cloudflare 账号已经登录，account id 是 `792e7704e9ce27ebda11e3fc5625cb56`
+- 已创建免费测试 D1：`lexio-platform-dev`
+- 这个测试库的 `database_id` 是 `56e9c056-d4bc-4b4f-a73f-1adf9629027a`
+- 已部署免费测试 Worker：`lexio-platform-api-dev`
+- 测试地址是 `https://lexio-platform-api-dev.lznwpu.workers.dev/health`
+- 远端 `/health` 已返回 200
+- 远端 D1 表结构已经落库，`users`、`subscriptions`、`entitlements`、`sync_state`、`usage_ledger`、`user_settings`、`vocabulary_items` 都查到了
+- 当前工作区里还没有 `.env.local`、`apps/platform-api/.dev.vars`、`apps/platform-web/.env.local`
+- 所以这次真实测试只覆盖了 Cloudflare Worker、D1、Durable Object 绑定和健康检查，没有继续做 Clerk、Paddle、AI Gateway 的真请求
+- 当前官网产物是 `wrangler deploy --config dist/wrangler.json` 这类 Worker 资产部署，不是现成的 Pages 项目
+
 ## 1. 先说两个和原方案不一样的地方
 
 - Worker 现在读取的是 `CLERK_JWT_KEY`，不是方案文档里的 `CLERK_JWT_TEMPLATE`。
@@ -18,6 +50,11 @@
 如果你要完整验证 Paddle webhook，本地还需要一个能把 `http://127.0.0.1:8787` 暴露成公网 `https` 地址的 tunnel。没有 tunnel，可以先跳过 webhook 这一段。
 
 ## 3. 本地环境变量怎么放
+
+先说明当前状态：
+
+- 这三个文件现在都还不存在，所以你如果要继续联调，得先自己补上
+- 下面这三段内容是模板，不是仓库里已经存在的真实值
 
 ### 3.1 扩展根目录 `.env.local`
 
@@ -85,6 +122,12 @@ pnpm install
 先确认 `apps/platform-api/wrangler.jsonc` 已经存在数据库配置，然后执行：
 
 ```bash
+pnpm --dir apps/platform-api d1:migrate:local
+```
+
+如果你想直接看底层命令，对应的是：
+
+```bash
 pnpm --dir apps/platform-api exec wrangler d1 migrations apply lexio-platform --local
 ```
 
@@ -105,6 +148,8 @@ http://127.0.0.1:8787
 ```bash
 curl http://127.0.0.1:8787/health
 ```
+
+这一步我已经用 `wrangler dev` 真跑过一次，本地 `/health` 是通的。
 
 ### 4.4 启动官网
 
@@ -140,8 +185,10 @@ pnpm dev
 ```bash
 pnpm type-check
 pnpm --dir apps/platform-api type-check
+pnpm --dir apps/platform-web type-check
 pnpm --dir apps/platform-web build
 SKIP_FREE_API=true pnpm test
+pnpm --dir apps/platform-api d1:migrate:local
 ```
 
 说明：
@@ -267,6 +314,16 @@ https://你的公网地址/webhooks/paddle
 
 ### 7.1 Cloudflare D1
 
+现在仓库里已经多了一套单独的 Cloudflare 测试环境：
+
+- `wrangler.jsonc` 顶层默认配置还是正式环境占位值
+- `wrangler.jsonc` 里新增了 `env.dev`
+- `env.dev` 绑定的 Worker 名字是 `lexio-platform-api-dev`
+- `env.dev` 绑定的 D1 名字是 `lexio-platform-dev`
+- 这个 dev 环境已经完成远端迁移和远端 `/health` 验证
+
+如果你只是继续复用我这次建好的免费测试环境，不需要再创建一次 D1。
+
 第一次上线前先创建正式数据库：
 
 ```bash
@@ -274,6 +331,12 @@ pnpm --dir apps/platform-api exec wrangler d1 create lexio-platform
 ```
 
 然后把返回的真实 `database_id` 写回 [apps/platform-api/wrangler.jsonc](/Users/liuzhuangm4/develop/english/apps/platform-api/wrangler.jsonc)。
+
+注意：
+
+- 不要把 `lexio-platform-dev` 的 `database_id` 覆盖到顶层默认配置
+- 顶层默认配置还是给正式环境留的
+- 现在这次已经创建好的测试库 ID 是 `56e9c056-d4bc-4b4f-a73f-1adf9629027a`
 
 ### 7.2 Worker 正式变量和密钥
 
@@ -324,10 +387,26 @@ pnpm --dir apps/platform-api exec wrangler d1 create lexio-platform
 
 ### 8.1 先部署 Worker
 
+如果你先复用已经建好的免费测试环境，直接跑：
+
+```bash
+pnpm --dir apps/platform-api d1:migrate:dev
+pnpm --dir apps/platform-api deploy:dev
+curl https://lexio-platform-api-dev.lznwpu.workers.dev/health
+```
+
+这套命令对应的就是：
+
+- 远端 D1：`lexio-platform-dev`
+- 远端 Worker：`lexio-platform-api-dev`
+- 远端健康检查地址：`https://lexio-platform-api-dev.lznwpu.workers.dev/health`
+
+如果你是第一次正式上线，不要直接用上面这个 dev 地址，继续看下面正式命令。
+
 先跑正式迁移：
 
 ```bash
-pnpm --dir apps/platform-api exec wrangler d1 migrations apply lexio-platform
+pnpm --dir apps/platform-api exec wrangler d1 migrations apply lexio-platform --remote
 ```
 
 再部署：
@@ -351,6 +430,12 @@ pnpm --dir apps/platform-web build
 ```
 
 当前仓库里官网构建后会生成 `dist/wrangler.json`。按现在这套产物，部署时要用这个配置文件。
+
+这里要注意一件事：
+
+- 这套产物现在是 Worker 资产部署，不是 Pages
+- 如果你后面真想改成 Pages，要额外补 Pages 项目和部署方式
+- 我这次没有直接部署官网，因为仓库里还没有 `VITE_CLERK_PUBLISHABLE_KEY` 这些真实值，页面会在启动时直接报错
 
 如果你的环境里已经能直接用 `wrangler`，可以在 `apps/platform-web` 目录执行：
 
@@ -394,5 +479,7 @@ pnpm zip:firefox
 - 官网和扩展必须是同一个 origin 约定，不能混用 `localhost` 和 `127.0.0.1`
 - `PADDLE_WEBHOOK_SECRET` 缺失时，webhook 会直接失败，这是故意保守处理
 - `VITE_PADDLE_PRO_PRICE_ID` 没配时，价格页不会真的拉起结账
-- `apps/platform-api/wrangler.jsonc` 里的 `database_id` 现在还是占位值，上线前必须改成真实 ID
+- `apps/platform-api/wrangler.jsonc` 顶层默认 `database_id` 现在还是占位值，上线前必须改成正式库的真实 ID
+- `apps/platform-api/wrangler.jsonc` 里的 `env.dev` 已经是可用测试配置，但它不是正式环境
 - 本地没有公网 `https` 地址时，Paddle webhook 这段没法做完整验收
+- 当前工作区里没有 Clerk、Paddle、AI Gateway 的真实环境变量，所以这次还没法继续做登录、结账、订阅回写和托管模型真测
