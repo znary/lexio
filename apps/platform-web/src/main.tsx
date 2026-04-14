@@ -2,6 +2,7 @@ import { ClerkProvider } from "@clerk/clerk-react"
 import * as React from "react"
 import ReactDOM from "react-dom/client"
 import App from "./app/app"
+import { APP_ROUTES } from "./app/routes"
 import "./app/styles.css"
 
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
@@ -12,7 +13,7 @@ if (!publishableKey) {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <ClerkProvider publishableKey={publishableKey} afterSignOutUrl="/sign-in">
+    <ClerkProvider publishableKey={publishableKey} afterSignOutUrl={APP_ROUTES.signIn}>
       <App />
     </ClerkProvider>
   </React.StrictMode>,

@@ -6,7 +6,7 @@ const WXT_API_KEY_PATTERN = /^WXT_.*API_KEY/
 const ALLOWED_BUNDLED_API_KEYS = new Set([
   "WXT_POSTHOG_API_KEY",
 ])
-const DEFAULT_WEBSITE_URL = process.env.WXT_WEBSITE_URL || "https://lexio.example.com"
+const DEFAULT_WEBSITE_URL = "https://lexio.example.com"
 
 function buildExternallyConnectableMatches(websiteUrl: string): string[] {
   try {
@@ -20,8 +20,6 @@ function buildExternallyConnectableMatches(websiteUrl: string): string[] {
     return []
   }
 }
-
-const EXTERNALLY_CONNECTABLE_MATCHES = buildExternallyConnectableMatches(DEFAULT_WEBSITE_URL)
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
@@ -37,6 +35,18 @@ export default defineConfig({
       }
     : {},
   manifest: ({ mode, browser }) => ({
+    ...(function () {
+      const websiteUrl = process.env.WXT_WEBSITE_URL || DEFAULT_WEBSITE_URL
+      const externallyConnectableMatches = buildExternallyConnectableMatches(websiteUrl)
+
+      return externallyConnectableMatches.length > 0
+        ? {
+            externally_connectable: {
+              matches: externallyConnectableMatches,
+            },
+          }
+        : {}
+    })(),
     name: "__MSG_extName__",
     description: "__MSG_extDescription__",
     default_locale: "en",
@@ -66,11 +76,6 @@ export default defineConfig({
         matches: ["*://*/*", "file:///*"],
       },
     ],
-    ...(EXTERNALLY_CONNECTABLE_MATCHES.length > 0 && {
-      externally_connectable: {
-        matches: EXTERNALLY_CONNECTABLE_MATCHES,
-      },
-    }),
     // Firefox-specific settings for MV3
     ...(browser === "firefox" && {
       // Override default CSP to exclude `upgrade-insecure-requests` (Firefox MV3 default),

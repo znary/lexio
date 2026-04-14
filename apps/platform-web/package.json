@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "deploy:cf": "pnpm build && wrangler deploy",
     "preview": "vite preview",
     "type-check": "tsc --noEmit"
   },

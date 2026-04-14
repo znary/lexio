@@ -2,6 +2,7 @@ import { SignedIn, SignedOut, SignInButton, useAuth } from "@clerk/clerk-react"
 import { initializePaddle } from "@paddle/paddle-js"
 import { useState } from "react"
 import { PADDLE_CLIENT_TOKEN, PADDLE_ENV } from "../app/env"
+import { APP_ROUTES } from "../app/routes"
 
 async function openCheckout(priceId: string, clerkUserId: string | null) {
   const paddle = await initializePaddle({
@@ -17,7 +18,7 @@ async function openCheckout(priceId: string, clerkUserId: string | null) {
     items: [{ priceId, quantity: 1 }],
     settings: {
       displayMode: "overlay",
-      successUrl: `${window.location.origin}/checkout-success`,
+      successUrl: `${window.location.origin}${APP_ROUTES.checkoutSuccess}`,
     },
     customData: clerkUserId ? { clerkUserId } : {},
   })
@@ -114,7 +115,7 @@ export function PricingPage() {
                 </button>
               </SignInButton>
             </SignedOut>
-            <a className="ghost-button" href="/extension-sync">Sync extension</a>
+            <a className="ghost-button" href={APP_ROUTES.extensionSync}>Sync extension</a>
           </div>
         </article>
         <aside className="hero-aside">
@@ -148,7 +149,7 @@ export function PricingPage() {
               "Managed AI access with a monthly cap",
               "Vocabulary sync across devices",
             ]}
-            action={<a className="ghost-button" href="/sign-in">Sign in</a>}
+            action={<a className="ghost-button" href={APP_ROUTES.signIn}>Sign in</a>}
           />
           <PlanCard
             featured

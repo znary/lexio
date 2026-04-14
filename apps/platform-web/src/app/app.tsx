@@ -3,22 +3,23 @@ import { CheckoutSuccessPage } from "../routes/checkout-success"
 import { ExtensionSyncPage } from "../routes/extension-sync"
 import { PricingPage } from "../routes/pricing"
 import { SignInPage } from "../routes/sign-in"
+import { APP_ROUTES, normalizePathname } from "./routes"
 
 const NAV_LINKS = [
-  { href: "/sign-in", label: "Sign in" },
-  { href: "/pricing", label: "Pricing" },
-  { href: "/extension-sync", label: "Sync extension" },
+  { href: APP_ROUTES.signIn, label: "Sign in" },
+  { href: APP_ROUTES.pricing, label: "Pricing" },
+  { href: APP_ROUTES.extensionSync, label: "Sync extension" },
 ] as const
 
 function resolvePage() {
-  switch (window.location.pathname) {
-    case "/pricing":
+  switch (normalizePathname(window.location.pathname)) {
+    case APP_ROUTES.pricing:
       return <PricingPage />
-    case "/checkout-success":
+    case APP_ROUTES.checkoutSuccess:
       return <CheckoutSuccessPage />
-    case "/extension-sync":
+    case APP_ROUTES.extensionSync:
       return <ExtensionSyncPage />
-    case "/sign-in":
+    case APP_ROUTES.signIn:
     default:
       return <SignInPage />
   }
@@ -30,7 +31,7 @@ function Header() {
 
   return (
     <header className="site-header">
-      <a className="brand-lockup" href="/sign-in">
+      <a className="brand-lockup" href={APP_ROUTES.signIn}>
         <span className="brand-badge">L</span>
         <span className="brand-copy">
           <strong>Lexio</strong>
@@ -46,7 +47,7 @@ function Header() {
       </nav>
       <div className="header-account">
         <SignedOut>
-          <a className="ghost-button" href="/sign-in">
+          <a className="ghost-button" href={APP_ROUTES.signIn}>
             Sign in
           </a>
         </SignedOut>
@@ -54,7 +55,7 @@ function Header() {
           <span className="account-label">{user?.firstName || user?.username || user?.primaryEmailAddress?.emailAddress}</span>
           <UserButton />
         </SignedIn>
-        {!isSignedIn && <a className="primary-button" href="/pricing">See plans</a>}
+        {!isSignedIn && <a className="primary-button" href={APP_ROUTES.pricing}>See plans</a>}
       </div>
     </header>
   )

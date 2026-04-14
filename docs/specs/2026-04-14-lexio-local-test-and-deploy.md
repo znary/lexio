@@ -33,6 +33,8 @@ pnpm --dir apps/platform-api exec wrangler d1 execute lexio-platform-dev --remot
 - 当前工作区里还没有 `.env.local`、`apps/platform-api/.dev.vars`、`apps/platform-web/.env.local`
 - 所以这次真实测试只覆盖了 Cloudflare Worker、D1、Durable Object 绑定和健康检查，没有继续做 Clerk、Paddle、AI Gateway 的真请求
 - 当前官网产物是 `wrangler deploy --config dist/wrangler.json` 这类 Worker 资产部署，不是现成的 Pages 项目
+- `platform-web` 正式配置现在是 `apps/platform-web/wrangler.jsonc`
+- 这个配置会把 `dist` 当成静态资源目录，并把未命中的前端路由回退到 `index.html`
 
 ## 1. 先说两个和原方案不一样的地方
 
@@ -61,12 +63,16 @@ pnpm --dir apps/platform-api exec wrangler d1 execute lexio-platform-dev --remot
 ```dotenv
 WXT_PLATFORM_API_URL=http://127.0.0.1:8787
 WXT_WEBSITE_URL=http://127.0.0.1:3355
+WXT_PLATFORM_SIGN_IN_PATH=/sign-in
+WXT_PLATFORM_PRICING_PATH=/pricing
+WXT_PLATFORM_EXTENSION_SYNC_PATH=/extension-sync
 ```
 
 注意：
 
 - `WXT_WEBSITE_URL` 必须和你实际打开的网站 origin 完全一致。
 - 不要一会儿用 `localhost`，一会儿用 `127.0.0.1`。这里现在做的是严格 origin 校验，混用会导致官网无法把 token 发回扩展。
+- 如果你改了官网登录路径或扩展同步路径，扩展这三项路径变量也要一起改，不然按钮会打开错误地址。
 
 ### 3.2 `apps/platform-api/.dev.vars`
 
@@ -102,12 +108,17 @@ VITE_PADDLE_CLIENT_TOKEN=test_xxx
 VITE_PADDLE_ENV=sandbox
 VITE_PADDLE_PRO_PRICE_ID=pri_xxx
 VITE_EXTENSION_ID=
+VITE_SIGN_IN_PATH=/sign-in
+VITE_PRICING_PATH=/pricing
+VITE_CHECKOUT_SUCCESS_PATH=/checkout-success
+VITE_EXTENSION_SYNC_PATH=/extension-sync
 ```
 
 说明：
 
 - `VITE_EXTENSION_ID` 可以先留空。正常流程是从扩展里点 `Sign in`，官网会自动带上 `?extensionId=...`。
 - 如果你想直接手输网址测试 `/extension-sync` 页面，再把扩展 ID 补进去。
+- 如果你改了这里的路径值，扩展根目录 `.env.local` 里的 `WXT_PLATFORM_*_PATH` 也要改成同一组路径。
 
 ## 4. 第一次本地启动
 
@@ -368,6 +379,10 @@ pnpm --dir apps/platform-api exec wrangler d1 create lexio-platform
 - `VITE_PADDLE_ENV`
 - `VITE_PADDLE_PRO_PRICE_ID`
 - `VITE_EXTENSION_ID` 可选
+- `VITE_SIGN_IN_PATH`
+- `VITE_PRICING_PATH`
+- `VITE_CHECKOUT_SUCCESS_PATH`
+- `VITE_EXTENSION_SYNC_PATH`
 
 ### 7.4 扩展正式变量
 
@@ -375,11 +390,16 @@ pnpm --dir apps/platform-api exec wrangler d1 create lexio-platform
 
 - `WXT_PLATFORM_API_URL`
 - `WXT_WEBSITE_URL`
+- `WXT_PLATFORM_SIGN_IN_PATH`
+- `WXT_PLATFORM_PRICING_PATH`
+- `WXT_PLATFORM_EXTENSION_SYNC_PATH`
 
 上线前一定确认：
 
 - `WXT_WEBSITE_URL` 是正式官网 origin
 - 正式官网 origin 已经在扩展包的 `externally_connectable.matches` 里
+- `WXT_PLATFORM_EXTENSION_SYNC_PATH` 和官网的 `VITE_EXTENSION_SYNC_PATH` 完全一致
+- `WXT_PLATFORM_PRICING_PATH` 和官网的 `VITE_PRICING_PATH` 完全一致
 
 因为这个值是在构建扩展时写进去的，所以正式地址变了就必须重新打包扩展。
 
@@ -429,21 +449,27 @@ curl https://你的-api-域名/health
 pnpm --dir apps/platform-web build
 ```
 
-当前仓库里官网构建后会生成 `dist/wrangler.json`。按现在这套产物，部署时要用这个配置文件。
-
 这里要注意一件事：
 
 - 这套产物现在是 Worker 资产部署，不是 Pages
+- 正式部署配置文件是 [apps/platform-web/wrangler.jsonc](/Users/liuzhuangm4/develop/english/apps/platform-web/wrangler.jsonc)
+- 这个文件已经把 `assets.not_found_handling` 设成 `single-page-application`
+- 所以上线后直接访问 `/sign-in`、`/pricing`、`/extension-sync` 这类前端路由时，会回到 `index.html`
 - 如果你后面真想改成 Pages，要额外补 Pages 项目和部署方式
 - 我这次没有直接部署官网，因为仓库里还没有 `VITE_CLERK_PUBLISHABLE_KEY` 这些真实值，页面会在启动时直接报错
 
 如果你的环境里已经能直接用 `wrangler`，可以在 `apps/platform-web` 目录执行：
 
 ```bash
-wrangler deploy --config dist/wrangler.json
+pnpm run deploy:cf
 ```
 
-如果你们后面想把这一步固定下来，建议再补一个 `apps/platform-web` 的正式 `deploy` 脚本。
+如果你只是想本地模拟 Cloudflare 路由行为，可以执行：
+
+```bash
+pnpm build
+pnpm exec wrangler dev
+```
 
 ### 8.3 最后打包扩展
 
@@ -477,6 +503,7 @@ pnpm zip:firefox
 ## 10. 最容易卡住的点
 
 - 官网和扩展必须是同一个 origin 约定，不能混用 `localhost` 和 `127.0.0.1`
+- 官网路由和扩展里写入的 `WXT_PLATFORM_*_PATH` 必须一致
 - `PADDLE_WEBHOOK_SECRET` 缺失时，webhook 会直接失败，这是故意保守处理
 - `VITE_PADDLE_PRO_PRICE_ID` 没配时，价格页不会真的拉起结账
 - `apps/platform-api/wrangler.jsonc` 顶层默认 `database_id` 现在还是占位值，上线前必须改成正式库的真实 ID

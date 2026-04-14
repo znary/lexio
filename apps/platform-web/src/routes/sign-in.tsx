@@ -1,4 +1,5 @@
 import { SignIn } from "@clerk/clerk-react"
+import { APP_ROUTES } from "../app/routes"
 
 export function SignInPage() {
   return (
@@ -20,9 +21,9 @@ export function SignInPage() {
         <div className="auth-panel">
           <SignIn
             routing="path"
-            path="/sign-in"
-            signUpUrl="/sign-in"
-            fallbackRedirectUrl="/extension-sync"
+            path={APP_ROUTES.signIn}
+            signUpUrl={APP_ROUTES.signIn}
+            fallbackRedirectUrl={APP_ROUTES.extensionSync}
           />
         </div>
       </div>

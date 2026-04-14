@@ -27,6 +27,7 @@
 - 配额控制：`Durable Objects`
 - 模型转发：`AI Gateway`
 - 官网：`React + Vite + @cloudflare/vite-plugin`
+- 官网部署：`Cloudflare Workers Static Assets`
 - 支付：`@paddle/paddle-js`
 - 本地开发：
   - `wrangler dev`
@@ -41,6 +42,10 @@
   - `/pricing`
   - `/checkout-success`
   - `/extension-sync`
+- 官网发布方式：
+  - 构建产物是 `apps/platform-web/dist`
+  - 用 `apps/platform-web/wrangler.jsonc` 部署到 Cloudflare Worker
+  - `assets.not_found_handling` 必须设成 `single-page-application`，这样 `/sign-in`、`/pricing`、`/extension-sync` 这些前端路由不会返回 404
 - 在 `apps/platform-web` 根目录执行：
   - `npx getdesign@latest add airbnb`
 - 生成的 `DESIGN.md` 作为官网 UI 的唯一设计依据。
@@ -155,6 +160,9 @@
 
 - `WXT_PLATFORM_API_URL`
 - `WXT_WEBSITE_URL`
+- `WXT_PLATFORM_SIGN_IN_PATH`
+- `WXT_PLATFORM_PRICING_PATH`
+- `WXT_PLATFORM_EXTENSION_SYNC_PATH`
 
 ### 9.2 platform-api
 
@@ -173,7 +181,12 @@
 - `VITE_PLATFORM_API_URL`
 - `VITE_PADDLE_CLIENT_TOKEN`
 - `VITE_PADDLE_ENV`
+- `VITE_PADDLE_PRO_PRICE_ID`
 - `VITE_EXTENSION_ID`
+- `VITE_SIGN_IN_PATH`
+- `VITE_PRICING_PATH`
+- `VITE_CHECKOUT_SUCCESS_PATH`
+- `VITE_EXTENSION_SYNC_PATH`
 
 ## 10. 实现顺序
 
@@ -185,11 +198,15 @@
 6. 完成 Worker API 和 D1
 7. 改扩展接入
 8. 跑本地验证
+9. 给 `platform-web` 配 `wrangler.jsonc`
+10. 部署 `platform-web`
 
 ## 11. 验收
 
 - `platform-api` 可以本地启动
 - `platform-web` 可以本地启动
+- `platform-web` 可以通过 `wrangler deploy` 发布到 Cloudflare
+- 直接访问 `/sign-in`、`/pricing`、`/checkout-success`、`/extension-sync` 都不会返回 404
 - `DESIGN.md` 已生成并被官网页面采用
 - 官网可登录、可打开 Paddle 结账
 - 扩展可同步 Clerk token

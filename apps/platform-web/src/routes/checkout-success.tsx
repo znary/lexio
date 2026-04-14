@@ -1,3 +1,5 @@
+import { APP_ROUTES } from "../app/routes"
+
 export function CheckoutSuccessPage() {
   return (
     <section className="sync-grid">
@@ -9,8 +11,8 @@ export function CheckoutSuccessPage() {
           so the extension can refresh the latest plan state.
         </p>
         <div className="button-row">
-          <a className="primary-button" href="/extension-sync">Sync extension now</a>
-          <a className="ghost-button" href="/pricing">Back to pricing</a>
+          <a className="primary-button" href={APP_ROUTES.extensionSync}>Sync extension now</a>
+          <a className="ghost-button" href={APP_ROUTES.pricing}>Back to pricing</a>
         </div>
       </article>
       <aside className="sync-card">

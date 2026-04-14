@@ -5,8 +5,8 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/base-ui/badge"
 import { Button } from "@/components/ui/base-ui/button"
-import { WEBSITE_URL } from "@/utils/constants/url"
 import { getPlatformMe } from "@/utils/platform/api"
+import { openPlatformExtensionSyncTab, openPlatformPricingTab } from "@/utils/platform/navigation"
 import { getPlatformAuthSession, watchPlatformAuthSession } from "@/utils/platform/storage"
 import { syncPlatformNow } from "@/utils/platform/sync"
 import { ConfigCard } from "../../../components/config-card"
@@ -117,18 +117,6 @@ export function PlatformAccountCard() {
     }
   }, [])
 
-  const handleOpenSignIn = async () => {
-    await browser.tabs.create({
-      url: `${WEBSITE_URL}/extension-sync?extensionId=${encodeURIComponent(browser.runtime.id)}`,
-    })
-  }
-
-  const handleOpenPricing = async () => {
-    await browser.tabs.create({
-      url: `${WEBSITE_URL}/pricing`,
-    })
-  }
-
   const handleSyncNow = async () => {
     if (!session) {
       toast.error("Sign in first, then sync again.")
@@ -207,10 +195,10 @@ export function PlatformAccountCard() {
         )}
 
         <div className="flex flex-wrap gap-2">
-          <Button type="button" onClick={() => void handleOpenSignIn()}>
+          <Button type="button" onClick={() => void openPlatformExtensionSyncTab(browser.runtime.id)}>
             {session ? "Reconnect account" : "Sign in"}
           </Button>
-          <Button type="button" variant="outline" onClick={() => void handleOpenPricing()} disabled={!session}>
+          <Button type="button" variant="outline" onClick={() => void openPlatformPricingTab()} disabled={!session}>
             Manage subscription
           </Button>
           <Button type="button" variant="outline" onClick={() => void handleSyncNow()} disabled={!session || isSyncing}>

@@ -1,5 +1,6 @@
 import { browser, i18n } from "#imports"
 import { Icon } from "@iconify/react"
+import { PlatformQuickAccess } from "@/components/platform/platform-quick-access"
 import { version } from "../../../package.json"
 import { AISmartContext } from "./components/ai-smart-context"
 import { AlwaysTranslate } from "./components/always-translate"
@@ -26,6 +27,7 @@ function App() {
         <div className="w-full">
           <TranslateButton className="w-full" />
         </div>
+        <PlatformQuickAccess size="sm" />
         <SiteControlToggle />
         <AlwaysTranslate />
         <Hotkey />
