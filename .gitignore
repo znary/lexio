@@ -14,6 +14,7 @@ stats-*.html
 stats-*.json
 .wxt
 apps/platform-api/.wrangler/
+apps/platform-web/.wrangler/
 web-ext.config.ts
 
 # Editor directories and files
@@ -28,6 +29,8 @@ web-ext.config.ts
 *.sln
 *.sw?
 
+.dev.vars
+.vars
 .env
 .env.*
 !.env.local.example
