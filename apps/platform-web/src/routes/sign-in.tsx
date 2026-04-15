@@ -1,7 +1,13 @@
 import { SignIn } from "@clerk/clerk-react"
+import { getExtensionIdFromLocation } from "../app/env"
 import { APP_ROUTES } from "../app/routes"
 
 export function SignInPage() {
+  const extensionId = getExtensionIdFromLocation()
+  const fallbackRedirectUrl = extensionId
+    ? `${APP_ROUTES.extensionSync}?extensionId=${encodeURIComponent(extensionId)}`
+    : APP_ROUTES.extensionSync
+
   return (
     <section className="clerk-shell">
       <div className="clerk-panel">
@@ -23,7 +29,7 @@ export function SignInPage() {
             routing="path"
             path={APP_ROUTES.signIn}
             signUpUrl={APP_ROUTES.signIn}
-            fallbackRedirectUrl={APP_ROUTES.extensionSync}
+            fallbackRedirectUrl={fallbackRedirectUrl}
           />
         </div>
       </div>

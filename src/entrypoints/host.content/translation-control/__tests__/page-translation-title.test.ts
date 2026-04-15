@@ -180,6 +180,14 @@ describe("pageTranslationManager title handling", () => {
     manager.stop()
 
     expect(document.title).toBe("Updated Source Title")
+    expect(mockValidateTranslationConfigAndToast).toHaveBeenCalledWith(
+      {
+        providersConfig: DEFAULT_CONFIG.providersConfig,
+        translate: DEFAULT_CONFIG.translate,
+        language: DEFAULT_CONFIG.language,
+      },
+      "eng",
+    )
     expect(mockSendMessage).toHaveBeenCalledWith("setAndNotifyPageTranslationStateChangedByManager", { enabled: true })
     expect(mockSendMessage).toHaveBeenCalledWith("setAndNotifyPageTranslationStateChangedByManager", { enabled: false })
   })

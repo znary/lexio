@@ -12,6 +12,7 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, content-type, paddle-signature",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Expose-Headers": "x-lexio-platform-token, x-lexio-platform-token-expires-at",
 } as const
 
 export function withCors(headers?: HeadersInit): Headers {

@@ -19,7 +19,10 @@ function App() {
       <div className="bg-background flex flex-col gap-4 px-6 pt-5 pb-4">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold">{i18n.t("name")}</span>
-          <TranslationHubButton />
+          <div className="flex items-center gap-1">
+            <TranslationHubButton />
+            <PlatformQuickAccess variant="menu" size="sm" />
+          </div>
         </div>
         <LanguageOptionsSelector />
         <TranslationModeSelector />
@@ -27,7 +30,6 @@ function App() {
         <div className="w-full">
           <TranslateButton className="w-full" />
         </div>
-        <PlatformQuickAccess size="sm" />
         <SiteControlToggle />
         <AlwaysTranslate />
         <Hotkey />

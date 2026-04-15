@@ -1,8 +1,9 @@
-import { SignedIn, SignedOut, useAuth, UserButton, useUser } from "@clerk/clerk-react"
+import { SignedIn, SignedOut, UserButton } from "@clerk/clerk-react"
 import { CheckoutSuccessPage } from "../routes/checkout-success"
 import { ExtensionSyncPage } from "../routes/extension-sync"
 import { PricingPage } from "../routes/pricing"
 import { SignInPage } from "../routes/sign-in"
+import { PlatformAuthBridge } from "./platform-auth-bridge"
 import { APP_ROUTES, normalizePathname } from "./routes"
 
 const NAV_LINKS = [
@@ -26,9 +27,6 @@ function resolvePage() {
 }
 
 function Header() {
-  const { isSignedIn } = useAuth()
-  const { user } = useUser()
-
   return (
     <header className="site-header">
       <a className="brand-lockup" href={APP_ROUTES.signIn}>
@@ -52,10 +50,8 @@ function Header() {
           </a>
         </SignedOut>
         <SignedIn>
-          <span className="account-label">{user?.firstName || user?.username || user?.primaryEmailAddress?.emailAddress}</span>
           <UserButton />
         </SignedIn>
-        {!isSignedIn && <a className="primary-button" href={APP_ROUTES.pricing}>See plans</a>}
       </div>
     </header>
   )
@@ -64,6 +60,7 @@ function Header() {
 export default function App() {
   return (
     <div className="page-shell">
+      <PlatformAuthBridge />
       <Header />
       <main className="page-content">
         {resolvePage()}

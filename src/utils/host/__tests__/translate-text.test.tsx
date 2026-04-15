@@ -5,10 +5,24 @@ import { DEFAULT_CONFIG } from "@/utils/constants/config"
 import { MANAGED_CLOUD_PROVIDER_ID } from "@/utils/constants/platform"
 import { DEFAULT_PROVIDER_CONFIG } from "@/utils/constants/providers"
 import { executeTranslate } from "@/utils/host/translate/execute-translate"
+import { validateTranslationConfigAndToast } from "@/utils/host/translate/translate-text"
 import { translateTextForInput, translateTextForPage, translateTextForPageTitle } from "@/utils/host/translate/translate-variants"
 import { getTranslatePrompt } from "@/utils/prompts/translate"
 
 // Mock dependencies
+vi.mock("sonner", () => ({
+  toast: {
+    error: vi.fn(),
+    warning: vi.fn(),
+  },
+}))
+
+vi.mock("#imports", () => ({
+  i18n: {
+    t: (key: string) => key,
+  },
+}))
+
 vi.mock("@/utils/config/storage", () => ({
   getLocalConfig: vi.fn(),
 }))
@@ -39,6 +53,8 @@ let mockGetConfigFromStorage: any
 let mockGetTranslatePrompt: any
 let mockGetOrCreateWebPageContext: any
 let mockGetOrGenerateWebPageSummary: any
+let mockToastError: any
+let mockToastWarning: any
 
 function createConfigWithProviderOverrides() {
   const microsoftProvider = DEFAULT_PROVIDER_CONFIG["microsoft-translate"]
@@ -82,6 +98,9 @@ describe("translate-text", () => {
     mockGetTranslatePrompt = vi.mocked((await import("@/utils/prompts/translate")).getTranslatePrompt)
     mockGetOrCreateWebPageContext = vi.mocked((await import("@/utils/host/translate/webpage-context")).getOrCreateWebPageContext)
     mockGetOrGenerateWebPageSummary = vi.mocked((await import("@/utils/host/translate/webpage-summary")).getOrGenerateWebPageSummary)
+    const { toast } = await import("sonner")
+    mockToastError = vi.mocked(toast.error)
+    mockToastWarning = vi.mocked(toast.warning)
 
     // Mock getOrCreateWebPageContext to return stable webpage metadata
     mockGetOrCreateWebPageContext.mockImplementation(() => Promise.resolve({
@@ -98,6 +117,29 @@ describe("translate-text", () => {
     mockGetTranslatePrompt.mockResolvedValue({
       systemPrompt: "Translate to {{targetLang}}",
       prompt: "{{input}}",
+    })
+  })
+
+  describe("validateTranslationConfigAndToast", () => {
+    it("allows managed cloud without apiKey", () => {
+      expect(validateTranslationConfigAndToast(DEFAULT_CONFIG, "eng")).toBe(true)
+      expect(mockToastError).not.toHaveBeenCalled()
+      expect(mockToastWarning).not.toHaveBeenCalled()
+    })
+
+    it("still blocks providers that really need an apiKey", () => {
+      const openaiProvider = DEFAULT_PROVIDER_CONFIG.openai
+      const config = {
+        ...DEFAULT_CONFIG,
+        providersConfig: [openaiProvider, ...DEFAULT_CONFIG.providersConfig],
+        translate: {
+          ...DEFAULT_CONFIG.translate,
+          providerId: openaiProvider.id,
+        },
+      }
+
+      expect(validateTranslationConfigAndToast(config, "eng")).toBe(false)
+      expect(mockToastError).toHaveBeenCalledWith("noAPIKeyConfig.warning")
     })
   })
 

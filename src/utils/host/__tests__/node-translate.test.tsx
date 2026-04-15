@@ -17,12 +17,16 @@ const TEST_CONFIG: Config = {
   },
 }
 
+const { mockValidateTranslationConfigAndToast } = vi.hoisted(() => ({
+  mockValidateTranslationConfigAndToast: vi.fn(() => true),
+}))
+
 vi.mock("@/utils/host/translate/translate-variants", () => ({
   translateTextForPage: vi.fn(() => Promise.resolve("translation")),
 }))
 
 vi.mock("@/utils/host/translate/translate-text", () => ({
-  validateTranslationConfigAndToast: vi.fn(() => true),
+  validateTranslationConfigAndToast: mockValidateTranslationConfigAndToast,
 }))
 
 vi.mock("@/utils/config/storage", () => ({
@@ -78,6 +82,14 @@ describe("node translation", () => {
       const wrapper = expectTranslationWrapper(node, "bilingual")
       expect(wrapper).toBe(node.childNodes[1])
       expectTranslatedContent(wrapper, BLOCK_CONTENT_CLASS)
+      expect(mockValidateTranslationConfigAndToast).toHaveBeenCalledWith(
+        {
+          providersConfig: TEST_CONFIG.providersConfig,
+          translate: TEST_CONFIG.translate,
+          language: TEST_CONFIG.language,
+        },
+        "eng",
+      )
 
       document.elementFromPoint = originalElementFromPoint
     })

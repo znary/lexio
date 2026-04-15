@@ -3,7 +3,7 @@ import { browser, defineBackground } from "#imports"
 import { WEBSITE_URL } from "@/utils/constants/url"
 import { logger } from "@/utils/logger"
 import { onMessage } from "@/utils/message"
-import { setPlatformAuthSession } from "@/utils/platform/storage"
+import { clearPlatformAuthSession, setPlatformAuthSession } from "@/utils/platform/storage"
 import { SessionCacheGroupRegistry } from "@/utils/session-cache/session-cache-group-registry"
 import { runAiSegmentSubtitles } from "./ai-segmentation"
 import { setupAnalyticsMessageHandlers } from "./analytics"
@@ -17,6 +17,7 @@ import { setupIframeInjection } from "./iframe-injection"
 import { setupLLMGenerateTextMessageHandlers } from "./llm-generate-text"
 import { initMockData } from "./mock-data"
 import { newUserGuide } from "./new-user-guide"
+import { handlePlatformAuthExternalMessage } from "./platform-auth"
 import { proxyFetch } from "./proxy-fetch"
 import { setUpSubtitlesTranslationQueue, setUpWebPageTranslationQueue } from "./translation-queues"
 import { translationMessage } from "./translation-signal"
@@ -30,39 +31,6 @@ function getWebsiteOrigin(): string | null {
   catch {
     return null
   }
-}
-
-function isAuthorizedExternalSender(senderUrl: string | undefined, websiteOrigin: string | null): boolean {
-  if (!websiteOrigin || !senderUrl) {
-    return false
-  }
-
-  try {
-    return new URL(senderUrl).origin === websiteOrigin
-  }
-  catch {
-    return false
-  }
-}
-
-function isPlatformAuthSyncMessage(
-  value: unknown,
-): value is {
-  type: "lexio-platform-auth-sync"
-  token: string
-  user?: {
-    id?: string | null
-    email?: string | null
-    name?: string | null
-    imageUrl?: string | null
-  }
-} {
-  if (!value || typeof value !== "object") {
-    return false
-  }
-
-  const message = value as Record<string, unknown>
-  return message.type === "lexio-platform-auth-sync" && typeof message.token === "string" && message.token.trim().length > 0
 }
 
 export default defineBackground({
@@ -100,32 +68,26 @@ export default defineBackground({
     })
 
     browser.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
-      if (!isPlatformAuthSyncMessage(message)) {
+      const handled = handlePlatformAuthExternalMessage({
+        message,
+        senderUrl: sender.url,
+        websiteOrigin,
+        setPlatformAuthSession,
+        clearPlatformAuthSession,
+      })
+
+      void handled.then((response) => {
+        if (response) {
+          sendResponse(response)
+        }
+      })
+
+      if (!message || typeof message !== "object") {
         return false
       }
 
-      if (!isAuthorizedExternalSender(sender.url, websiteOrigin)) {
-        sendResponse({ ok: false, error: "Unauthorized sender" })
-        return false
-      }
-
-      void (async () => {
-        try {
-          await setPlatformAuthSession({
-            token: message.token,
-            user: message.user,
-          })
-          sendResponse({ ok: true })
-        }
-        catch (error) {
-          sendResponse({
-            ok: false,
-            error: error instanceof Error ? error.message : "Failed to save platform token",
-          })
-        }
-      })()
-
-      return true
+      const type = (message as Record<string, unknown>).type
+      return type === "lexio-platform-auth-sync" || type === "lexio-platform-auth-clear"
     })
 
     onMessage("aiSegmentSubtitles", async (message) => {

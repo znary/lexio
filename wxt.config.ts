@@ -7,6 +7,28 @@ const ALLOWED_BUNDLED_API_KEYS = new Set([
   "WXT_POSTHOG_API_KEY",
 ])
 const DEFAULT_WEBSITE_URL = "https://lexio.example.com"
+const REQUIRED_PLATFORM_ENV_VARS = [
+  "WXT_PLATFORM_API_URL",
+  "WXT_WEBSITE_URL",
+  "WXT_PLATFORM_SIGN_IN_PATH",
+  "WXT_PLATFORM_PRICING_PATH",
+  "WXT_PLATFORM_EXTENSION_SYNC_PATH",
+] as const
+
+function valueLooksLocal(urlLike: string | undefined): boolean {
+  const value = urlLike?.trim()
+  if (!value) {
+    return false
+  }
+
+  try {
+    const hostname = new URL(value).hostname.trim().toLowerCase()
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0"
+  }
+  catch {
+    return false
+  }
+}
 
 function buildExternallyConnectableMatches(websiteUrl: string): string[] {
   try {
@@ -119,6 +141,27 @@ export default defineConfig({
                   `\n\nFound WXT_*_API_KEY environment variables that may be bundled:\n`
                   + `${apiKeyVars.map(k => `   - ${k}`).join("\n")}\n\n`
                   + `Please unset these variables before building for production.\n`,
+                )
+              }
+
+              const missingPlatformEnvVars = REQUIRED_PLATFORM_ENV_VARS.filter(key => !process.env[key]?.trim())
+
+              if (missingPlatformEnvVars.length > 0) {
+                throw new Error(
+                  `\n\nMissing required platform environment variables for production:\n`
+                  + `${missingPlatformEnvVars.map(key => `   - ${key}`).join("\n")}\n\n`
+                  + `Set them before building the production extension.\n`,
+                )
+              }
+
+              const localOnlyPlatformEnvVars = ["WXT_PLATFORM_API_URL", "WXT_WEBSITE_URL"]
+                .filter(key => valueLooksLocal(process.env[key]))
+
+              if (localOnlyPlatformEnvVars.length > 0) {
+                throw new Error(
+                  `\n\nFound localhost-only platform URLs in a production extension build:\n`
+                  + `${localOnlyPlatformEnvVars.map(key => `   - ${key}=${process.env[key]}`).join("\n")}\n\n`
+                  + `Replace them with the real Cloudflare URLs before building.\n`,
                 )
               }
 

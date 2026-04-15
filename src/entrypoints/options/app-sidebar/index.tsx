@@ -18,6 +18,7 @@ import { WEBSITE_URL } from "@/utils/constants/url"
 import { getCommandPaletteShortcutHint } from "@/utils/os"
 import { version } from "../../../../package.json"
 import { commandPaletteOpenAtom } from "../command-palette/atoms"
+import { PlatformAccountMenu } from "../pages/config/platform-account"
 import { SettingsNav } from "./settings-nav"
 import { ToolsNav } from "./tools-nav"
 import { WhatsNewFooter } from "./whats-new-footer"
@@ -29,16 +30,19 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="group-data-[state=expanded]:px-5 group-data-[state=expanded]:pt-4 transition-all">
-        <a href={WEBSITE_URL} className="flex items-center gap-2">
-          <img src={lexioLogo} alt={`${i18n.t("name")} logo`} className="h-8 w-8 shrink-0" />
-          <span className="text-md font-bold overflow-hidden truncate">{i18n.t("name")}</span>
-          <span className="text-xs text-muted-foreground overflow-hidden truncate">
-            {`v${version}`}
-          </span>
-        </a>
+        <div className="flex items-center justify-between gap-3">
+          <a href={WEBSITE_URL} className="flex min-w-0 items-center gap-2">
+            <img src={lexioLogo} alt={`${i18n.t("name")} logo`} className="h-8 w-8 shrink-0" />
+            <span className="text-md font-bold overflow-hidden truncate group-data-[state=collapsed]:hidden">{i18n.t("name")}</span>
+            <span className="text-xs text-muted-foreground overflow-hidden truncate group-data-[state=collapsed]:hidden">
+              {`v${version}`}
+            </span>
+          </a>
+          <PlatformAccountMenu />
+        </div>
         <InputGroup
           onClick={() => setCommandPaletteOpen(true)}
-          className="bg-background"
+          className="mt-3 bg-background"
         >
           <InputGroupInput
             readOnly

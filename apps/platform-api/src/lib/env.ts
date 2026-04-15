@@ -6,13 +6,12 @@ export interface Env {
   CLERK_JWT_KEY?: string
   CLERK_AUDIENCE?: string
   CLERK_AUTHORIZED_PARTIES?: string
+  PLATFORM_EXTENSION_TOKEN_SECRET?: string
   AI_GATEWAY_BASE_URL: string
   AI_GATEWAY_API_KEY: string
   AI_GATEWAY_MODEL_FREE?: string
   AI_GATEWAY_MODEL_PRO?: string
-  PADDLE_API_KEY?: string
   PADDLE_WEBHOOK_SECRET?: string
-  PADDLE_ENV?: "sandbox" | "production"
   PADDLE_PRO_PRICE_ID?: string
 }
 

@@ -1,16 +1,40 @@
 import type { ExportedHandler } from "@cloudflare/workers-types"
+import type { SessionContext } from "./lib/auth"
 import type { Env } from "./lib/env"
 import { UsageGate } from "./durable-objects/usage-gate"
-import { requireSession } from "./lib/auth"
+import { mintExtensionToken, requireSession } from "./lib/auth"
 import { handleRouteError, noContent } from "./lib/http"
 import { handleAiGenerate, handleAiStream, handleOpenAiChatCompletions } from "./routes/ai"
+import { handleExchangeExtensionToken } from "./routes/auth"
 import { handleHealthCheck } from "./routes/health"
 import { handleMe } from "./routes/me"
 import { handlePaddleWebhook } from "./routes/paddle"
 import { handleSyncPull, handleSyncPush } from "./routes/sync"
 
+const PLATFORM_TOKEN_HEADER = "x-lexio-platform-token"
+const PLATFORM_TOKEN_EXPIRES_AT_HEADER = "x-lexio-platform-token-expires-at"
+
+async function withRefreshedExtensionSession(response: Response, session: SessionContext | null, env: Env): Promise<Response> {
+  if (!session || session.tokenType !== "extension") {
+    return response
+  }
+
+  const nextSession = await mintExtensionToken(session, env)
+  const headers = new Headers(response.headers)
+  headers.set(PLATFORM_TOKEN_HEADER, nextSession.token)
+  headers.set(PLATFORM_TOKEN_EXPIRES_AT_HEADER, nextSession.expiresAt)
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
 const handler: ExportedHandler<Env> = {
   async fetch(request, env) {
+    let session: SessionContext | null = null
+
     if (request.method === "OPTIONS") {
       return noContent()
     }
@@ -19,43 +43,56 @@ const handler: ExportedHandler<Env> = {
       const url = new URL(request.url)
 
       if (request.method === "GET" && url.pathname === "/health") {
-        return handleHealthCheck()
+        return handleHealthCheck(env)
       }
 
       if (request.method === "POST" && url.pathname === "/webhooks/paddle") {
         return handlePaddleWebhook(request, env)
       }
 
-      const session = await requireSession(request, env)
+      session = await requireSession(request, env)
+      let response: Response
+
+      if (request.method === "POST" && url.pathname === "/v1/auth/extension-token") {
+        response = await handleExchangeExtensionToken(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
 
       if (request.method === "GET" && url.pathname === "/v1/me") {
-        return handleMe(request, env, session)
+        response = await handleMe(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
       }
 
       if (request.method === "POST" && url.pathname === "/v1/sync/pull") {
-        return handleSyncPull(request, env, session)
+        response = await handleSyncPull(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
       }
 
       if (request.method === "POST" && url.pathname === "/v1/sync/push") {
-        return handleSyncPush(request, env, session)
+        response = await handleSyncPush(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
       }
 
       if (request.method === "POST" && url.pathname === "/v1/ai/generate") {
-        return handleAiGenerate(request, env, session)
+        response = await handleAiGenerate(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
       }
 
       if (request.method === "POST" && url.pathname === "/v1/ai/stream") {
-        return handleAiStream(request, env, session)
+        response = await handleAiStream(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
       }
 
       if (request.method === "POST" && url.pathname === "/v1/openai/chat/completions") {
-        return handleOpenAiChatCompletions(request, env, session)
+        response = await handleOpenAiChatCompletions(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
       }
 
-      return new Response("Not found", { status: 404 })
+      response = new Response("Not found", { status: 404 })
+      return withRefreshedExtensionSession(response, session, env)
     }
     catch (error) {
-      return handleRouteError(error)
+      return withRefreshedExtensionSession(handleRouteError(error), session, env)
     }
   },
 }

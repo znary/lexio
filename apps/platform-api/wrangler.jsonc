@@ -26,9 +26,6 @@
       "tag": "v1"
     }
   ],
-  "vars": {
-    "PADDLE_ENV": "sandbox"
-  },
   "env": {
     "dev": {
       "name": "lexio-platform-api-dev",
@@ -49,7 +46,13 @@
         }
       ],
       "vars": {
-        "PADDLE_ENV": "sandbox"
+        "CLERK_PUBLISHABLE_KEY": "pk_test_c2VsZWN0ZWQtc2N1bHBpbi02OC5jbGVyay5hY2NvdW50cy5kZXYk",
+        "CLERK_JWT_KEY": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3IJrJZeRQhvB8WCx6Kfg\nIt4c4M3RGGnfSnyjyzUUA5EC4KZ7RSqVhs+Upio37Hs46TQLivghr37HSD0tGlcV\nirE6iCxUv4pxdaFK5ymkNK54tg6jI+T/oFJH7yiFpyxAQU5L2YN7SKk4/yWiALiF\nn+iNj4Y4ECQag0G2Z5J/yQnQ7/OEEwp3CINUlCyO66UJqqL0osHls5qJEWzxYJ4Z\nihf94O7tcEuHZ+eHj2LeHTftQHoTe9pMEts5CO2uK71w3YGOniJMCXo5Q3VWxmxK\nv6sZYkvXUk5d/GDEke4Fpl9Dx0pe0lJ6Cl+TTYL80rhGwyOmMid8ZgBihTjggMn/\nGwIDAQAB\n-----END PUBLIC KEY-----",
+        "CLERK_AUTHORIZED_PARTIES": "https://lexio-platform-web.lznwpu.workers.dev",
+        "AI_GATEWAY_BASE_URL": "https://ark.cn-beijing.volces.com/api/v3",
+        "AI_GATEWAY_MODEL_FREE": "ep-20260326213836-ms45r",
+        "AI_GATEWAY_MODEL_PRO": "ep-20260326213836-ms45r",
+        "PADDLE_PRO_PRICE_ID": "pri_xxx"
       }
     }
   }

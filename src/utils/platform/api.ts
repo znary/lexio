@@ -1,7 +1,10 @@
 import type { Config } from "@/types/config/config"
 import type { VocabularyItem } from "@/types/vocabulary"
 import { buildPlatformApiUrl } from "../constants/platform"
-import { clearPlatformAuthSession, getPlatformAuthSession } from "./storage"
+import { clearPlatformAuthSession, getPlatformAuthSession, setPlatformAuthSession } from "./storage"
+
+export const PLATFORM_TOKEN_REFRESH_HEADER = "x-lexio-platform-token"
+export const PLATFORM_TOKEN_EXPIRES_AT_HEADER = "x-lexio-platform-token-expires-at"
 
 export interface PlatformUserPayload {
   id: string
@@ -64,6 +67,20 @@ async function getPlatformErrorMessage(response: Response): Promise<string> {
   return payload
 }
 
+export async function refreshPlatformSessionFromResponse(response: Response): Promise<void> {
+  const nextToken = response.headers.get(PLATFORM_TOKEN_REFRESH_HEADER)
+    ?? response.headers.get("X-Lexio-Platform-Token")
+  if (!nextToken?.trim()) {
+    return
+  }
+
+  const currentSession = await getPlatformAuthSession()
+  await setPlatformAuthSession({
+    token: nextToken.trim(),
+    user: currentSession?.user,
+  })
+}
+
 export async function platformFetch(path: string, init?: RequestInit): Promise<Response> {
   const token = await getAccessTokenOrThrow()
   const headers = new Headers(init?.headers)
@@ -73,6 +90,7 @@ export async function platformFetch(path: string, init?: RequestInit): Promise<R
     ...init,
     headers,
   })
+  await refreshPlatformSessionFromResponse(response)
 
   if (response.status === 401) {
     await clearPlatformAuthSession()

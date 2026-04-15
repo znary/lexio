@@ -1,6 +1,8 @@
-import { SignedIn, SignedOut, SignInButton, useAuth, useUser } from "@clerk/clerk-react"
-import { useEffect, useMemo, useState } from "react"
-import { getExtensionIdFromLocation } from "../app/env"
+import type { ReactNode } from "react"
+import { SignInButton, useAuth, useUser } from "@clerk/clerk-react"
+import { useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
+import { syncPlatformAuthToExtension } from "../app/platform-auth"
 
 declare global {
   interface Window {
@@ -22,21 +24,21 @@ declare global {
 type SyncStatus = "idle" | "syncing" | "success" | "error"
 
 function StatusPill({ status }: { status: SyncStatus }) {
-  const className = status === "success"
-    ? "status-pill is-success"
-    : status === "error"
-      ? "status-pill is-error"
-      : status === "syncing"
-        ? "status-pill is-warning"
-        : "status-pill"
+  let className = "status-pill"
+  let label = "Waiting for sign-in"
 
-  const label = status === "success"
-    ? "Extension synced"
-    : status === "error"
-      ? "Sync failed"
-      : status === "syncing"
-        ? "Syncing..."
-        : "Waiting for sign-in"
+  if (status === "success") {
+    className = "status-pill is-success"
+    label = "Extension synced"
+  }
+  else if (status === "error") {
+    className = "status-pill is-error"
+    label = "Sync failed"
+  }
+  else if (status === "syncing") {
+    className = "status-pill is-warning"
+    label = "Syncing..."
+  }
 
   return <div className={className}>{label}</div>
 }
@@ -45,68 +47,96 @@ export function ExtensionSyncPage() {
   const { getToken, isSignedIn } = useAuth()
   const { user } = useUser()
   const [status, setStatus] = useState<SyncStatus>("idle")
-  const [message, setMessage] = useState("Sign in and keep the extension installed in this browser.")
-  const extensionId = useMemo(() => getExtensionIdFromLocation(), [])
+  const [message, setMessage] = useState("Sign in to send the token back to the extension.")
+  const syncKey = isSignedIn
+    ? [
+        user?.id ?? "",
+        user?.primaryEmailAddress?.emailAddress ?? "",
+        user?.fullName ?? "",
+        user?.username ?? "",
+        user?.imageUrl ?? "",
+      ].join("|")
+    : "signed-out"
+  const lastSyncKeyRef = useRef("")
+  let sessionPanel: ReactNode
 
   useEffect(() => {
     async function syncExtension() {
-      if (!isSignedIn || !extensionId) {
+      if (!isSignedIn) {
+        lastSyncKeyRef.current = ""
+        setStatus("idle")
+        setMessage("Sign in to send the token back to the extension.")
         return
       }
 
-      if (!window.chrome?.runtime?.sendMessage) {
-        setStatus("error")
-        setMessage("This page must run in a browser that can message the extension.")
+      if (lastSyncKeyRef.current === syncKey) {
         return
       }
+
+      lastSyncKeyRef.current = syncKey
 
       try {
         setStatus("syncing")
         const token = await getToken()
         if (!token) {
-          throw new Error("Clerk did not return a session token. Sign in again and retry.")
+          throw new Error("Clerk did not return a session token.")
         }
 
-        const payload = {
-          type: "lexio-platform-auth-sync",
-          token,
-          user: {
-            id: user?.id,
-            email: user?.primaryEmailAddress?.emailAddress ?? null,
-            name: user?.fullName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress ?? "Lexio user",
-            imageUrl: user?.imageUrl ?? null,
-          },
-        }
-
-        await new Promise<void>((resolve, reject) => {
-          window.chrome?.runtime?.sendMessage?.(extensionId, payload, (response) => {
-            const runtimeError = window.chrome?.runtime?.lastError
-            if (runtimeError) {
-              reject(new Error(runtimeError.message || "The extension rejected the platform token."))
-              return
-            }
-
-            const result = response as { ok?: boolean, error?: string } | undefined
-            if (!result?.ok) {
-              reject(new Error(result?.error || "The extension did not accept the sync payload."))
-              return
-            }
-
-            resolve()
-          })
+        await syncPlatformAuthToExtension(token, {
+          id: user?.id,
+          email: user?.primaryEmailAddress?.emailAddress ?? null,
+          name: user?.fullName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress ?? "Lexio user",
+          imageUrl: user?.imageUrl ?? null,
         })
 
         setStatus("success")
-        setMessage("Token sent to the extension. You can go back and use Lexio now.")
+        setMessage("Lexio account connected. You can go back to the extension now.")
+        toast.success("Lexio account connected.")
       }
       catch (error) {
         setStatus("error")
-        setMessage(error instanceof Error ? error.message : "Extension sync failed")
+        const nextMessage = error instanceof Error ? error.message : "Extension sync failed"
+        setMessage(nextMessage)
+        toast.error(nextMessage)
       }
     }
 
     void syncExtension()
-  }, [extensionId, getToken, isSignedIn, user])
+  }, [
+    getToken,
+    isSignedIn,
+    syncKey,
+    user?.fullName,
+    user?.id,
+    user?.imageUrl,
+    user?.primaryEmailAddress?.emailAddress,
+    user?.username,
+  ])
+
+  if (!isSignedIn) {
+    sessionPanel = (
+      <div className="card-stack">
+        <h2 className="plan-title">Sign in first</h2>
+        <p className="card-copy">The extension can only accept a signed Clerk token.</p>
+        <SignInButton mode="modal">
+          <button type="button" className="primary-button">Sign in</button>
+        </SignInButton>
+      </div>
+    )
+  }
+  else {
+    sessionPanel = (
+      <div className="card-stack">
+        <h2 className="plan-title">Current browser session</h2>
+        <div className="feature-list">
+          <div className="feature-row">
+            <strong>User</strong>
+            <span className="muted-copy">{user?.primaryEmailAddress?.emailAddress ?? "Signed in"}</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <section className="sync-grid">
@@ -119,38 +149,8 @@ export function ExtensionSyncPage() {
         </p>
         <StatusPill status={status} />
         <p className="sync-code">{message}</p>
-        {!extensionId && (
-          <div className="empty-panel">
-            Open this page from the extension so the `extensionId` query parameter is filled automatically.
-          </div>
-        )}
       </article>
-      <aside className="sync-card">
-        <SignedOut>
-          <div className="card-stack">
-            <h2 className="plan-title">Sign in first</h2>
-            <p className="card-copy">The extension can only accept a signed Clerk token.</p>
-            <SignInButton mode="modal">
-              <button type="button" className="primary-button">Sign in</button>
-            </SignInButton>
-          </div>
-        </SignedOut>
-        <SignedIn>
-          <div className="card-stack">
-            <h2 className="plan-title">Current browser session</h2>
-            <div className="feature-list">
-              <div className="feature-row">
-                <strong>User</strong>
-                <span className="muted-copy">{user?.primaryEmailAddress?.emailAddress ?? "Signed in"}</span>
-              </div>
-              <div className="feature-row">
-                <strong>Extension ID</strong>
-                <span className="muted-copy">{extensionId || "Missing"}</span>
-              </div>
-            </div>
-          </div>
-        </SignedIn>
-      </aside>
+      <aside className="sync-card">{sessionPanel}</aside>
     </section>
   )
 }

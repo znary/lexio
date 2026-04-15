@@ -7,6 +7,7 @@ import { LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME } from "@read-frog/defin
 import { toast } from "sonner"
 import { isAPIProviderConfig, isLLMProviderConfig } from "@/types/config/provider"
 import { getProviderConfigById } from "@/utils/config/helpers"
+import { MANAGED_CLOUD_PROVIDER_ID } from "@/utils/constants/platform"
 
 import { detectLanguage } from "@/utils/content/language"
 import { logger } from "@/utils/logger"
@@ -182,7 +183,12 @@ export function validateTranslationConfigAndToast(
   }
 
   // check if the API key is configured
-  if (isAPIProviderConfig(providerConfig) && !providerConfig.apiKey?.trim() && !["deeplx", "ollama"].includes(providerConfig.provider)) {
+  const isManagedCloudProvider = providerConfig.id === MANAGED_CLOUD_PROVIDER_ID && providerConfig.provider === "openai-compatible"
+  const requiresApiKey = isAPIProviderConfig(providerConfig)
+    && !isManagedCloudProvider
+    && !["deeplx", "ollama"].includes(providerConfig.provider)
+
+  if (requiresApiKey && !providerConfig.apiKey?.trim()) {
     toast.error(i18n.t("noAPIKeyConfig.warning"))
     logger.info("validateTranslationConfig: returning false (no API key)")
     return false

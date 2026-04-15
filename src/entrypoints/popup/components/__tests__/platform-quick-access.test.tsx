@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react"
-import * as React from "react"
+/* eslint-disable react/no-clone-element, react/no-context-provider, react/no-use-context */
+import type { MouseEvent, ReactElement, ReactNode } from "react"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { createContext, useContext, useState } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { PlatformQuickAccess } from "@/components/platform/platform-quick-access"
 
@@ -8,23 +10,107 @@ const getPlatformAuthSessionMock = vi.fn()
 const watchPlatformAuthSessionMock = vi.fn()
 const openPlatformExtensionSyncTabMock = vi.fn()
 const openPlatformPricingTabMock = vi.fn()
+const clearPlatformAuthSessionMock = vi.fn()
 
 vi.mock("@/components/ui/base-ui/button", () => ({
   Button: ({
     children,
     type = "button",
+    ...props
   }: React.ComponentProps<"button">) => (
-    <button type={type}>
+    <button type={type} {...props}>
       {children}
     </button>
   ),
 }))
 
 vi.mock("@/components/ui/base-ui/badge", () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  Badge: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }))
 
+vi.mock("@/components/ui/base-ui/dropdown-menu", async () => {
+  const React = await import("react")
+
+  interface MenuContextValue {
+    open: boolean
+    setOpen: (open: boolean) => void
+  }
+
+  const MenuContext = createContext<MenuContextValue | null>(null)
+
+  function useMenuContext() {
+    const context = useContext(MenuContext)
+    if (!context) {
+      throw new Error("DropdownMenu components must be used within DropdownMenu.")
+    }
+    return context
+  }
+
+  function DropdownMenu({ children }: { children: ReactNode }) {
+    const [open, setOpen] = useState(false)
+    return (
+      <MenuContext.Provider value={{ open, setOpen }}>
+        {children}
+      </MenuContext.Provider>
+    )
+  }
+
+  function DropdownMenuTrigger({
+    children,
+    render,
+  }: {
+    children: ReactNode
+    render: ReactElement<{
+      children?: ReactNode
+      onClick?: (event: MouseEvent<HTMLButtonElement>) => void
+    }>
+  }) {
+    const { setOpen } = useMenuContext()
+    return React.cloneElement(render, {
+      onClick: (event: MouseEvent<HTMLButtonElement>) => {
+        render.props.onClick?.(event)
+        setOpen(true)
+      },
+      children,
+    })
+  }
+
+  function DropdownMenuContent({ children }: { children: ReactNode }) {
+    const { open } = useMenuContext()
+    return open ? <div>{children}</div> : null
+  }
+
+  function DropdownMenuItem({
+    children,
+    onClick,
+    variant,
+  }: {
+    children: ReactNode
+    onClick?: () => void
+    variant?: string
+  }) {
+    return (
+      <button type="button" data-variant={variant} onClick={onClick}>
+        {children}
+      </button>
+    )
+  }
+
+  function DropdownMenuSeparator() {
+    return <div role="separator" />
+  }
+
+  return {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+  }
+})
+
 vi.mock("@/utils/platform/storage", () => ({
+  clearPlatformAuthSession: (...args: unknown[]) => clearPlatformAuthSessionMock(...args),
   getPlatformAuthSession: (...args: unknown[]) => getPlatformAuthSessionMock(...args),
   watchPlatformAuthSession: (...args: unknown[]) => watchPlatformAuthSessionMock(...args),
 }))
@@ -35,25 +121,29 @@ vi.mock("@/utils/platform/navigation", () => ({
 }))
 
 afterEach(() => {
+  cleanup()
   vi.clearAllMocks()
 })
 
 describe("platformQuickAccess", () => {
-  it("shows a visible sign in entry when there is no platform session", async () => {
+  it("shows a compact account menu in popup mode", async () => {
     getPlatformAuthSessionMock.mockResolvedValue(null)
     watchPlatformAuthSessionMock.mockReturnValue(() => {})
 
-    render(<PlatformQuickAccess size="sm" />)
+    render(<PlatformQuickAccess variant="menu" size="sm" />)
 
     await waitFor(() => {
-      expect(screen.getByText("Not signed in")).toBeInTheDocument()
+      expect(screen.getByLabelText("Open account menu")).toBeInTheDocument()
     })
 
+    fireEvent.click(screen.getByLabelText("Open account menu"))
+
+    expect(screen.getByText("Lexio Cloud")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Plans" })).toBeInTheDocument()
   })
 
-  it("shows the connected email when a platform session already exists", async () => {
+  it("shows logout inside the popup menu when signed in", async () => {
     getPlatformAuthSessionMock.mockResolvedValue({
       token: "token",
       user: {
@@ -63,17 +153,21 @@ describe("platformQuickAccess", () => {
     })
     watchPlatformAuthSessionMock.mockReturnValue(() => {})
 
-    render(<PlatformQuickAccess />)
+    render(<PlatformQuickAccess variant="menu" />)
 
     await waitFor(() => {
-      expect(screen.getByText("user@example.com")).toBeInTheDocument()
+      expect(screen.getByLabelText("Open account menu")).toBeInTheDocument()
     })
 
-    expect(screen.getByText("Signed in")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Reconnect" })).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText("Open account menu"))
+
+    expect(screen.getByText("user@example.com")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Log out" }))
+
+    expect(clearPlatformAuthSessionMock).toHaveBeenCalledTimes(1)
   })
 
-  it("still shows a connected state when the session has no email", async () => {
+  it("keeps the inline card actions and logout button for options pages", async () => {
     getPlatformAuthSessionMock.mockResolvedValue({
       token: "token",
       user: {},
@@ -88,5 +182,6 @@ describe("platformQuickAccess", () => {
     })
 
     expect(screen.getByRole("button", { name: "Reconnect" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Log out" })).toBeInTheDocument()
   })
 })

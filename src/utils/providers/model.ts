@@ -28,7 +28,8 @@ import { compactObject } from "@/types/utils"
 import { getLLMProvidersConfig, getProviderConfigById } from "../config/helpers"
 import { CONFIG_STORAGE_KEY } from "../constants/config"
 import { MANAGED_CLOUD_PROVIDER_ID, PLATFORM_OPENAI_BASE_URL } from "../constants/platform"
-import { getPlatformAuthSession } from "../platform/storage"
+import { refreshPlatformSessionFromResponse } from "../platform/api"
+import { clearPlatformAuthSession, getPlatformAuthSession } from "../platform/storage"
 import { resolveModelId } from "./model-id"
 
 const CREATE_AI_MAPPER = {
@@ -69,6 +70,30 @@ export function supportsStructuredOutputsForCustomProvider(provider: string): bo
   return provider !== "volcengine"
 }
 
+export async function fetchManagedCloudWithSessionGuard(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const response = await fetch(input, init)
+
+  if (response.status !== 401 && response.status !== 403) {
+    await refreshPlatformSessionFromResponse(response)
+    return response
+  }
+
+  await clearPlatformAuthSession()
+
+  const headers = new Headers(response.headers)
+  headers.set("Content-Type", "application/json; charset=utf-8")
+
+  return new Response(JSON.stringify({
+    error: {
+      message: "Platform session expired. Sign in again.",
+    },
+  }), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
 async function getLanguageModelById(providerId: string) {
   const config = await storage.getItem<Config>(`local:${CONFIG_STORAGE_KEY}`)
   if (!config) {
@@ -91,6 +116,7 @@ async function getLanguageModelById(providerId: string) {
       name: providerConfig.provider,
       baseURL: PLATFORM_OPENAI_BASE_URL,
       apiKey: session.token,
+      fetch: fetchManagedCloudWithSessionGuard,
     }).languageModel(resolveModelId(providerConfig.model) || MANAGED_CLOUD_PROVIDER_ID)
   }
 
