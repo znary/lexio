@@ -13,6 +13,10 @@ function resolveGatewayModel(env: Env, plan: Plan): string {
   return env.AI_GATEWAY_MODEL_FREE || "openai/gpt-4.1-nano"
 }
 
+function isVolcengineModel(model: string): boolean {
+  return model.startsWith("doubao-") || model.includes("/doubao-")
+}
+
 export async function forwardChatCompletions(
   env: Env,
   body: Record<string, unknown>,
@@ -22,10 +26,18 @@ export async function forwardChatCompletions(
     throw new HttpError(500, "AI Gateway is not configured")
   }
 
+  const model = resolveGatewayModel(env, plan)
   const upstreamUrl = `${trimTrailingSlash(env.AI_GATEWAY_BASE_URL)}/chat/completions`
+
+  // Disable thinking for volcengine models
+  const thinkingOverride = isVolcengineModel(model)
+    ? { thinking: { type: "disabled" as const } }
+    : {}
+
   const upstreamBody = JSON.stringify({
     ...body,
-    model: resolveGatewayModel(env, plan),
+    ...thinkingOverride,
+    model,
   })
 
   const response = await fetch(upstreamUrl, {
