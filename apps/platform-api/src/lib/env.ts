@@ -43,7 +43,7 @@ export function buildEntitlements(plan: Plan): Entitlements {
       plan,
       monthlyRequestLimit: 5000,
       monthlyTokenLimit: 5_000_000,
-      concurrentRequestLimit: 8,
+      concurrentRequestLimit: 20,
     }
   }
 
@@ -51,6 +51,6 @@ export function buildEntitlements(plan: Plan): Entitlements {
     plan: "free",
     monthlyRequestLimit: 500,
     monthlyTokenLimit: 500_000,
-    concurrentRequestLimit: 2,
+    concurrentRequestLimit: 10,
   }
 }

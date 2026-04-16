@@ -30,6 +30,7 @@ export interface BatchOptions<T, R> {
   batchDelay: number
   maxRetries?: number
   enableFallbackToIndividual?: boolean
+  shouldFallbackToIndividual?: (error: Error) => boolean
   getBatchKey: (data: T) => string
   getCharacters: (data: T) => number
   executeBatch: (dataList: T[]) => Promise<R[]>
@@ -45,6 +46,7 @@ export class BatchQueue<T, R> {
   private batchDelay: number
   private maxRetries: number
   private enableFallbackToIndividual: boolean
+  private shouldFallbackToIndividual: (error: Error) => boolean
   private getBatchKey: (data: T) => string
   private getCharacters: (data: T) => number
   private executeBatch: (dataList: T[]) => Promise<R[]>
@@ -57,6 +59,7 @@ export class BatchQueue<T, R> {
     this.batchDelay = config.batchDelay
     this.maxRetries = config.maxRetries ?? 3
     this.enableFallbackToIndividual = config.enableFallbackToIndividual ?? true
+    this.shouldFallbackToIndividual = config.shouldFallbackToIndividual ?? (() => true)
     this.getBatchKey = config.getBatchKey
     this.getCharacters = config.getCharacters
     this.executeBatch = config.executeBatch
@@ -188,7 +191,11 @@ export class BatchQueue<T, R> {
         return this.executeBatchWithRetry(tasks, batchKey, retryCount + 1)
       }
 
-      if (this.enableFallbackToIndividual && this.executeIndividual) {
+      if (
+        this.enableFallbackToIndividual
+        && this.executeIndividual
+        && this.shouldFallbackToIndividual(err)
+      ) {
         return this.executeFallbackIndividual(tasks, batchKey)
       }
 

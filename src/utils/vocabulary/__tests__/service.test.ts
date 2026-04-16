@@ -132,4 +132,81 @@ describe("vocabulary service", () => {
       hitCount: 4,
     }))
   })
+
+  it("removes an item from the local cache before the delete request finishes", async () => {
+    apiGetVocabularyItemsMock.mockResolvedValue([
+      {
+        id: "voc_delete",
+        sourceText: "hello",
+        normalizedText: "hello",
+        translatedText: "你好",
+        sourceLang: "en",
+        targetLang: "zh-CN",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 1,
+        lastSeenAt: 2,
+        hitCount: 3,
+        updatedAt: 4,
+        deletedAt: null,
+      },
+    ])
+
+    let resolveDelete: ((value: { ok: true }) => void) | null = null
+    apiDeleteVocabularyItemMock.mockReturnValue(new Promise((resolve) => {
+      resolveDelete = resolve
+    }))
+
+    const { getCachedVocabularyItems, removeVocabularyItem, VOCABULARY_CHANGED_EVENT } = await import("../service")
+    const changedListener = vi.fn()
+    document.addEventListener(VOCABULARY_CHANGED_EVENT, changedListener)
+
+    const deletePromise = removeVocabularyItem("voc_delete")
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(getCachedVocabularyItems()).toEqual([])
+    expect(changedListener).toHaveBeenCalledTimes(1)
+
+    if (!resolveDelete) {
+      throw new Error("delete promise resolver was not captured")
+    }
+
+    const finishDelete = resolveDelete as (value: { ok: true }) => void
+    finishDelete({ ok: true })
+    await expect(deletePromise).resolves.toBeUndefined()
+
+    document.removeEventListener(VOCABULARY_CHANGED_EVENT, changedListener)
+  })
+
+  it("restores the cache when delete fails", async () => {
+    apiGetVocabularyItemsMock.mockResolvedValue([
+      {
+        id: "voc_delete",
+        sourceText: "hello",
+        normalizedText: "hello",
+        translatedText: "你好",
+        sourceLang: "en",
+        targetLang: "zh-CN",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 1,
+        lastSeenAt: 2,
+        hitCount: 3,
+        updatedAt: 4,
+        deletedAt: null,
+      },
+    ])
+    apiDeleteVocabularyItemMock.mockRejectedValue(new Error("delete failed"))
+
+    const { getCachedVocabularyItems, removeVocabularyItem } = await import("../service")
+
+    await expect(removeVocabularyItem("voc_delete")).rejects.toThrow("delete failed")
+    expect(getCachedVocabularyItems()).toEqual([
+      expect.objectContaining({
+        id: "voc_delete",
+      }),
+    ])
+  })
 })

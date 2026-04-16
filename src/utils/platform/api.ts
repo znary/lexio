@@ -51,6 +51,16 @@ export interface ManagedTranslateRequest {
   isBatch?: boolean
 }
 
+export class PlatformAPIError extends Error {
+  statusCode: number
+
+  constructor(statusCode: number, message: string) {
+    super(message)
+    this.name = "PlatformAPIError"
+    this.statusCode = statusCode
+  }
+}
+
 async function getAccessTokenOrThrow(): Promise<string> {
   const session = await getPlatformAuthSession()
   if (!session?.token) {
@@ -110,7 +120,7 @@ export async function platformFetch(path: string, init?: RequestInit): Promise<R
   }
 
   if (!response.ok) {
-    throw new Error(await getPlatformErrorMessage(response))
+    throw new PlatformAPIError(response.status, await getPlatformErrorMessage(response))
   }
 
   return response

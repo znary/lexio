@@ -193,6 +193,12 @@ describe("translation queue helpers", () => {
     )
   })
 
+  it("keeps the managed translation queue cap at the free-tier limit", async () => {
+    const { MANAGED_TRANSLATION_MAX_CONCURRENCY } = await import("../translation-queues")
+
+    expect(MANAGED_TRANSLATION_MAX_CONCURRENCY).toBe(10)
+  })
+
   it("exposes webpage summary generation as a separate background handler", async () => {
     const { setUpWebPageTranslationQueue } = await import("../translation-queues")
     await setUpWebPageTranslationQueue()

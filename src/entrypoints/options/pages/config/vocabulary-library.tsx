@@ -90,27 +90,33 @@ export function VocabularyLibraryCard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredItems.map(item => (
-                    <TableRow key={item.id}>
-                      <TableCell className="max-w-56 whitespace-normal break-words">{item.sourceText}</TableCell>
-                      <TableCell className="max-w-56 whitespace-normal break-words">{item.translatedText}</TableCell>
-                      <TableCell>{item.kind}</TableCell>
-                      <TableCell>{item.hitCount}</TableCell>
-                      <TableCell>{formatDate(item.lastSeenAt)}</TableCell>
-                      <TableCell>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => {
-                            void removeVocabularyItem(item.id).then(invalidate)
-                          }}
-                        >
-                          <IconTrash className="size-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredItems.map((item) => {
+                    const deleteLabel = `${i18n.t("options.floatingButtonAndToolbar.selectionToolbar.customActions.form.delete")}: ${item.sourceText}`
+
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell className="max-w-56 whitespace-normal break-words">{item.sourceText}</TableCell>
+                        <TableCell className="max-w-56 whitespace-normal break-words">{item.translatedText}</TableCell>
+                        <TableCell>{item.kind}</TableCell>
+                        <TableCell>{item.hitCount}</TableCell>
+                        <TableCell>{formatDate(item.lastSeenAt)}</TableCell>
+                        <TableCell>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={deleteLabel}
+                            title={deleteLabel}
+                            onClick={() => {
+                              void removeVocabularyItem(item.id).then(invalidate)
+                            }}
+                          >
+                            <IconTrash className="size-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             )}

@@ -20,6 +20,7 @@ export interface QueueOptions {
   timeoutMs: number
   maxRetries: number
   baseRetryDelayMs: number
+  maxConcurrency?: number
 }
 
 export class RequestQueue {
@@ -27,6 +28,7 @@ export class RequestQueue {
   private waitingTasks = new Map<string, RequestTask>()
   private executingTasks = new Map<string, RequestTask>()
   private nextScheduleTimer: NodeJS.Timeout | null = null
+  private maxConcurrency: number
 
   // token bucket
   private bucketTokens: number
@@ -34,6 +36,7 @@ export class RequestQueue {
 
   constructor(private options: QueueOptions) {
     this.options = options
+    this.maxConcurrency = options.maxConcurrency ?? Number.POSITIVE_INFINITY
     this.bucketTokens = options.capacity
     this.lastRefill = Date.now()
     this.waitingQueue = new BinaryHeapPQ<RequestTask & { hash: string }>()
@@ -88,7 +91,11 @@ export class RequestQueue {
   private schedule() {
     this.refillTokens()
 
-    while (this.bucketTokens >= 1 && this.waitingQueue.size() > 0) {
+    while (
+      this.bucketTokens >= 1
+      && this.waitingQueue.size() > 0
+      && this.executingTasks.size < this.maxConcurrency
+    ) {
       const task = this.waitingQueue.peek()
       if (task && task.scheduleAt <= Date.now()) {
         this.waitingQueue.pop()
@@ -110,6 +117,11 @@ export class RequestQueue {
     if (this.waitingQueue.size() > 0) {
       const nextTask = this.waitingQueue.peek()
       if (nextTask) {
+        const hasExecutionSlot = this.executingTasks.size < this.maxConcurrency
+        if (!hasExecutionSlot) {
+          return
+        }
+
         const now = Date.now()
         const delayUntilScheduled = Math.max(0, nextTask.scheduleAt - now)
         const msUntilNextToken = this.bucketTokens >= 1 ? 0 : Math.ceil((1 - this.bucketTokens) / this.options.rate * 1000)

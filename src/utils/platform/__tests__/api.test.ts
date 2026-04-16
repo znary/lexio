@@ -117,6 +117,41 @@ describe("platform api helpers", () => {
     expect(clearPlatformAuthSessionMock).toHaveBeenCalledTimes(1)
   })
 
+  it("preserves the platform status code on request failures", async () => {
+    const { PlatformAPIError, platformFetch } = await import("../api")
+    getPlatformAuthSessionMock.mockResolvedValue({
+      token: "old-token",
+      user: {
+        email: "user@example.com",
+      },
+      updatedAt: Date.now(),
+    })
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "Too Many Requests" }), {
+      status: 429,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    let error: unknown
+    try {
+      await platformFetch("/v1/translate")
+    }
+    catch (caught) {
+      error = caught
+    }
+
+    expect(error).toMatchObject({
+      name: "PlatformAPIError",
+      message: "Too Many Requests",
+      statusCode: 429,
+    })
+    expect(error).toBeInstanceOf(PlatformAPIError)
+    expect((error as { statusCode: number }).statusCode).toBe(429)
+  })
+
   it("streams managed translation chunks through the platform endpoint", async () => {
     const { streamManagedTranslation } = await import("../api")
     getPlatformAuthSessionMock.mockResolvedValue({

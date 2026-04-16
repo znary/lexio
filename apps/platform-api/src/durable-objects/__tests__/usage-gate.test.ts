@@ -41,7 +41,7 @@ function createReserveRequest() {
         plan: "free",
         monthlyRequestLimit: 100,
         monthlyTokenLimit: 1000,
-        concurrentRequestLimit: 2,
+        concurrentRequestLimit: 10,
       },
     }),
   })
@@ -88,10 +88,18 @@ describe("usageGate", () => {
     const { ctx, readState } = createContext({
       monthKey: "2026-04",
       requestCount: 4,
-      activeCount: 2,
+      activeCount: 10,
       leases: {
         active_1: Date.now() - 1000,
         active_2: Date.now() - 500,
+        active_3: Date.now() - 400,
+        active_4: Date.now() - 300,
+        active_5: Date.now() - 200,
+        active_6: Date.now() - 100,
+        active_7: Date.now() - 90,
+        active_8: Date.now() - 80,
+        active_9: Date.now() - 70,
+        active_10: Date.now() - 60,
       },
     })
     const gate = new UsageGate(ctx, {})
@@ -103,7 +111,7 @@ describe("usageGate", () => {
     expect(payload.error).toBe("Too many concurrent requests")
     expect(readState()).toMatchObject({
       requestCount: 4,
-      activeCount: 2,
+      activeCount: 10,
     })
   })
 

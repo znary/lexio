@@ -17,9 +17,11 @@ import { logger } from "@/utils/logger"
 import { onMessage } from "@/utils/message"
 import { getSubtitlesTranslatePrompt } from "@/utils/prompts/subtitles"
 import { getTranslatePrompt } from "@/utils/prompts/translate"
-import { BatchQueue } from "@/utils/request/batch-queue"
+import { BatchCountMismatchError, BatchQueue } from "@/utils/request/batch-queue"
 import { RequestQueue } from "@/utils/request/request-queue"
 import { ensureInitializedConfig } from "./config"
+
+export const MANAGED_TRANSLATION_MAX_CONCURRENCY = 10
 
 export function parseBatchResult(result: string): string[] {
   return result.split(BATCH_SEPARATOR).map(t => t.trim())
@@ -176,6 +178,9 @@ async function createTranslationQueues<TContext>(config: TranslationQueueSetupCo
     timeoutMs: 20_000,
     maxRetries: 2,
     baseRetryDelayMs: 1_000,
+    // Keep the client queue at the free-tier platform limit so requests can flow
+    // through without hitting an avoidable lower local cap first.
+    maxConcurrency: MANAGED_TRANSLATION_MAX_CONCURRENCY,
   })
 
   const batchQueue = new BatchQueue<TranslateBatchData<TContext>, string>({
@@ -184,6 +189,7 @@ async function createTranslationQueues<TContext>(config: TranslationQueueSetupCo
     batchDelay: 100,
     maxRetries: 3,
     enableFallbackToIndividual: true,
+    shouldFallbackToIndividual: error => error instanceof BatchCountMismatchError,
     getBatchKey: (data) => {
       return Sha256Hex(`${data.langConfig.sourceCode}-${data.langConfig.targetCode}-${data.providerConfig.id}`)
     },

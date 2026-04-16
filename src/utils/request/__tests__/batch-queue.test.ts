@@ -81,6 +81,7 @@ function createBatchQueue(
   options?: {
     maxRetries?: number
     enableFallbackToIndividual?: boolean
+    shouldFallbackToIndividual?: (error: Error) => boolean
     executeIndividual?: (data: TranslateBatchData) => Promise<string>
     onError?: (error: Error, context: { batchKey: string, retryCount: number, isFallback: boolean }) => void
   },
@@ -109,6 +110,7 @@ function createBatchQueue(
       return requestQueue.enqueue(batchThunk, Date.now(), hash)
     },
     executeIndividual: options?.executeIndividual,
+    shouldFallbackToIndividual: options?.shouldFallbackToIndividual,
     onError: options?.onError,
   })
 }
@@ -508,7 +510,7 @@ describe("batchQueue – error handling", () => {
     expect(batchAttemptCount).toBe(3) // Initial + 2 retries before fallback
   })
 
-  it("falls back to individual immediately on request error (no retry)", async () => {
+  it("does not fall back to individual on request error by default", async () => {
     vi.useFakeTimers()
     let batchAttemptCount = 0
     mockExecuteTranslate.mockImplementation((text: string) => {
@@ -525,6 +527,7 @@ describe("batchQueue – error handling", () => {
     const batchQueue = createBatchQueue(requestQueue, baseBatchConfig, {
       maxRetries: 3,
       enableFallbackToIndividual: true,
+      shouldFallbackToIndividual: () => false,
       executeIndividual: async (data) => {
         const result = await executeTranslate(data.text, data.langConfig, data.providerConfig, mockPromptResolver)
         return result
@@ -549,8 +552,7 @@ describe("batchQueue – error handling", () => {
     vi.advanceTimersByTime(baseBatchConfig.batchDelay)
     vi.advanceTimersByTime(0)
 
-    const results = await Promise.all(promises)
-    expect(results).toEqual(["individual-Text1", "individual-Text2"])
+    await expect(Promise.all(promises)).rejects.toThrow("API error")
     expect(batchAttemptCount).toBe(1) // Only 1 attempt, no retry for request errors
   })
 
