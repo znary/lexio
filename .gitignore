@@ -15,6 +15,7 @@ stats-*.json
 .wxt
 apps/platform-api/.wrangler/
 apps/platform-web/.wrangler/
+apps/platform-web/dist/
 web-ext.config.ts
 
 # Editor directories and files
