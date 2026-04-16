@@ -48,7 +48,7 @@ interface ProtocolMap {
   getPinState: () => boolean
   returnPinState: (data: { isPinned: boolean }) => void
   // request
-  enqueueTranslateRequest: (data: { text: string, langConfig: Config["language"], providerConfig: ProviderConfig, scheduleAt: number, hash: string, webTitle?: string | null, webContent?: string | null, webSummary?: string | null }) => Promise<string>
+  enqueueTranslateRequest: (data: { text: string, langConfig: Config["language"], providerConfig: ProviderConfig, scheduleAt: number, hash: string, scene?: string, webTitle?: string | null, webContent?: string | null, webSummary?: string | null }) => Promise<string>
   getOrGenerateWebPageSummary: (data: { webTitle: string, webContent: string, providerConfig: ProviderConfig }) => Promise<string | null>
   enqueueSubtitlesTranslateRequest: (data: { text: string, langConfig: Config["language"], providerConfig: ProviderConfig, scheduleAt: number, hash: string, videoTitle?: string | null, summary?: string | null }) => Promise<string>
   getSubtitlesSummary: (data: { videoTitle: string, subtitlesContext: string, providerConfig: ProviderConfig }) => Promise<string | null>

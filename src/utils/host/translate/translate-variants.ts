@@ -1,6 +1,5 @@
 import type { LangCodeISO6393 } from "@read-frog/definitions"
 import type { Config, InputTranslationLang } from "@/types/config/config"
-import { isLLMProviderConfig } from "@/types/config/provider"
 import { getDetectedCodeFromStorage, getFinalSourceCode } from "@/utils/config/languages"
 import { resolveProviderConfig } from "@/utils/constants/feature-providers"
 import { detectLanguage } from "@/utils/content/language"
@@ -33,10 +32,6 @@ async function getWebPagePromptContext(
   enableAIContentAware: boolean,
   includeSummary: boolean,
 ): Promise<{ webTitle: string, webContent: string, webSummary?: string } | undefined> {
-  if (!isLLMProviderConfig(providerConfig)) {
-    return undefined
-  }
-
   const webPageContext = await getOrCreateWebPageContext()
   if (!webPageContext) {
     return undefined
@@ -59,6 +54,7 @@ async function translateTextUsingPageConfig(
   options: {
     extraHashTags?: string[]
     webPageContext?: { webTitle?: string | null, webContent?: string | null, webSummary?: string | null }
+    scene?: string
   } = {},
 ): Promise<string> {
   const preparedText = prepareTranslationText(text)
@@ -94,6 +90,7 @@ async function translateTextUsingPageConfig(
     enableAIContentAware: config.translate.enableAIContentAware,
     extraHashTags: options.extraHashTags,
     webPageContext: options.webPageContext,
+    scene: options.scene,
   })
 }
 
@@ -107,7 +104,9 @@ export async function translateTextForPage(text: string): Promise<string> {
   const webPageContext = await getWebPagePromptContext(providerConfig, config.translate.enableAIContentAware, true)
 
   return translateTextUsingPageConfig(config, text, {
+    extraHashTags: ["pageTranslation"],
     webPageContext,
+    scene: "page",
   })
 }
 
@@ -129,6 +128,7 @@ export async function translateTextForPageTitle(text: string): Promise<string> {
       webContent: webPageContext?.webContent,
       webSummary: webPageContext?.webSummary,
     },
+    scene: "page-title",
   })
 }
 
@@ -181,5 +181,6 @@ export async function translateTextForInput(
     providerConfig,
     enableAIContentAware: config.translate.enableAIContentAware,
     webPageContext,
+    scene: "input",
   })
 }

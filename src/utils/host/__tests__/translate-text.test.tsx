@@ -31,8 +31,8 @@ vi.mock("@/utils/message", () => ({
   sendMessage: vi.fn(),
 }))
 
-vi.mock("@/utils/host/translate/api/microsoft", () => ({
-  microsoftTranslate: vi.fn(),
+vi.mock("@/utils/platform/api", () => ({
+  translateWithManagedPlatform: vi.fn(),
 }))
 
 vi.mock("@/utils/prompts/translate", () => ({
@@ -48,7 +48,7 @@ vi.mock("@/utils/host/translate/webpage-summary", () => ({
 }))
 
 let mockSendMessage: any
-let mockMicrosoftTranslate: any
+let mockTranslateWithManagedPlatform: any
 let mockGetConfigFromStorage: any
 let mockGetTranslatePrompt: any
 let mockGetOrCreateWebPageContext: any
@@ -56,35 +56,8 @@ let mockGetOrGenerateWebPageSummary: any
 let mockToastError: any
 let mockToastWarning: any
 
-function createConfigWithProviderOverrides() {
-  const microsoftProvider = DEFAULT_PROVIDER_CONFIG["microsoft-translate"]
-
-  return {
-    ...DEFAULT_CONFIG,
-    providersConfig: [microsoftProvider, ...DEFAULT_CONFIG.providersConfig],
-    translate: {
-      ...DEFAULT_CONFIG.translate,
-      providerId: microsoftProvider.id,
-    },
-    inputTranslation: {
-      ...DEFAULT_CONFIG.inputTranslation,
-      providerId: microsoftProvider.id,
-    },
-    videoSubtitles: {
-      ...DEFAULT_CONFIG.videoSubtitles,
-      providerId: microsoftProvider.id,
-    },
-    selectionToolbar: {
-      ...DEFAULT_CONFIG.selectionToolbar,
-      features: {
-        ...DEFAULT_CONFIG.selectionToolbar.features,
-        translate: {
-          ...DEFAULT_CONFIG.selectionToolbar.features.translate,
-          providerId: microsoftProvider.id,
-        },
-      },
-    },
-  }
+function createManagedConfig() {
+  return JSON.parse(JSON.stringify(DEFAULT_CONFIG))
 }
 
 describe("translate-text", () => {
@@ -93,7 +66,7 @@ describe("translate-text", () => {
     document.title = "Document Title"
     document.body.innerHTML = "<main>Body content</main>"
     mockSendMessage = vi.mocked((await import("@/utils/message")).sendMessage)
-    mockMicrosoftTranslate = vi.mocked((await import("@/utils/host/translate/api/microsoft")).microsoftTranslate)
+    mockTranslateWithManagedPlatform = vi.mocked((await import("@/utils/platform/api")).translateWithManagedPlatform)
     mockGetConfigFromStorage = vi.mocked((await import("@/utils/config/storage")).getLocalConfig)
     mockGetTranslatePrompt = vi.mocked((await import("@/utils/prompts/translate")).getTranslatePrompt)
     mockGetOrCreateWebPageContext = vi.mocked((await import("@/utils/host/translate/webpage-context")).getOrCreateWebPageContext)
@@ -108,10 +81,16 @@ describe("translate-text", () => {
       webTitle: document.title,
       webContent: document.body.textContent || "",
     }))
-    mockGetOrGenerateWebPageSummary.mockResolvedValue("Generated summary")
+    mockGetOrGenerateWebPageSummary.mockImplementation((
+      _webPageContext: unknown,
+      _providerConfig: unknown,
+      enableAIContentAware: boolean,
+    ) => {
+      return Promise.resolve(enableAIContentAware ? "Generated summary" : null)
+    })
 
     // Mock getConfigFromStorage to return DEFAULT_CONFIG
-    mockGetConfigFromStorage.mockResolvedValue(createConfigWithProviderOverrides())
+    mockGetConfigFromStorage.mockResolvedValue(createManagedConfig())
 
     // Mock getTranslatePrompt to return a simple prompt pair
     mockGetTranslatePrompt.mockResolvedValue({
@@ -142,7 +121,7 @@ describe("translate-text", () => {
       expect(mockToastError).not.toHaveBeenCalled()
     })
 
-    it("still blocks pure API providers that really need an apiKey", () => {
+    it("allows translate providers without apiKey because translation now runs through the platform backend", () => {
       const deeplProvider = DEFAULT_PROVIDER_CONFIG.deepl
       const config = {
         ...DEFAULT_CONFIG,
@@ -153,8 +132,8 @@ describe("translate-text", () => {
         },
       }
 
-      expect(validateTranslationConfigAndToast(config, "eng")).toBe(false)
-      expect(mockToastError).toHaveBeenCalledWith("noAPIKeyConfig.warning")
+      expect(validateTranslationConfigAndToast(config, "eng")).toBe(true)
+      expect(mockToastError).not.toHaveBeenCalled()
     })
   })
 
@@ -171,9 +150,11 @@ describe("translate-text", () => {
         providerConfig: expect.any(Object),
         scheduleAt: expect.any(Number),
         hash: expect.any(String),
+        webTitle: "Document Title",
+        webContent: "Body content",
       }))
-      expect(mockGetOrCreateWebPageContext).not.toHaveBeenCalled()
-      expect(mockGetOrGenerateWebPageSummary).not.toHaveBeenCalled()
+      expect(mockGetOrCreateWebPageContext).toHaveBeenCalledTimes(1)
+      expect(mockGetOrGenerateWebPageSummary).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -270,18 +251,18 @@ describe("translate-text", () => {
   })
 
   describe("translateTextForInput", () => {
-    it("skips webpage context loading for non-llm input translations", async () => {
+    it("includes webpage context for managed input translations without loading summary", async () => {
       mockSendMessage.mockResolvedValue("translated input")
 
       const result = await translateTextForInput("hello", "eng", "cmn")
 
       expect(result).toBe("translated input")
-      expect(mockGetOrCreateWebPageContext).not.toHaveBeenCalled()
-      expect(mockGetOrGenerateWebPageSummary).not.toHaveBeenCalled()
+      expect(mockGetOrCreateWebPageContext).toHaveBeenCalledTimes(1)
+      expect(mockGetOrGenerateWebPageSummary).toHaveBeenCalledTimes(1)
       expect(mockSendMessage).toHaveBeenCalledWith("enqueueTranslateRequest", expect.objectContaining({
         text: "hello",
-        webTitle: undefined,
-        webContent: undefined,
+        webTitle: "Document Title",
+        webContent: "Body content",
         webSummary: undefined,
       }))
     })
@@ -354,15 +335,20 @@ describe("translate-text", () => {
       expect(await executeTranslate("\u200B \u200B", langConfig, providerConfig, getTranslatePrompt)).toBe("")
 
       // Should translate valid content after removing zero-width spaces
-      mockMicrosoftTranslate.mockResolvedValue("你好")
+      mockTranslateWithManagedPlatform.mockResolvedValue("你好")
       const result = await executeTranslate("\u200B hello \u200B", langConfig, providerConfig, getTranslatePrompt)
       expect(result).toBe("你好")
-      // Shared translation core should send minimally prepared text to the provider
-      expect(mockMicrosoftTranslate).toHaveBeenCalledWith("hello", "en", "zh")
+      expect(mockTranslateWithManagedPlatform).toHaveBeenCalledWith(expect.objectContaining({
+        text: "hello",
+        sourceLanguage: "en",
+        targetLanguage: "zh",
+        systemPrompt: "Translate to {{targetLang}}",
+        prompt: "{{input}}",
+      }))
     })
 
     it("should trim translation result", async () => {
-      mockMicrosoftTranslate.mockResolvedValue("  测试结果  ")
+      mockTranslateWithManagedPlatform.mockResolvedValue("  测试结果  ")
 
       const result = await executeTranslate("test input", langConfig, providerConfig, getTranslatePrompt)
 

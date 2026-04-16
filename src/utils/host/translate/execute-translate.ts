@@ -2,12 +2,8 @@ import type { PromptResolver } from "./api/ai"
 import type { Config } from "@/types/config/config"
 import type { ProviderConfig } from "@/types/config/provider"
 import { ISO6393_TO_6391, LANG_CODE_TO_EN_NAME } from "@read-frog/definitions"
-import { isLLMProviderConfig, isNonAPIProvider, isPureAPIProvider } from "@/types/config/provider"
-import { aiTranslate } from "./api/ai"
-import { deeplTranslate } from "./api/deepl"
-import { deeplxTranslate } from "./api/deeplx"
-import { googleTranslate } from "./api/google"
-import { microsoftTranslate } from "./api/microsoft"
+import { isLLMProviderConfig } from "@/types/config/provider"
+import { translateWithManagedPlatform } from "@/utils/platform/api"
 import { prepareTranslationText } from "./text-preparation"
 
 export async function executeTranslate<TContext>(
@@ -16,9 +12,9 @@ export async function executeTranslate<TContext>(
   providerConfig: ProviderConfig,
   promptResolver: PromptResolver<TContext>,
   options?: {
-    forceBackgroundFetch?: boolean
     isBatch?: boolean
     context?: TContext
+    scene?: string
   },
 ) {
   const preparedText = prepareTranslationText(text)
@@ -26,42 +22,24 @@ export async function executeTranslate<TContext>(
     return ""
   }
 
-  const { provider } = providerConfig
-  let translatedText = ""
+  const sourceLang = langConfig.sourceCode === "auto" ? "auto" : (ISO6393_TO_6391[langConfig.sourceCode] ?? "auto")
+  const targetLang = ISO6393_TO_6391[langConfig.targetCode]
+  if (!targetLang) {
+    throw new Error(`Invalid target language code: ${langConfig.targetCode}`)
+  }
 
-  if (isNonAPIProvider(provider)) {
-    const sourceLang = langConfig.sourceCode === "auto" ? "auto" : (ISO6393_TO_6391[langConfig.sourceCode] ?? "auto")
-    const targetLang = ISO6393_TO_6391[langConfig.targetCode]
-    if (!targetLang) {
-      throw new Error(`Invalid target language code: ${langConfig.targetCode}`)
-    }
-    if (provider === "google-translate") {
-      translatedText = await googleTranslate(preparedText, sourceLang, targetLang)
-    }
-    else if (provider === "microsoft-translate") {
-      translatedText = await microsoftTranslate(preparedText, sourceLang, targetLang)
-    }
-  }
-  else if (isPureAPIProvider(provider)) {
-    const sourceLang = langConfig.sourceCode === "auto" ? "auto" : (ISO6393_TO_6391[langConfig.sourceCode] ?? "auto")
-    const targetLang = ISO6393_TO_6391[langConfig.targetCode]
-    if (!targetLang) {
-      throw new Error(`Invalid target language code: ${langConfig.targetCode}`)
-    }
-    if (provider === "deeplx") {
-      translatedText = await deeplxTranslate(preparedText, sourceLang, targetLang, providerConfig, options)
-    }
-    else if (provider === "deepl") {
-      translatedText = await deeplTranslate(text, sourceLang, targetLang, providerConfig, options)
-    }
-  }
-  else if (isLLMProviderConfig(providerConfig)) {
-    const targetLangName = LANG_CODE_TO_EN_NAME[langConfig.targetCode]
-    translatedText = await aiTranslate(preparedText, targetLangName, providerConfig, promptResolver, options)
-  }
-  else {
-    throw new Error(`Unknown provider: ${provider}`)
-  }
+  const targetLangName = LANG_CODE_TO_EN_NAME[langConfig.targetCode]
+  const { systemPrompt, prompt } = await promptResolver(targetLangName, preparedText, options)
+  const translatedText = await translateWithManagedPlatform({
+    scene: options?.scene,
+    text: preparedText,
+    sourceLanguage: sourceLang,
+    targetLanguage: targetLang,
+    systemPrompt,
+    prompt,
+    temperature: isLLMProviderConfig(providerConfig) ? providerConfig.temperature : undefined,
+    isBatch: options?.isBatch,
+  })
 
   return translatedText.trim()
 }

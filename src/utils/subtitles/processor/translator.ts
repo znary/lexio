@@ -82,10 +82,6 @@ async function buildSubtitleHashComponents(
     partialLangConfig.targetCode,
   ]
 
-  if (!isLLMProviderConfig(providerConfig)) {
-    return hashComponents
-  }
-
   const targetLangName = LANG_CODE_TO_EN_NAME[partialLangConfig.targetCode]
   const { systemPrompt, prompt } = await getSubtitlesTranslatePrompt(targetLangName, preparedText, {
     isBatch: true,

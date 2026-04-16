@@ -116,4 +116,75 @@ describe("platform api helpers", () => {
     await expect(platformFetch("/v1/me")).rejects.toThrow("Platform session expired. Sign in again.")
     expect(clearPlatformAuthSessionMock).toHaveBeenCalledTimes(1)
   })
+
+  it("streams managed translation chunks through the platform endpoint", async () => {
+    const { streamManagedTranslation } = await import("../api")
+    getPlatformAuthSessionMock.mockResolvedValue({
+      token: "platform-token",
+      user: {
+        email: "user@example.com",
+      },
+      updatedAt: Date.now(),
+    })
+
+    const encoder = new TextEncoder()
+    const fetchMock = vi.fn().mockResolvedValue(new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode("data: {\"choices\":[{\"delta\":{\"content\":\"A\"}}]}\n\n"))
+        controller.enqueue(encoder.encode("data: {\"choices\":[{\"delta\":{\"content\":[{\"text\":\"B\"}]}}]}\n\n"))
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"))
+        controller.close()
+      },
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+      },
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const snapshots: Array<{ output: string, thinkingStatus: string }> = []
+    const result = await streamManagedTranslation(
+      {
+        text: "hello",
+        systemPrompt: "system",
+        prompt: "prompt",
+      },
+      {
+        onChunk(snapshot) {
+          snapshots.push({
+            output: snapshot.output,
+            thinkingStatus: snapshot.thinking.status,
+          })
+        },
+      },
+    )
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe("https://platform.example.com/v1/translate/stream")
+    expect(init).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({
+        text: "hello",
+        systemPrompt: "system",
+        prompt: "prompt",
+      }),
+    })
+    expect(init.headers).toBeInstanceOf(Headers)
+    expect((init.headers as Headers).get("Authorization")).toBe("Bearer platform-token")
+    expect((init.headers as Headers).get("Content-Type")).toBe("application/json; charset=utf-8")
+
+    expect(snapshots).toEqual([
+      { output: "A", thinkingStatus: "thinking" },
+      { output: "AB", thinkingStatus: "thinking" },
+    ])
+    expect(result).toEqual({
+      output: "AB",
+      thinking: {
+        status: "complete",
+        text: "",
+      },
+    })
+  })
 })

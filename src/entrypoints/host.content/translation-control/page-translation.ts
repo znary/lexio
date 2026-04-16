@@ -1,11 +1,9 @@
 import type { FeatureUsageContext } from "@/types/analytics"
 import { ANALYTICS_FEATURE, ANALYTICS_SURFACE } from "@/types/analytics"
-import { isLLMProviderConfig } from "@/types/config/provider"
 import { createFeatureUsageContext, trackFeatureUsed } from "@/utils/analytics"
 import { getDetectedCodeFromStorage } from "@/utils/config/languages"
 import { getLocalConfig } from "@/utils/config/storage"
 import { CONTENT_WRAPPER_CLASS } from "@/utils/constants/dom-labels"
-import { resolveProviderConfig } from "@/utils/constants/feature-providers"
 import { getRandomUUID } from "@/utils/crypto-polyfill"
 import { hasNoWalkAncestor, isDontWalkIntoButTranslateAsChildElement, isHTMLElement } from "@/utils/host/dom/filter"
 import { deepQueryTopLevelSelector } from "@/utils/host/dom/find"
@@ -119,16 +117,12 @@ export class PageTranslationManager implements IPageTranslationManager {
     }
 
     try {
-      const providerConfig = resolveProviderConfig(config, "translate")
-
       await sendMessage("setAndNotifyPageTranslationStateChangedByManager", {
         enabled: true,
       })
 
       this.isPageTranslating = true
-      await this.primeDocumentTitleContext(
-        config.translate.enableAIContentAware && isLLMProviderConfig(providerConfig),
-      )
+      await this.primeDocumentTitleContext(config.translate.enableAIContentAware)
       this.startDocumentTitleTracking()
 
       // Listen to existing elements when they enter the viewpoint

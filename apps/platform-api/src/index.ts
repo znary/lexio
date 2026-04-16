@@ -10,6 +10,7 @@ import { handleHealthCheck } from "./routes/health"
 import { handleMe } from "./routes/me"
 import { handlePaddleWebhook } from "./routes/paddle"
 import { handleSyncPull, handleSyncPush } from "./routes/sync"
+import { handleTranslateStream, handleTranslateText } from "./routes/translate"
 import {
   handleVocabularyClear,
   handleVocabularyCreate,
@@ -115,6 +116,16 @@ const handler: ExportedHandler<Env> = {
 
       if (request.method === "POST" && url.pathname === "/v1/ai/stream") {
         response = await handleAiStream(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      if (request.method === "POST" && url.pathname === "/v1/translate") {
+        response = await handleTranslateText(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      if (request.method === "POST" && url.pathname === "/v1/translate/stream") {
+        response = await handleTranslateStream(request, env, session)
         return withRefreshedExtensionSession(response, session, env)
       }
 

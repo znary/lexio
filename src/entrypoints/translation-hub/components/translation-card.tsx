@@ -55,7 +55,7 @@ export function TranslationCard({ providerId, isExpanded, onExpandedChange }: Tr
             sourceCode: req.sourceLanguage,
             targetCode: req.targetLanguage,
             level: language.level,
-          }, provider, getTranslatePrompt)
+          }, provider, getTranslatePrompt, { scene: "translation-hub" })
 
           // Ignore stale responses - return undefined to silently discard
           if (requestIdRef.current !== myRequestId) {

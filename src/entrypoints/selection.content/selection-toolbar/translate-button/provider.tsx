@@ -4,7 +4,7 @@ import type { SelectionToolbarInlineError } from "../inline-error"
 import type { BackgroundTextStreamSnapshot, ThinkingSnapshot } from "@/types/background-stream"
 import type { LLMProviderConfig, ProviderConfig } from "@/types/config/provider"
 import { i18n } from "#imports"
-import { LANG_CODE_TO_EN_NAME } from "@read-frog/definitions"
+import { ISO6393_TO_6391, LANG_CODE_TO_EN_NAME } from "@read-frog/definitions"
 import { useAtomValue, useSetAtom } from "jotai"
 import { createContext, use, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -17,15 +17,13 @@ import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { filterEnabledProvidersConfig, getProviderConfigById } from "@/utils/config/helpers"
 import { DEFAULT_DICTIONARY_ACTION_ID } from "@/utils/constants/custom-action"
 import { CUSTOM_ACTION_TEMPLATES } from "@/utils/constants/custom-action-templates"
-import { streamBackgroundText } from "@/utils/content-script/background-stream-client"
 import { prepareTranslationText } from "@/utils/host/translate/text-preparation"
 import { translateTextCore } from "@/utils/host/translate/translate-text"
 import { getOrCreateWebPageContext } from "@/utils/host/translate/webpage-context"
 import { getOrGenerateWebPageSummary } from "@/utils/host/translate/webpage-summary"
 import { onMessage } from "@/utils/message"
+import { streamManagedTranslation } from "@/utils/platform/api"
 import { getTranslatePromptFromConfig } from "@/utils/prompts/translate"
-import { resolveModelId } from "@/utils/providers/model-id"
-import { getProviderOptionsWithOverride } from "@/utils/providers/options"
 import { saveTranslatedSelectionToVocabulary } from "@/utils/vocabulary/service"
 import { shadowWrapper } from "../.."
 import { SelectionToolbarErrorAlert } from "../../components/selection-toolbar-error-alert"
@@ -83,15 +81,6 @@ async function translateWithLlm({
   registerAbortController: (abortController: AbortController) => void
 }) {
   const targetLangName = LANG_CODE_TO_EN_NAME[translateRequest.language.targetCode]
-  const {
-    id: providerId,
-    provider,
-    providerOptions: userProviderOptions,
-    temperature,
-    disableThinking,
-  } = providerConfig
-  const modelName = resolveModelId(providerConfig.model)
-  const providerOptions = getProviderOptionsWithOverride(modelName ?? "", provider, userProviderOptions, disableThinking)
   const abortController = new AbortController()
   registerAbortController(abortController)
 
@@ -118,13 +107,23 @@ async function translateWithLlm({
       : undefined,
   )
 
-  const translatedText = await streamBackgroundText(
+  const sourceLanguage = translateRequest.language.sourceCode === "auto"
+    ? "auto"
+    : (ISO6393_TO_6391[translateRequest.language.sourceCode] ?? "auto")
+  const targetLanguage = ISO6393_TO_6391[translateRequest.language.targetCode]
+  if (!targetLanguage) {
+    throw new Error(`Invalid target language code: ${translateRequest.language.targetCode}`)
+  }
+
+  const translatedText = await streamManagedTranslation(
     {
-      providerId,
-      system: systemPrompt,
+      scene: "selection",
+      text: preparedText,
+      sourceLanguage,
+      targetLanguage,
+      systemPrompt,
       prompt,
-      providerOptions,
-      temperature,
+      temperature: providerConfig.temperature,
     },
     {
       signal: abortController.signal,

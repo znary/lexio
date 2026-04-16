@@ -5,10 +5,7 @@ import type { WebPagePromptContext } from "@/types/content"
 import { i18n } from "#imports"
 import { LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME } from "@read-frog/definitions"
 import { toast } from "sonner"
-import { isAPIProviderConfig, isLLMProviderConfig } from "@/types/config/provider"
 import { getProviderConfigById } from "@/utils/config/helpers"
-import { MANAGED_CLOUD_PROVIDER_ID } from "@/utils/constants/platform"
-
 import { detectLanguage } from "@/utils/content/language"
 import { logger } from "@/utils/logger"
 import { getTranslatePrompt } from "@/utils/prompts/translate"
@@ -80,10 +77,6 @@ async function buildWebPageHashComponents(
     partialLangConfig.targetCode,
   ]
 
-  if (!isLLMProviderConfig(providerConfig)) {
-    return hashComponents
-  }
-
   const targetLangName = LANG_CODE_TO_EN_NAME[partialLangConfig.targetCode]
   const { systemPrompt, prompt } = await getTranslatePrompt(targetLangName, preparedText, {
     isBatch: true,
@@ -115,6 +108,7 @@ export interface TranslateTextOptions {
   enableAIContentAware?: boolean
   extraHashTags?: string[]
   webPageContext?: WebPagePromptContext
+  scene?: string
 }
 
 /**
@@ -155,6 +149,7 @@ export async function translateTextCore(options: TranslateTextOptions): Promise<
     providerConfig,
     scheduleAt: Date.now(),
     hash: Sha256Hex(...hashComponents),
+    scene: options.scene,
     webTitle: normalizedWebPageContext?.webTitle,
     webContent: normalizedWebPageContext?.webContent,
     webSummary: normalizedWebPageContext?.webSummary,
@@ -180,19 +175,6 @@ export function validateTranslationConfigAndToast(
     toast.warning(i18n.t("translation.autoModeSameLanguage", [
       LANG_CODE_TO_LOCALE_NAME[detectedCode] ?? detectedCode,
     ]))
-  }
-
-  // check if the API key is configured
-  const isManagedCloudProvider = providerConfig.id === MANAGED_CLOUD_PROVIDER_ID && providerConfig.provider === "openai-compatible"
-  const requiresApiKey = isAPIProviderConfig(providerConfig)
-    && !isManagedCloudProvider
-    && !isLLMProviderConfig(providerConfig)
-    && providerConfig.provider !== "deeplx"
-
-  if (requiresApiKey && !providerConfig.apiKey?.trim()) {
-    toast.error(i18n.t("noAPIKeyConfig.warning"))
-    logger.info("validateTranslationConfig: returning false (no API key)")
-    return false
   }
 
   return true

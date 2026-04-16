@@ -1,3 +1,4 @@
+import type { BackgroundTextStreamSnapshot, ThinkingSnapshot } from "@/types/background-stream"
 import type { Config } from "@/types/config/config"
 import type { VocabularyItem } from "@/types/vocabulary"
 import { buildPlatformApiUrl } from "../constants/platform"
@@ -37,6 +38,17 @@ export interface PlatformMeResponse {
 export interface PlatformPullResponse {
   settings: Record<string, unknown> | null
   vocabularyItems: VocabularyItem[]
+}
+
+export interface ManagedTranslateRequest {
+  scene?: string
+  text: string
+  sourceLanguage?: string
+  targetLanguage?: string
+  systemPrompt: string
+  prompt: string
+  temperature?: number
+  isBatch?: boolean
 }
 
 async function getAccessTokenOrThrow(): Promise<string> {
@@ -129,6 +141,130 @@ export async function pushPlatformSync(payload: {
   })
 
   return await response.json() as { ok: true, syncedAt: string }
+}
+
+export async function translateWithManagedPlatform(payload: ManagedTranslateRequest): Promise<string> {
+  const response = await platformFetch("/v1/translate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const data = await response.json() as { text: string }
+  return data.text
+}
+
+function extractStreamTextPart(payloadText: string): string {
+  const payload = JSON.parse(payloadText) as {
+    choices?: Array<{
+      delta?: {
+        content?: string | Array<{ text?: string }>
+      }
+    }>
+  }
+  const content = payload.choices?.[0]?.delta?.content
+
+  if (typeof content === "string") {
+    return content
+  }
+
+  if (!Array.isArray(content)) {
+    return ""
+  }
+
+  return content
+    .map(part => typeof part?.text === "string" ? part.text : "")
+    .join("")
+}
+
+const STREAM_THINKING_PENDING: ThinkingSnapshot = {
+  status: "thinking",
+  text: "",
+}
+
+const STREAM_THINKING_COMPLETE: ThinkingSnapshot = {
+  status: "complete",
+  text: "",
+}
+
+const STREAM_LINE_SPLIT_RE = /\r?\n/
+
+export async function streamManagedTranslation(
+  payload: ManagedTranslateRequest,
+  options: {
+    signal?: AbortSignal
+    onChunk?: (snapshot: BackgroundTextStreamSnapshot) => void
+  } = {},
+): Promise<BackgroundTextStreamSnapshot> {
+  const response = await platformFetch("/v1/translate/stream", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify(payload),
+    signal: options.signal,
+  })
+
+  if (!response.body) {
+    throw new Error("Managed translation stream is unavailable")
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+  let translatedText = ""
+
+  const processLine = (line: string) => {
+    const trimmedLine = line.trim()
+    if (!trimmedLine.startsWith("data:")) {
+      return
+    }
+
+    const payloadText = trimmedLine.slice(5).trim()
+    if (!payloadText || payloadText === "[DONE]") {
+      return
+    }
+
+    const chunkText = extractStreamTextPart(payloadText)
+    if (!chunkText) {
+      return
+    }
+
+    translatedText += chunkText
+    options.onChunk?.({
+      output: translatedText,
+      thinking: STREAM_THINKING_PENDING,
+    })
+  }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) {
+      break
+    }
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split(STREAM_LINE_SPLIT_RE)
+    buffer = lines.pop() ?? ""
+
+    for (const line of lines) {
+      processLine(line)
+    }
+  }
+
+  buffer += decoder.decode()
+  if (buffer.trim()) {
+    for (const line of buffer.split(STREAM_LINE_SPLIT_RE)) {
+      processLine(line)
+    }
+  }
+
+  return {
+    output: translatedText,
+    thinking: STREAM_THINKING_COMPLETE,
+  }
 }
 
 // Vocabulary API

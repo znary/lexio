@@ -12,6 +12,7 @@ export interface Env {
   ARK_MODEL?: string
   ARK_MODEL_FREE?: string
   ARK_MODEL_PRO?: string
+  MANAGED_TRANSLATION_ENGINE?: string
   AI_GATEWAY_BASE_URL: string
   AI_GATEWAY_API_KEY: string
   AI_GATEWAY_MODEL_FREE?: string

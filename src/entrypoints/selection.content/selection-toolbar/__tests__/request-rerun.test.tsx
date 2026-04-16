@@ -31,11 +31,13 @@ import { SelectionToolbar } from "../index"
 import { TranslateButton } from "../translate-button"
 import { SelectionTranslationProvider } from "../translate-button/provider"
 
+const streamManagedTranslationMock = vi.fn()
 const streamBackgroundTextMock = vi.fn()
 const streamBackgroundStructuredObjectMock = vi.fn()
 const translateTextCoreMock = vi.fn()
 const getOrCreateWebPageContextMock = vi.fn().mockResolvedValue(null)
 const getOrGenerateWebPageSummaryMock = vi.fn()
+const saveTranslatedSelectionToVocabularyMock = vi.fn().mockResolvedValue(null)
 const toastErrorMock = vi.fn()
 const onMessageMock = vi.fn()
 const storageAdapterGetMock = vi.fn()
@@ -226,6 +228,14 @@ vi.mock("@/utils/content-script/background-stream-client", () => ({
   streamBackgroundStructuredObject: (...args: unknown[]) => streamBackgroundStructuredObjectMock(...args),
 }))
 
+vi.mock("@/utils/platform/api", async () => {
+  const actual = await vi.importActual<typeof import("@/utils/platform/api")>("@/utils/platform/api")
+  return {
+    ...actual,
+    streamManagedTranslation: (...args: unknown[]) => streamManagedTranslationMock(...args),
+  }
+})
+
 vi.mock("@/utils/host/translate/translate-text", () => ({
   translateTextCore: (...args: unknown[]) => translateTextCoreMock(...args),
 }))
@@ -256,6 +266,10 @@ vi.mock("@/utils/logger", () => ({
 vi.mock("@/utils/message", () => ({
   onMessage: (...args: unknown[]) => onMessageMock(...args),
   sendMessage: vi.fn(),
+}))
+
+vi.mock("@/utils/vocabulary/service", () => ({
+  saveTranslatedSelectionToVocabulary: (...args: unknown[]) => saveTranslatedSelectionToVocabularyMock(...args),
 }))
 
 vi.mock("@/utils/atoms/storage-adapter", () => ({
@@ -736,7 +750,7 @@ describe("selection toolbar requests", () => {
     const streamCalls: Array<{ signal?: AbortSignal, onChunk?: (data: BackgroundTextStreamSnapshot) => void }> = []
     translateTextCoreMock.mockResolvedValue("")
 
-    streamBackgroundTextMock.mockImplementation((_payload, options: {
+    streamManagedTranslationMock.mockImplementation((_payload, options: {
       signal?: AbortSignal
       onChunk?: (data: BackgroundTextStreamSnapshot) => void
     }) => {
@@ -763,7 +777,7 @@ describe("selection toolbar requests", () => {
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
 
     await waitFor(() => {
-      expect(streamBackgroundTextMock).toHaveBeenCalledTimes(1)
+      expect(streamManagedTranslationMock).toHaveBeenCalledTimes(1)
     })
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }))
@@ -787,7 +801,7 @@ describe("selection toolbar requests", () => {
     } | null>()
 
     getOrCreateWebPageContextMock.mockImplementation(() => pendingContext.promise)
-    streamBackgroundTextMock.mockResolvedValue({
+    streamManagedTranslationMock.mockResolvedValue({
       output: "Should not stream",
       thinking: {
         status: "complete",
@@ -819,7 +833,7 @@ describe("selection toolbar requests", () => {
       await Promise.resolve()
     })
 
-    expect(streamBackgroundTextMock).not.toHaveBeenCalled()
+    expect(streamManagedTranslationMock).not.toHaveBeenCalled()
     expect(toastErrorMock).not.toHaveBeenCalled()
     expect(screen.queryByRole("alert")).toBeNull()
     expect(screen.queryByTestId("translation-content")).toBeNull()
@@ -874,7 +888,7 @@ describe("selection toolbar requests", () => {
     expect(alert).toHaveTextContent("translationHub.translationFailed")
     expect(alert).toHaveTextContent("options.floatingButtonAndToolbar.selectionToolbar.errors.providerUnavailable")
     expect(translateTextCoreMock).not.toHaveBeenCalled()
-    expect(streamBackgroundTextMock).not.toHaveBeenCalled()
+    expect(streamManagedTranslationMock).not.toHaveBeenCalled()
   })
 
   it("shows translations identical to the original text", async () => {
