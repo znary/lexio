@@ -1,7 +1,7 @@
 import { SignedIn, SignedOut, SignInButton, useAuth } from "@clerk/clerk-react"
 import { initializePaddle } from "@paddle/paddle-js"
 import { useState } from "react"
-import { PADDLE_CLIENT_TOKEN, PADDLE_ENV } from "../app/env"
+import { PADDLE_CLIENT_TOKEN, PADDLE_ENV, PADDLE_PRO_PRICE_ID } from "../app/env"
 import { APP_ROUTES } from "../app/routes"
 
 async function openCheckout(priceId: string, clerkUserId: string | null) {
@@ -68,18 +68,17 @@ export function PricingPage() {
   const { userId } = useAuth()
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const proPriceId = import.meta.env.VITE_PADDLE_PRO_PRICE_ID || ""
 
   const handleSubscribe = async () => {
-    if (!proPriceId) {
-      setErrorMessage("Missing VITE_PADDLE_PRO_PRICE_ID")
+    if (!PADDLE_PRO_PRICE_ID) {
+      setErrorMessage("Missing Paddle price id")
       return
     }
 
     try {
       setErrorMessage(null)
       setIsLoading(true)
-      await openCheckout(proPriceId, userId ?? null)
+      await openCheckout(PADDLE_PRO_PRICE_ID, userId ?? null)
     }
     catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Checkout failed")
