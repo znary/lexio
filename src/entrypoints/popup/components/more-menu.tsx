@@ -6,9 +6,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/base-ui/dropdown-menu"
+import { buildSectionSearch } from "@/entrypoints/options/command-palette/section-scroll"
 import { WEBSITE_URL } from "@/utils/constants/url"
 
 export function MoreMenu() {
+  const vocabularyUrl = browser.runtime.getURL(`/options.html#/vocabulary${buildSectionSearch("vocabulary-library")}`)
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -24,7 +27,7 @@ export function MoreMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="top" className="w-fit">
         <DropdownMenuItem
-          onClick={() => void browser.tabs.create({ url: browser.runtime.getURL("/options.html#/config") })}
+          onClick={() => void browser.tabs.create({ url: vocabularyUrl })}
           className="cursor-pointer"
         >
           <Icon icon="tabler:book-2" className="size-4" strokeWidth={1.6} />

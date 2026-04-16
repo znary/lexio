@@ -1,10 +1,23 @@
+import type { VocabularyItem } from "@/types/vocabulary"
 import { i18n } from "#imports"
 import { IconDownload, IconTrash } from "@tabler/icons-react"
 import { kebabCase } from "case-anything"
 import { saveAs } from "file-saver"
 import { useMemo, useState } from "react"
+import { toast } from "sonner"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/base-ui/alert-dialog"
 import { Button } from "@/components/ui/base-ui/button"
 import { Input } from "@/components/ui/base-ui/input"
+import { Spinner } from "@/components/ui/base-ui/spinner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/base-ui/table"
 import { useVocabularyItems } from "@/hooks/use-vocabulary-items"
 import { APP_NAME } from "@/utils/constants/app"
@@ -16,8 +29,10 @@ function formatDate(timestamp: number): string {
 }
 
 export function VocabularyLibraryCard() {
-  const { query, invalidate } = useVocabularyItems()
+  const { query } = useVocabularyItems()
   const [search, setSearch] = useState("")
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<Pick<VocabularyItem, "id" | "sourceText"> | null>(null)
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null)
   const items = useMemo(() => query.data ?? [], [query.data])
 
   const filteredItems = useMemo(() => {
@@ -35,6 +50,28 @@ export function VocabularyLibraryCard() {
   const exportItems = () => {
     const blob = new Blob([JSON.stringify(filteredItems, null, 2)], { type: "application/json;charset=utf-8" })
     saveAs(blob, `${kebabCase(APP_NAME)}-vocabulary.json`)
+  }
+
+  const isDeletingPendingItem = deletingItemId != null && deletingItemId === pendingDeleteItem?.id
+
+  async function confirmDeleteItem() {
+    if (!pendingDeleteItem || deletingItemId) {
+      return
+    }
+
+    const itemId = pendingDeleteItem.id
+
+    try {
+      setDeletingItemId(itemId)
+      await removeVocabularyItem(itemId)
+      setPendingDeleteItem(null)
+    }
+    catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error))
+    }
+    finally {
+      setDeletingItemId(null)
+    }
   }
 
   return (
@@ -59,7 +96,7 @@ export function VocabularyLibraryCard() {
               type="button"
               variant="destructive"
               onClick={() => {
-                void clearVocabularyItems().then(invalidate)
+                void clearVocabularyItems()
               }}
               disabled={items.length === 0}
             >
@@ -107,8 +144,12 @@ export function VocabularyLibraryCard() {
                             size="icon-sm"
                             aria-label={deleteLabel}
                             title={deleteLabel}
+                            disabled={deletingItemId === item.id}
                             onClick={() => {
-                              void removeVocabularyItem(item.id).then(invalidate)
+                              setPendingDeleteItem({
+                                id: item.id,
+                                sourceText: item.sourceText,
+                              })
                             }}
                           >
                             <IconTrash className="size-4" />
@@ -121,6 +162,37 @@ export function VocabularyLibraryCard() {
               </Table>
             )}
       </div>
+
+      <AlertDialog
+        open={pendingDeleteItem != null}
+        onOpenChange={(open) => {
+          if (!open && !deletingItemId) {
+            setPendingDeleteItem(null)
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingDeleteItem
+                ? `${i18n.t("options.floatingButtonAndToolbar.selectionToolbar.customActions.form.delete")}: ${pendingDeleteItem.sourceText}`
+                : i18n.t("options.floatingButtonAndToolbar.selectionToolbar.customActions.form.delete")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {i18n.t("options.floatingButtonAndToolbar.selectionToolbar.customActions.form.deleteDialog.description")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingPendingItem}>
+              {i18n.t("options.floatingButtonAndToolbar.selectionToolbar.customActions.form.deleteDialog.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => void confirmDeleteItem()} disabled={isDeletingPendingItem}>
+              {isDeletingPendingItem && <Spinner className="mr-2" />}
+              {i18n.t("options.floatingButtonAndToolbar.selectionToolbar.customActions.form.deleteDialog.confirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </ConfigCard>
   )
 }
