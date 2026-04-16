@@ -93,5 +93,6 @@ export function translationMessage() {
       return
 
     await storage.removeItem(getTranslationStateKey(details.tabId))
+    void sendMessage("notifyTranslationStateChanged", { enabled: false }, details.tabId)
   })
 }
