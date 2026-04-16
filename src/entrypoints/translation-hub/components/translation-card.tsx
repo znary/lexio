@@ -1,7 +1,7 @@
 import { i18n } from "#imports"
 import { Icon } from "@iconify/react"
 import { useMutation } from "@tanstack/react-query"
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { useAtomValue } from "jotai"
 import { useEffect, useEffectEvent, useRef } from "react"
 import { toast } from "sonner"
 import ProviderIcon from "@/components/provider-icon"
@@ -15,7 +15,7 @@ import { PROVIDER_ITEMS } from "@/utils/constants/providers"
 import { executeTranslate } from "@/utils/host/translate/execute-translate"
 import { getTranslatePrompt } from "@/utils/prompts/translate"
 import { cn } from "@/utils/styles/utils"
-import { selectedProviderIdsAtom, translateRequestAtom, translationCardExpandedStateAtom } from "../atoms"
+import { translateRequestAtom } from "../atoms"
 
 interface TranslationCardProps {
   providerId: string
@@ -28,8 +28,6 @@ export function TranslationCard({ providerId, isExpanded, onExpandedChange }: Tr
   const request = useAtomValue(translateRequestAtom)
   const language = useAtomValue(configFieldsAtomMap.language)
   const providersConfig = useAtomValue(configFieldsAtomMap.providersConfig)
-  const [selectedProviderIds, setSelectedProviderIds] = useAtom(selectedProviderIdsAtom)
-  const setExpandedById = useSetAtom(translationCardExpandedStateAtom)
 
   const provider = getProviderConfigById(providersConfig, providerId)
   const providerItem = provider ? PROVIDER_ITEMS[provider.provider as keyof typeof PROVIDER_ITEMS] : undefined
@@ -86,18 +84,6 @@ export function TranslationCard({ providerId, isExpanded, onExpandedChange }: Tr
       void navigator.clipboard.writeText(mutation.data)
       toast.success(i18n.t("translationHub.copiedToClipboard"))
     }
-  }
-
-  const handleRemove = () => {
-    setSelectedProviderIds(selectedProviderIds.filter(id => id !== providerId))
-    setExpandedById((prev) => {
-      if (!(providerId in prev))
-        return prev
-
-      const next = { ...prev }
-      delete next[providerId]
-      return next
-    })
   }
 
   if (!provider)
@@ -162,15 +148,6 @@ export function TranslationCard({ providerId, isExpanded, onExpandedChange }: Tr
               <Icon icon={isExpanded ? "tabler:chevron-up" : "tabler:chevron-down"} className="h-3.5 w-3.5" />
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleRemove}
-            className="h-7 w-7"
-            title={i18n.t("translationHub.deleteCard")}
-          >
-            <Icon icon="tabler:x" className="h-3.5 w-3.5" />
-          </Button>
         </div>
       </div>
 

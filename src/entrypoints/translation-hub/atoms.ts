@@ -2,7 +2,7 @@ import type { LangCodeISO6393 } from "@read-frog/definitions"
 import type { TranslateProviderConfig } from "@/types/config/provider"
 import { atom } from "jotai"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
-import { filterEnabledProvidersConfig, getTranslateProvidersConfig } from "@/utils/config/helpers"
+import { MANAGED_CLOUD_PROVIDER_ID } from "@/utils/constants/platform"
 
 // === LangCode Atoms (derive from config, local override) ===
 const sourceLangCodeOverrideAtom = atom<LangCodeISO6393 | "auto" | null>(null)
@@ -37,17 +37,34 @@ export const detectedSourceLangCodeAtom = atom<LangCodeISO6393 | null>(null)
 // === Selected Provider IDs (only store IDs, get config from configFieldsAtomMap) ===
 const selectedProviderIdsOverrideAtom = atom<string[] | null>(null)
 
+function resolveManagedTranslationProviderIds(providersConfig: TranslateProviderConfig[]) {
+  const managedProvider = providersConfig.find(provider =>
+    provider.id === MANAGED_CLOUD_PROVIDER_ID && provider.enabled,
+  )
+  return managedProvider ? [managedProvider.id] : []
+}
+
 export const selectedProviderIdsAtom = atom(
   (get) => {
     const override = get(selectedProviderIdsOverrideAtom)
     if (override !== null)
       return override
-    // Default: all enabled translate providers' IDs
     const providersConfig = get(configFieldsAtomMap.providersConfig)
-    const translateProviders = getTranslateProvidersConfig(providersConfig)
-    return filterEnabledProvidersConfig(translateProviders).map(p => p.id)
+    return resolveManagedTranslationProviderIds(providersConfig)
   },
-  (_get, set, ids: string[]) => set(selectedProviderIdsOverrideAtom, ids),
+  (get, set, ids: string[]) => {
+    const providersConfig = get(configFieldsAtomMap.providersConfig)
+    const managedProviderIds = resolveManagedTranslationProviderIds(providersConfig)
+    if (managedProviderIds.length === 0) {
+      set(selectedProviderIdsOverrideAtom, [])
+      return
+    }
+
+    set(
+      selectedProviderIdsOverrideAtom,
+      ids.includes(MANAGED_CLOUD_PROVIDER_ID) ? managedProviderIds : [],
+    )
+  },
 )
 
 // === Translation Card UI State ===
