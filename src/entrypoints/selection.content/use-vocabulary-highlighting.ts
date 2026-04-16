@@ -1,10 +1,8 @@
 import type { VocabularyHoverPreview } from "./vocabulary-highlight-ui"
 import type { VocabularyItem } from "@/types/vocabulary"
-import { storage } from "#imports"
 import { useAtomValue } from "jotai"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
-import { VOCABULARY_ITEMS_STORAGE_KEY } from "@/utils/constants/config"
 import { NOTRANSLATE_CLASS } from "@/utils/constants/dom-labels"
 import {
   VOCABULARY_HIGHLIGHT_BOUNDARY_LIMITERS,
@@ -12,7 +10,7 @@ import {
   VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE,
   VOCABULARY_HIGHLIGHT_STYLE_ID,
 } from "@/utils/constants/vocabulary"
-import { getActiveVocabularyItems, getLocalVocabularyItemsAndMeta } from "@/utils/vocabulary/storage"
+import { getVocabularyItems, VOCABULARY_CHANGED_EVENT } from "@/utils/vocabulary/service"
 import { SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE } from "./overlay-layers"
 import {
   createVocabularyHighlightStyle,
@@ -190,7 +188,7 @@ export function useVocabularyHighlighting() {
     let observer: MutationObserver | null = null
     let rehighlightTimer: number | null = null
 
-    const scheduleHighlight = () => {
+    const scheduleHighlight = (delay = 400) => {
       if (rehighlightTimer) {
         window.clearTimeout(rehighlightTimer)
       }
@@ -198,7 +196,11 @@ export function useVocabularyHighlighting() {
       rehighlightTimer = window.setTimeout(() => {
         rehighlightTimer = null
         void applyHighlights()
-      }, 400)
+      }, delay)
+    }
+
+    const queueHighlight = () => {
+      scheduleHighlight()
     }
 
     async function applyHighlights() {
@@ -209,9 +211,9 @@ export function useVocabularyHighlighting() {
       isApplyingHighlights = true
 
       try {
-        const [{ default: Mark }, { value: items }] = await Promise.all([
+        const [{ default: Mark }, items] = await Promise.all([
           import("mark.js"),
-          getLocalVocabularyItemsAndMeta(),
+          getVocabularyItems(),
         ])
 
         if (disposed) {
@@ -221,8 +223,8 @@ export function useVocabularyHighlighting() {
         markInstance ??= new Mark(document.body)
         await unmark(markInstance)
 
-        const activeItems = getActiveVocabularyItems(items)
-          .filter(item => item.sourceText.trim())
+        const activeItems = items
+          .filter(item => item.deletedAt == null && item.sourceText.trim())
           .sort((left, right) => right.sourceText.length - left.sourceText.length)
 
         itemsByIdRef.current = new Map(activeItems.map(item => [item.id, item]))
@@ -309,15 +311,16 @@ export function useVocabularyHighlighting() {
       })
     }
 
-    const unwatch = storage.watch(`local:${VOCABULARY_ITEMS_STORAGE_KEY}`, () => {
-      scheduleHighlight()
-    })
+    const handleVocabularyChanged = () => {
+      scheduleHighlight(0)
+    }
 
     document.addEventListener("click", handleHighlightClick, true)
     document.addEventListener("mouseover", handleHighlightMouseOver, true)
     document.addEventListener("mouseout", handleHighlightMouseOut, true)
-    window.addEventListener("hashchange", scheduleHighlight)
-    window.addEventListener("popstate", scheduleHighlight)
+    document.addEventListener(VOCABULARY_CHANGED_EVENT, handleVocabularyChanged)
+    window.addEventListener("hashchange", queueHighlight)
+    window.addEventListener("popstate", queueHighlight)
     window.addEventListener("resize", refreshHoverPreview)
     window.addEventListener("scroll", refreshHoverPreview, true)
     void applyHighlights()
@@ -329,12 +332,12 @@ export function useVocabularyHighlighting() {
         window.clearTimeout(rehighlightTimer)
       }
       observer?.disconnect()
-      unwatch()
       document.removeEventListener("click", handleHighlightClick, true)
       document.removeEventListener("mouseover", handleHighlightMouseOver, true)
       document.removeEventListener("mouseout", handleHighlightMouseOut, true)
-      window.removeEventListener("hashchange", scheduleHighlight)
-      window.removeEventListener("popstate", scheduleHighlight)
+      document.removeEventListener(VOCABULARY_CHANGED_EVENT, handleVocabularyChanged)
+      window.removeEventListener("hashchange", queueHighlight)
+      window.removeEventListener("popstate", queueHighlight)
       window.removeEventListener("resize", refreshHoverPreview)
       window.removeEventListener("scroll", refreshHoverPreview, true)
       hoverHighlightRef.current = null

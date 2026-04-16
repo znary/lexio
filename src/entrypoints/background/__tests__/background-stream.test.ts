@@ -2,7 +2,6 @@ import type { BackgroundStructuredObjectStreamSnapshot } from "@/types/backgroun
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const streamTextMock = vi.fn()
-const outputObjectMock = vi.fn((params: Record<string, unknown>) => params)
 const getModelByIdMock = vi.fn()
 
 class MockNoOutputGeneratedError extends Error {
@@ -14,9 +13,6 @@ class MockNoOutputGeneratedError extends Error {
 vi.mock("ai", () => ({
   streamText: streamTextMock,
   NoOutputGeneratedError: MockNoOutputGeneratedError,
-  Output: {
-    object: outputObjectMock,
-  },
 }))
 
 vi.mock("@/utils/providers/model", () => ({
@@ -87,15 +83,11 @@ describe("background-stream", () => {
   it("streams structured object output from background", async () => {
     getModelByIdMock.mockResolvedValue("mock-model")
     streamTextMock.mockReturnValue({
-      partialOutputStream: (async function* () {
-        yield { score: 97 }
-        yield { score: 97, summary: "Strong argument structure" }
+      fullStream: (async function* () {
+        yield { type: "text-delta", text: "{\"score\":97," }
+        yield { type: "text-delta", text: "\"summary\":\"Strong argument structure\"}" }
       })(),
-      output: Promise.resolve({
-        score: 97,
-        summary: "Strong argument structure",
-      }),
-      fullStream: (async function* () {})(),
+      output: Promise.resolve("{\"score\":97,\"summary\":\"Strong argument structure\"}"),
     })
 
     const chunkSnapshots: BackgroundStructuredObjectStreamSnapshot[] = []
@@ -133,7 +125,7 @@ describe("background-stream", () => {
     })
     expect(chunkSnapshots).toEqual([
       {
-        output: { score: 97 },
+        output: {},
         thinking: {
           status: "thinking",
           text: "",
@@ -147,55 +139,69 @@ describe("background-stream", () => {
         },
       },
     ])
-
-    const schemaArg = outputObjectMock.mock.calls[0][0].schema as {
-      safeParse: (value: unknown) => { success: boolean }
-    }
-    expect(schemaArg.safeParse({
-      score: 99,
-      summary: "text",
-    }).success).toBe(true)
-    expect(schemaArg.safeParse({
-      score: null,
-      summary: null,
-    }).success).toBe(true)
-    expect(schemaArg.safeParse({
-      score: "99",
-      summary: "text",
-    }).success).toBe(false)
   })
 
-  it("falls back to prompt-constrained JSON parsing for volcengine structured output", async () => {
+  it("fills missing structured fields with null in the final result", async () => {
     getModelByIdMock.mockResolvedValue("mock-model")
     streamTextMock.mockReturnValue({
       fullStream: (async function* () {
-        yield { type: "text-delta", text: "{\"score\":97," }
-        yield { type: "text-delta", text: "\"summary\":\"Strong argument structure\"}" }
+        yield { type: "text-delta", text: "{\"term\":\"manner\"}" }
       })(),
-      output: Promise.resolve("{\"score\":97,\"summary\":\"Strong argument structure\"}"),
+      output: Promise.resolve("{\"term\":\"manner\"}"),
     })
 
     const { runStructuredObjectStreamInBackground } = await import("../background-stream")
     const result = await runStructuredObjectStreamInBackground({
-      providerId: "volcengine-default",
-      providerType: "volcengine",
-      prompt: "Analyze selection",
+      providerId: "managed-cloud-default",
+      providerType: "openai-compatible",
+      prompt: "Explain the selected word",
       outputSchema: [
-        { name: "score", type: "number" },
-        { name: "summary", type: "string" },
+        { name: "term", type: "string" },
+        { name: "definition", type: "string" },
+      ],
+    })
+
+    expect(result).toEqual({
+      output: {
+        term: "manner",
+        definition: null,
+      },
+      thinking: {
+        status: "complete",
+        text: "",
+      },
+    })
+  })
+
+  it("falls back to prompt-constrained JSON parsing for managed cloud structured output", async () => {
+    getModelByIdMock.mockResolvedValue("mock-model")
+    streamTextMock.mockReturnValue({
+      fullStream: (async function* () {
+        yield { type: "text-delta", text: "{\"term\":\"manner\"," }
+        yield { type: "text-delta", text: "\"definition\":\"方式\"}" }
+      })(),
+      output: Promise.resolve("{\"term\":\"manner\",\"definition\":\"方式\"}"),
+    })
+
+    const { runStructuredObjectStreamInBackground } = await import("../background-stream")
+    const result = await runStructuredObjectStreamInBackground({
+      providerId: "managed-cloud-default",
+      providerType: "openai-compatible",
+      prompt: "Explain the selected word",
+      outputSchema: [
+        { name: "term", type: "string" },
+        { name: "definition", type: "string" },
       ],
     })
 
     expect(streamTextMock).toHaveBeenCalledWith(expect.objectContaining({
       model: "mock-model",
-      prompt: "Analyze selection",
+      prompt: "Explain the selected word",
     }))
-    expect(streamTextMock.mock.calls[0][0]).not.toHaveProperty("output")
-    expect(outputObjectMock).not.toHaveBeenCalled()
     expect(result).toEqual({
       output: {
-        score: 97,
-        summary: "Strong argument structure",
+        term: "manner",
+        definition: "方式",
       },
       thinking: {
         status: "complete",

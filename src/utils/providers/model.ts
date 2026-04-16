@@ -1,74 +1,12 @@
 import type { Config } from "@/types/config/config"
 import { storage } from "#imports"
-import { createAlibaba } from "@ai-sdk/alibaba"
-import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock"
-import { createAnthropic } from "@ai-sdk/anthropic"
-import { createCerebras } from "@ai-sdk/cerebras"
-import { createCohere } from "@ai-sdk/cohere"
-import { createDeepInfra } from "@ai-sdk/deepinfra"
-import { createDeepSeek } from "@ai-sdk/deepseek"
-import { createFireworks } from "@ai-sdk/fireworks"
-import { createGoogleGenerativeAI } from "@ai-sdk/google"
-import { createGroq } from "@ai-sdk/groq"
-import { createHuggingFace } from "@ai-sdk/huggingface"
-import { createMistral } from "@ai-sdk/mistral"
-import { createMoonshotAI } from "@ai-sdk/moonshotai"
-import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
-import { createPerplexity } from "@ai-sdk/perplexity"
-import { createReplicate } from "@ai-sdk/replicate"
-import { createTogetherAI } from "@ai-sdk/togetherai"
-import { createVercel } from "@ai-sdk/vercel"
-import { createXai } from "@ai-sdk/xai"
-import { createOpenRouter } from "@openrouter/ai-sdk-provider"
-import { createOllama } from "ollama-ai-provider-v2"
-import { createMinimax } from "vercel-minimax-ai-provider"
-import { isCustomLLMProvider } from "@/types/config/provider"
-import { compactObject } from "@/types/utils"
 import { getLLMProvidersConfig, getProviderConfigById } from "../config/helpers"
 import { CONFIG_STORAGE_KEY } from "../constants/config"
 import { MANAGED_CLOUD_PROVIDER_ID, PLATFORM_OPENAI_BASE_URL } from "../constants/platform"
 import { refreshPlatformSessionFromResponse } from "../platform/api"
 import { clearPlatformAuthSession, getPlatformAuthSession } from "../platform/storage"
 import { resolveModelId } from "./model-id"
-
-const CREATE_AI_MAPPER = {
-  "siliconflow": createOpenAICompatible,
-  "tensdaq": createOpenAICompatible,
-  "ai302": createOpenAICompatible,
-  "volcengine": createOpenAICompatible,
-  "openrouter": createOpenRouter,
-  "openai-compatible": createOpenAICompatible,
-  "openai": createOpenAI,
-  "deepseek": createDeepSeek,
-  "google": createGoogleGenerativeAI,
-  "anthropic": createAnthropic,
-  "xai": createXai,
-  "bedrock": createAmazonBedrock,
-  "groq": createGroq,
-  "deepinfra": createDeepInfra,
-  "mistral": createMistral,
-  "togetherai": createTogetherAI,
-  "cohere": createCohere,
-  "fireworks": createFireworks,
-  "cerebras": createCerebras,
-  "replicate": createReplicate,
-  "perplexity": createPerplexity,
-  "vercel": createVercel,
-  "ollama": createOllama,
-  "minimax": createMinimax,
-  "alibaba": createAlibaba,
-  "moonshotai": createMoonshotAI,
-  "huggingface": createHuggingFace,
-} as const
-
-const CUSTOM_HEADER_MAP: Partial<Record<keyof typeof CREATE_AI_MAPPER, Record<string, string>>> = {
-  anthropic: { "anthropic-dangerous-direct-browser-access": "true" },
-}
-
-export function supportsStructuredOutputsForCustomProvider(provider: string): boolean {
-  return provider !== "volcengine"
-}
 
 export async function fetchManagedCloudWithSessionGuard(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const response = await fetch(input, init)
@@ -100,54 +38,24 @@ async function getLanguageModelById(providerId: string) {
     throw new Error("Config not found")
   }
 
-  const LLMProvidersConfig = getLLMProvidersConfig(config.providersConfig)
-  const providerConfig = getProviderConfigById(LLMProvidersConfig, providerId)
-  if (!providerConfig) {
+  const llmProvidersConfig = getLLMProvidersConfig(config.providersConfig)
+  const selectedProviderConfig = getProviderConfigById(llmProvidersConfig, providerId)
+  if (!selectedProviderConfig) {
     throw new Error(`Provider ${providerId} not found`)
   }
 
-  if (providerId === MANAGED_CLOUD_PROVIDER_ID) {
-    const session = await getPlatformAuthSession()
-    if (!session?.token) {
-      throw new Error("No Lexio account token found. Sign in again.")
-    }
-
-    return createOpenAICompatible({
-      name: providerConfig.provider,
-      baseURL: PLATFORM_OPENAI_BASE_URL,
-      apiKey: session.token,
-      fetch: fetchManagedCloudWithSessionGuard,
-    }).languageModel(resolveModelId(providerConfig.model) || MANAGED_CLOUD_PROVIDER_ID)
+  const session = await getPlatformAuthSession()
+  if (!session?.token) {
+    throw new Error("No Lexio account token found. Sign in again.")
   }
 
-  const customHeaders = CUSTOM_HEADER_MAP[providerConfig.provider]
-  const connectionOptions = compactObject(providerConfig.connectionOptions ?? {})
-
-  const provider = isCustomLLMProvider(providerConfig.provider)
-    ? CREATE_AI_MAPPER[providerConfig.provider]({
-        ...connectionOptions,
-        name: providerConfig.provider,
-        baseURL: providerConfig.baseURL ?? "",
-        // Volcengine's OpenAI-compatible endpoint accepts JSON mode but rejects
-        // `response_format.type = "json_schema"` for the Doubao models we expose.
-        supportsStructuredOutputs: supportsStructuredOutputsForCustomProvider(providerConfig.provider),
-        ...(providerConfig.apiKey && { apiKey: providerConfig.apiKey }),
-        ...(customHeaders && { headers: customHeaders }),
-      })
-    : CREATE_AI_MAPPER[providerConfig.provider]({
-        ...connectionOptions,
-        ...(providerConfig.baseURL && { baseURL: providerConfig.baseURL }),
-        ...(providerConfig.apiKey && { apiKey: providerConfig.apiKey }),
-        ...(customHeaders && { headers: customHeaders }),
-      })
-
-  const modelId = resolveModelId(providerConfig.model)
-
-  if (!modelId) {
-    throw new Error("Model is undefined")
-  }
-
-  return provider.languageModel(modelId)
+  return createOpenAICompatible({
+    name: "openai-compatible",
+    baseURL: PLATFORM_OPENAI_BASE_URL,
+    apiKey: session.token,
+    fetch: fetchManagedCloudWithSessionGuard,
+    supportsStructuredOutputs: false,
+  }).languageModel(resolveModelId(selectedProviderConfig.model) || MANAGED_CLOUD_PROVIDER_ID)
 }
 
 export async function getModelById(providerId: string) {

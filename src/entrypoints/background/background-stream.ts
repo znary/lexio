@@ -14,7 +14,7 @@ import type {
   StreamRuntimeOptions,
   ThinkingSnapshot,
 } from "@/types/background-stream"
-import { Output, streamText } from "ai"
+import { streamText } from "ai"
 import { z } from "zod"
 import { BACKGROUND_STREAM_PORTS } from "@/types/background-stream"
 import { extractAISDKErrorMessage } from "@/utils/error/extract-message"
@@ -225,12 +225,10 @@ function createStreamSnapshot<TOutput>(
   }
 }
 
-function supportsResponseFormatJson(providerType?: string): boolean {
-  return providerType !== "volcengine"
-}
-
 const JSON_FENCE_START_REGEX = /^```(?:json)?\s*/i
 const JSON_FENCE_END_REGEX = /\s*```$/
+const THINK_BLOCK_REGEX = /<think>[\s\S]*?<\/think>/gi
+const THINK_END_REGEX = /<\/think>/gi
 
 function sanitizeStructuredObjectText(text: string): string {
   const trimmed = text.trim()
@@ -239,6 +237,8 @@ function sanitizeStructuredObjectText(text: string): string {
   }
 
   const withoutFences = trimmed
+    .replace(THINK_BLOCK_REGEX, "")
+    .replace(THINK_END_REGEX, "")
     .replace(JSON_FENCE_START_REGEX, "")
     .replace(JSON_FENCE_END_REGEX, "")
     .trim()
@@ -252,9 +252,67 @@ function sanitizeStructuredObjectText(text: string): string {
   return withoutFences
 }
 
+function normalizeStructuredObjectValue(value: unknown, type: "string" | "number"): string | number | null {
+  if (value == null) {
+    return null
+  }
+
+  if (type === "number") {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value
+    }
+
+    if (typeof value === "string" && value.trim() !== "") {
+      const parsedNumber = Number(value)
+      return Number.isFinite(parsedNumber) ? parsedNumber : null
+    }
+
+    return null
+  }
+
+  if (typeof value === "string") {
+    return value
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value)
+  }
+
+  return null
+}
+
+function normalizeStructuredObject(
+  value: unknown,
+  outputSchema: Array<{ name: string, type: "string" | "number" }>,
+  fillMissingKeys: boolean,
+): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null
+  }
+
+  const recordValue = value as Record<string, unknown>
+  const normalized: Record<string, unknown> = {}
+  let hasKnownField = false
+
+  for (const field of outputSchema) {
+    if (!(field.name in recordValue)) {
+      if (fillMissingKeys) {
+        normalized[field.name] = null
+      }
+      continue
+    }
+
+    hasKnownField = true
+    normalized[field.name] = normalizeStructuredObjectValue(recordValue[field.name], field.type)
+  }
+
+  return hasKnownField ? normalized : null
+}
+
 function tryParseStructuredObject(
   text: string,
-  schema: z.ZodObject<Record<string, z.ZodTypeAny>>,
+  outputSchema: Array<{ name: string, type: "string" | "number" }>,
+  fillMissingKeys = false,
 ): Record<string, unknown> | null {
   const sanitized = sanitizeStructuredObjectText(text)
   if (!sanitized) {
@@ -263,8 +321,7 @@ function tryParseStructuredObject(
 
   try {
     const parsed = JSON.parse(sanitized)
-    const result = schema.safeParse(parsed)
-    return result.success ? result.data : null
+    return normalizeStructuredObject(parsed, outputSchema, fillMissingKeys)
   }
   catch {
     return null
@@ -341,7 +398,7 @@ export async function runStructuredObjectStreamInBackground(
   serializablePayload: BackgroundStreamStructuredObjectSerializablePayload,
   options: StreamRuntimeOptions<BackgroundStructuredObjectStreamSnapshot> = {},
 ): Promise<BackgroundStructuredObjectStreamSnapshot> {
-  const { providerId, providerType, outputSchema, ...streamParams } = serializablePayload
+  const { providerId, providerType: _providerType, outputSchema, ...streamParams } = serializablePayload
   const { signal, onChunk, onError } = options
 
   if (signal?.aborted) {
@@ -355,135 +412,59 @@ export async function runStructuredObjectStreamInBackground(
     text: "",
   }
 
-  const fieldTypeToZodSchema: Record<string, z.ZodTypeAny> = {
-    string: z.string().nullable(),
-    number: z.number().nullable(),
-  }
-
-  const schemaShape: Record<string, z.ZodTypeAny> = {}
-  for (const field of outputSchema) {
-    schemaShape[field.name] = fieldTypeToZodSchema[field.type] ?? z.string().nullable()
-  }
-
-  const objectSchema = z.object(schemaShape).strict()
-
-  if (!supportsResponseFormatJson(providerType)) {
-    let cumulativeText = ""
-
-    const result = streamText({
-      ...(streamParams as Parameters<typeof streamText>[0]),
-      model,
-      abortSignal: signal,
-      onError: ({ error }) => {
-        onError?.(error)
-      },
-    })
-
-    for await (const part of result.fullStream) {
-      if (signal?.aborted) {
-        throw new DOMException("stream aborted", "AbortError")
-      }
-
-      switch (part.type) {
-        case "text-delta": {
-          cumulativeText += part.text
-          const parsed = tryParseStructuredObject(cumulativeText, objectSchema)
-          if (parsed) {
-            cumulativeValue = parsed
-          }
-          onChunk?.(createStreamSnapshot(cumulativeValue, thinking))
-          break
-        }
-        case "reasoning-delta": {
-          thinking = {
-            status: "thinking",
-            text: thinking.text + part.text,
-          }
-          onChunk?.(createStreamSnapshot(cumulativeValue, thinking))
-          break
-        }
-        case "reasoning-end": {
-          thinking = {
-            ...thinking,
-            status: "complete",
-          }
-          onChunk?.(createStreamSnapshot(cumulativeValue, thinking))
-          break
-        }
-      }
-    }
-
-    const finalText = await result.output
-    const parsedFinal = tryParseStructuredObject(finalText, objectSchema)
-    if (!parsedFinal) {
-      throw new Error("Failed to parse structured JSON output")
-    }
-
-    thinking = {
-      ...thinking,
-      status: "complete",
-    }
-
-    return createStreamSnapshot(parsedFinal, thinking)
-  }
-
   const result = streamText({
     ...(streamParams as Parameters<typeof streamText>[0]),
     model,
-    output: Output.object({
-      schema: objectSchema,
-    }),
     abortSignal: signal,
     onError: ({ error }) => {
       onError?.(error)
     },
   })
+  let cumulativeText = ""
 
-  const consumePartialOutput = async () => {
-    for await (const partial of result.partialOutputStream) {
-      if (signal?.aborted) {
-        throw new DOMException("stream aborted", "AbortError")
-      }
+  for await (const part of result.fullStream) {
+    if (signal?.aborted) {
+      throw new DOMException("stream aborted", "AbortError")
+    }
 
-      if (partial && typeof partial === "object" && !Array.isArray(partial)) {
-        cumulativeValue = { ...cumulativeValue, ...partial }
+    switch (part.type) {
+      case "text-delta": {
+        cumulativeText += part.text
+        const parsed = tryParseStructuredObject(cumulativeText, outputSchema)
+        if (parsed) {
+          cumulativeValue = parsed
+        }
         onChunk?.(createStreamSnapshot(cumulativeValue, thinking))
+        break
+      }
+      case "reasoning-delta": {
+        thinking = {
+          status: "thinking",
+          text: thinking.text + part.text,
+        }
+        onChunk?.(createStreamSnapshot(cumulativeValue, thinking))
+        break
+      }
+      case "reasoning-end": {
+        thinking = {
+          ...thinking,
+          status: "complete",
+        }
+        onChunk?.(createStreamSnapshot(cumulativeValue, thinking))
+        break
       }
     }
   }
 
-  const consumeFullStream = async () => {
-    for await (const part of result.fullStream) {
-      if (signal?.aborted) {
-        throw new DOMException("stream aborted", "AbortError")
-      }
+  const finalText = await result.output
+  const finalValue = tryParseStructuredObject(finalText, outputSchema, true)
+    ?? (Object.keys(cumulativeValue).length > 0
+      ? normalizeStructuredObject(cumulativeValue, outputSchema, true)
+      : null)
 
-      switch (part.type) {
-        case "reasoning-delta": {
-          thinking = {
-            status: "thinking",
-            text: thinking.text + part.text,
-          }
-          onChunk?.(createStreamSnapshot(cumulativeValue, thinking))
-          break
-        }
-        case "reasoning-end": {
-          thinking = {
-            ...thinking,
-            status: "complete",
-          }
-          onChunk?.(createStreamSnapshot(cumulativeValue, thinking))
-          break
-        }
-      }
-    }
+  if (!finalValue) {
+    throw new Error("Failed to parse structured JSON output")
   }
-
-  const [finalValue] = await Promise.all([
-    result.output,
-    consumePartialOutput(),
-    consumeFullStream(),
-  ])
 
   thinking = {
     ...thinking,

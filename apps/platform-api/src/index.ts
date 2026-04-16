@@ -10,9 +10,17 @@ import { handleHealthCheck } from "./routes/health"
 import { handleMe } from "./routes/me"
 import { handlePaddleWebhook } from "./routes/paddle"
 import { handleSyncPull, handleSyncPush } from "./routes/sync"
+import {
+  handleVocabularyClear,
+  handleVocabularyCreate,
+  handleVocabularyDelete,
+  handleVocabularyList,
+  handleVocabularyUpdate,
+} from "./routes/vocabulary"
 
 const PLATFORM_TOKEN_HEADER = "x-lexio-platform-token"
 const PLATFORM_TOKEN_EXPIRES_AT_HEADER = "x-lexio-platform-token-expires-at"
+const VOCABULARY_ITEM_PATH_REGEX = /^\/v1\/vocabulary\/([^/]+)$/
 
 async function withRefreshedExtensionSession(response: Response, session: SessionContext | null, env: Env): Promise<Response> {
   if (!session || session.tokenType !== "extension") {
@@ -70,6 +78,33 @@ const handler: ExportedHandler<Env> = {
 
       if (request.method === "POST" && url.pathname === "/v1/sync/push") {
         response = await handleSyncPush(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      // Vocabulary API
+      if (request.method === "GET" && url.pathname === "/v1/vocabulary") {
+        response = await handleVocabularyList(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      if (request.method === "POST" && url.pathname === "/v1/vocabulary") {
+        response = await handleVocabularyCreate(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      if (request.method === "PUT" && url.pathname === "/v1/vocabulary") {
+        response = await handleVocabularyUpdate(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      if (request.method === "DELETE" && url.pathname === "/v1/vocabulary") {
+        response = await handleVocabularyClear(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      const vocabularyItemMatch = request.method === "DELETE" && url.pathname.match(VOCABULARY_ITEM_PATH_REGEX)
+      if (vocabularyItemMatch) {
+        response = await handleVocabularyDelete(request, env, session, vocabularyItemMatch[1])
         return withRefreshedExtensionSession(response, session, env)
       }
 

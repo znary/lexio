@@ -1,8 +1,71 @@
-import type { VocabularyItem, VocabularyKind, VocabularySettings } from "@/types/vocabulary"
+import type { VocabularyItem, VocabularySettings } from "@/types/vocabulary"
+import {
+  clearVocabularyItems as apiClearVocabularyItems,
+  createVocabularyItem as apiCreateVocabularyItem,
+  deleteVocabularyItem as apiDeleteVocabularyItem,
+  getVocabularyItems as apiGetVocabularyItems,
+  updateVocabularyItem as apiUpdateVocabularyItem,
+} from "../platform/api"
 import { countVocabularyWords, isEnglishVocabularyCandidate, normalizeVocabularyText } from "./normalization"
-import { getLocalVocabularyItemsAndMeta, setLocalVocabularyItemsAndMeta, sortVocabularyItems } from "./storage"
 
-function classifyVocabularyKind(wordCount: number): VocabularyKind {
+export const VOCABULARY_CHANGED_EVENT = "lexio:vocabulary-changed"
+let vocabularyItemsCache: VocabularyItem[] | null = null
+
+function notifyVocabularyChanged(): void {
+  if (typeof document !== "undefined") {
+    document.dispatchEvent(new CustomEvent(VOCABULARY_CHANGED_EVENT))
+  }
+}
+
+function sortVocabularyItems(items: VocabularyItem[]): VocabularyItem[] {
+  return [...items].sort((left, right) => right.updatedAt - left.updatedAt)
+}
+
+function replaceVocabularyItemsCache(items: VocabularyItem[], notify = true): VocabularyItem[] {
+  vocabularyItemsCache = sortVocabularyItems(items)
+  if (notify) {
+    notifyVocabularyChanged()
+  }
+  return vocabularyItemsCache
+}
+
+function upsertVocabularyItem(items: VocabularyItem[], nextItem: VocabularyItem): VocabularyItem[] {
+  const existingIndex = items.findIndex(item => item.id === nextItem.id)
+
+  if (existingIndex >= 0) {
+    const nextItems = [...items]
+    nextItems[existingIndex] = nextItem
+    return nextItems
+  }
+
+  return [...items, nextItem]
+}
+
+function restoreOrUpdateExistingItem(
+  item: VocabularyItem,
+  sourceText: string,
+  translatedText: string,
+  sourceLang: string,
+  targetLang: string,
+  wordCount: number,
+  now: number,
+): VocabularyItem {
+  return {
+    ...item,
+    sourceText: sourceText.trim(),
+    translatedText: translatedText.trim(),
+    sourceLang,
+    targetLang,
+    kind: classifyVocabularyKind(wordCount),
+    wordCount,
+    lastSeenAt: now,
+    hitCount: item.deletedAt == null ? item.hitCount + 1 : 1,
+    updatedAt: now,
+    deletedAt: null,
+  }
+}
+
+function classifyVocabularyKind(wordCount: number): "word" | "phrase" {
   return wordCount === 1 ? "word" : "phrase"
 }
 
@@ -31,30 +94,6 @@ function buildVocabularyItem(
   }
 }
 
-function restoreOrUpdateExistingItem(
-  item: VocabularyItem,
-  sourceText: string,
-  translatedText: string,
-  sourceLang: string,
-  targetLang: string,
-  wordCount: number,
-  now: number,
-): VocabularyItem {
-  return {
-    ...item,
-    sourceText: sourceText.trim(),
-    translatedText: translatedText.trim(),
-    sourceLang,
-    targetLang,
-    kind: classifyVocabularyKind(wordCount),
-    wordCount,
-    lastSeenAt: now,
-    hitCount: item.deletedAt == null ? item.hitCount + 1 : 1,
-    updatedAt: now,
-    deletedAt: null,
-  }
-}
-
 export function canAutoSaveToVocabulary(sourceText: string, settings: VocabularySettings): boolean {
   if (!settings.autoSave) {
     return false
@@ -70,6 +109,20 @@ export function canAutoSaveToVocabulary(sourceText: string, settings: Vocabulary
   }
 
   return wordCount <= settings.maxPhraseWords
+}
+
+export function getCachedVocabularyItems(): VocabularyItem[] | null {
+  return vocabularyItemsCache == null ? null : [...vocabularyItemsCache]
+}
+
+export async function getVocabularyItems(options?: { forceRefresh?: boolean }): Promise<VocabularyItem[]> {
+  if (!options?.forceRefresh && vocabularyItemsCache != null) {
+    return [...vocabularyItemsCache]
+  }
+
+  const items = sortVocabularyItems(await apiGetVocabularyItems())
+  vocabularyItemsCache = items
+  return [...items]
 }
 
 export async function saveTranslatedSelectionToVocabulary({
@@ -92,59 +145,71 @@ export async function saveTranslatedSelectionToVocabulary({
   const now = Date.now()
   const wordCount = countVocabularyWords(sourceText)
   const normalizedText = normalizeVocabularyText(sourceText)
-  const { value: items, meta } = await getLocalVocabularyItemsAndMeta()
+  const items = await getVocabularyItems()
   const existingItem = items.find(item => item.normalizedText === normalizedText)
+  const previousItems = getCachedVocabularyItems() ?? items
 
-  const nextItem = existingItem
-    ? restoreOrUpdateExistingItem(existingItem, sourceText, translatedText, sourceLang, targetLang, wordCount, now)
-    : buildVocabularyItem(sourceText, translatedText, sourceLang, targetLang, wordCount, now)
+  if (existingItem) {
+    const updatedItem = restoreOrUpdateExistingItem(
+      existingItem,
+      sourceText,
+      translatedText,
+      sourceLang,
+      targetLang,
+      wordCount,
+      now,
+    )
 
-  const nextItems = sortVocabularyItems(
-    existingItem
-      ? items.map(item => item.id === existingItem.id ? nextItem : item)
-      : [...items, nextItem],
-  )
+    replaceVocabularyItemsCache(upsertVocabularyItem(previousItems, updatedItem))
 
-  await setLocalVocabularyItemsAndMeta(nextItems, {
-    schemaVersion: meta.schemaVersion,
-    lastModifiedAt: now,
-  })
+    try {
+      await apiUpdateVocabularyItem(updatedItem)
+    }
+    catch (error) {
+      replaceVocabularyItemsCache(previousItems)
+      throw error
+    }
 
-  return nextItem
+    return updatedItem
+  }
+
+  const newItem = buildVocabularyItem(sourceText, translatedText, sourceLang, targetLang, wordCount, now)
+  replaceVocabularyItemsCache(upsertVocabularyItem(previousItems, newItem))
+
+  try {
+    await apiCreateVocabularyItem(newItem)
+  }
+  catch (error) {
+    replaceVocabularyItemsCache(previousItems)
+    throw error
+  }
+
+  return newItem
 }
 
 export async function removeVocabularyItem(itemId: string): Promise<void> {
-  const now = Date.now()
-  const { value: items, meta } = await getLocalVocabularyItemsAndMeta()
-  const nextItems = items.map((item) => {
-    if (item.id !== itemId || item.deletedAt != null) {
-      return item
-    }
+  const previousItems = await getVocabularyItems()
+  const nextItems = previousItems.filter(item => item.id !== itemId)
+  replaceVocabularyItemsCache(nextItems)
 
-    return {
-      ...item,
-      updatedAt: now,
-      deletedAt: now,
-    }
-  })
-
-  await setLocalVocabularyItemsAndMeta(nextItems, {
-    schemaVersion: meta.schemaVersion,
-    lastModifiedAt: now,
-  })
+  try {
+    await apiDeleteVocabularyItem(itemId)
+  }
+  catch (error) {
+    replaceVocabularyItemsCache(previousItems)
+    throw error
+  }
 }
 
 export async function clearVocabularyItems(): Promise<void> {
-  const now = Date.now()
-  const { value: items, meta } = await getLocalVocabularyItemsAndMeta()
-  const nextItems = items.map(item => ({
-    ...item,
-    updatedAt: now,
-    deletedAt: now,
-  }))
+  const previousItems = await getVocabularyItems()
+  replaceVocabularyItemsCache([])
 
-  await setLocalVocabularyItemsAndMeta(nextItems, {
-    schemaVersion: meta.schemaVersion,
-    lastModifiedAt: now,
-  })
+  try {
+    await apiClearVocabularyItems()
+  }
+  catch (error) {
+    replaceVocabularyItemsCache(previousItems)
+    throw error
+  }
 }

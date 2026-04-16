@@ -1,37 +1,37 @@
 import type { VocabularyItem } from "@/types/vocabulary"
-import { storage } from "#imports"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { useCallback, useEffect, useMemo } from "react"
-import { VOCABULARY_ITEMS_STORAGE_KEY } from "@/utils/constants/config"
-import { getActiveVocabularyItems, getLocalVocabularyItemsAndMeta } from "@/utils/vocabulary/storage"
+import { useEffect } from "react"
+import {
+  getCachedVocabularyItems,
+  getVocabularyItems,
+  VOCABULARY_CHANGED_EVENT,
+} from "@/utils/vocabulary/service"
 
-interface UseVocabularyItemsOptions {
-  includeDeleted?: boolean
-}
+const VOCABULARY_ITEMS_QUERY_KEY = ["vocabulary-items"] as const
 
-export function useVocabularyItems(options: UseVocabularyItemsOptions = {}) {
-  const { includeDeleted = false } = options
+export function useVocabularyItems() {
   const queryClient = useQueryClient()
-  const queryKey = useMemo(() => ["vocabulary-items", includeDeleted] as const, [includeDeleted])
 
   const query = useQuery({
-    queryKey,
-    queryFn: async (): Promise<VocabularyItem[]> => {
-      const { value } = await getLocalVocabularyItemsAndMeta()
-      return includeDeleted ? value : getActiveVocabularyItems(value)
-    },
+    queryKey: VOCABULARY_ITEMS_QUERY_KEY,
+    queryFn: () => getVocabularyItems({ forceRefresh: true }),
   })
 
-  const invalidate = useCallback(
-    () => queryClient.invalidateQueries({ queryKey }),
-    [queryClient, queryKey],
-  )
-
   useEffect(() => {
-    return storage.watch(`local:${VOCABULARY_ITEMS_STORAGE_KEY}`, () => {
-      void invalidate()
-    })
-  }, [invalidate])
+    const handleVocabularyChanged = () => {
+      const items = getCachedVocabularyItems()
+      if (items != null) {
+        queryClient.setQueryData<VocabularyItem[]>(VOCABULARY_ITEMS_QUERY_KEY, items)
+      }
+    }
+
+    document.addEventListener(VOCABULARY_CHANGED_EVENT, handleVocabularyChanged)
+    return () => {
+      document.removeEventListener(VOCABULARY_CHANGED_EVENT, handleVocabularyChanged)
+    }
+  }, [queryClient])
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: VOCABULARY_ITEMS_QUERY_KEY })
 
   return { query, invalidate }
 }

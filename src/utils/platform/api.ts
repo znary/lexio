@@ -118,7 +118,7 @@ export async function pullPlatformSync(): Promise<PlatformPullResponse> {
 
 export async function pushPlatformSync(payload: {
   settings: Config
-  vocabularyItems: VocabularyItem[]
+  vocabularyItems?: VocabularyItem[]
 }): Promise<{ ok: true, syncedAt: string }> {
   const response = await platformFetch("/v1/sync/push", {
     method: "POST",
@@ -129,4 +129,47 @@ export async function pushPlatformSync(payload: {
   })
 
   return await response.json() as { ok: true, syncedAt: string }
+}
+
+// Vocabulary API
+export async function getVocabularyItems(): Promise<VocabularyItem[]> {
+  const response = await platformFetch("/v1/vocabulary")
+  const data = await response.json() as { items: VocabularyItem[] }
+  return data.items
+}
+
+export async function createVocabularyItem(item: VocabularyItem): Promise<{ ok: true, id: string }> {
+  const response = await platformFetch("/v1/vocabulary", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify(item),
+  })
+  return await response.json() as { ok: true, id: string }
+}
+
+export async function updateVocabularyItem(item: VocabularyItem): Promise<{ ok: true }> {
+  const response = await platformFetch("/v1/vocabulary", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify(item),
+  })
+  return await response.json() as { ok: true }
+}
+
+export async function deleteVocabularyItem(itemId: string): Promise<{ ok: true }> {
+  const response = await platformFetch(`/v1/vocabulary/${encodeURIComponent(itemId)}`, {
+    method: "DELETE",
+  })
+  return await response.json() as { ok: true }
+}
+
+export async function clearVocabularyItems(): Promise<{ ok: true }> {
+  const response = await platformFetch("/v1/vocabulary", {
+    method: "DELETE",
+  })
+  return await response.json() as { ok: true }
 }

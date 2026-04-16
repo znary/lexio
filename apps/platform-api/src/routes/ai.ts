@@ -29,8 +29,12 @@ async function streamWithLeaseCleanup(
       }
     }
     finally {
-      await writer.close()
-      await onFinish()
+      try {
+        await writer.close()
+      }
+      finally {
+        await onFinish()
+      }
     }
   })()
 

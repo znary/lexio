@@ -15,8 +15,6 @@ import { DEFAULT_VOCABULARY_SETTINGS } from "./vocabulary"
 
 export const CONFIG_STORAGE_KEY = "config"
 export const LAST_SYNCED_CONFIG_STORAGE_KEY = "lastSyncedConfig"
-export const VOCABULARY_ITEMS_STORAGE_KEY = "vocabularyItems"
-export const LAST_SYNCED_VOCABULARY_ITEMS_STORAGE_KEY = "lastSyncedVocabularyItems"
 export const PLATFORM_AUTH_STORAGE_KEY = "__platformAuth"
 
 export const THEME_STORAGE_KEY = "theme"

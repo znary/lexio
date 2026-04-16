@@ -30,23 +30,3 @@ export const vocabularyItemsSchema = z.array(vocabularyItemSchema)
 export type VocabularyKind = z.infer<typeof vocabularyKindSchema>
 export type VocabularySettings = z.infer<typeof vocabularySettingsSchema>
 export type VocabularyItem = z.infer<typeof vocabularyItemSchema>
-
-export interface VocabularyItemsMeta extends Record<string, unknown> {
-  schemaVersion: number
-  lastModifiedAt: number
-}
-
-export interface LastSyncedVocabularyItemsMeta extends VocabularyItemsMeta {
-  lastSyncedAt: number
-  email: string
-}
-
-export interface VocabularyItemsValueAndMeta {
-  value: VocabularyItem[]
-  meta: VocabularyItemsMeta
-}
-
-export interface LastSyncedVocabularyItemsValueAndMeta {
-  value: VocabularyItem[]
-  meta: LastSyncedVocabularyItemsMeta
-}

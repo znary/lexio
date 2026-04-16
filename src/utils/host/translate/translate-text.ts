@@ -186,7 +186,8 @@ export function validateTranslationConfigAndToast(
   const isManagedCloudProvider = providerConfig.id === MANAGED_CLOUD_PROVIDER_ID && providerConfig.provider === "openai-compatible"
   const requiresApiKey = isAPIProviderConfig(providerConfig)
     && !isManagedCloudProvider
-    && !["deeplx", "ollama"].includes(providerConfig.provider)
+    && !isLLMProviderConfig(providerConfig)
+    && providerConfig.provider !== "deeplx"
 
   if (requiresApiKey && !providerConfig.apiKey?.trim()) {
     toast.error(i18n.t("noAPIKeyConfig.warning"))

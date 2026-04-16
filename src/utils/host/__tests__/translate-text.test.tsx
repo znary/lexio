@@ -127,7 +127,7 @@ describe("translate-text", () => {
       expect(mockToastWarning).not.toHaveBeenCalled()
     })
 
-    it("still blocks providers that really need an apiKey", () => {
+    it("allows llm providers without apiKey because they now route through the platform backend", () => {
       const openaiProvider = DEFAULT_PROVIDER_CONFIG.openai
       const config = {
         ...DEFAULT_CONFIG,
@@ -135,6 +135,21 @@ describe("translate-text", () => {
         translate: {
           ...DEFAULT_CONFIG.translate,
           providerId: openaiProvider.id,
+        },
+      }
+
+      expect(validateTranslationConfigAndToast(config, "eng")).toBe(true)
+      expect(mockToastError).not.toHaveBeenCalled()
+    })
+
+    it("still blocks pure API providers that really need an apiKey", () => {
+      const deeplProvider = DEFAULT_PROVIDER_CONFIG.deepl
+      const config = {
+        ...DEFAULT_CONFIG,
+        providersConfig: [deeplProvider, ...DEFAULT_CONFIG.providersConfig],
+        translate: {
+          ...DEFAULT_CONFIG.translate,
+          providerId: deeplProvider.id,
         },
       }
 

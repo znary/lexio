@@ -22,7 +22,7 @@ export async function handleSyncPush(request: Request, env: Env, session: Sessio
 
   await pushSyncData(env, user.id, {
     settings: payload.settings ?? null,
-    vocabularyItems: payload.vocabularyItems ?? [],
+    vocabularyItems: payload.vocabularyItems,
   })
 
   return json({

@@ -1,20 +1,31 @@
 import type { Env, Plan } from "./env"
 import { HttpError } from "./http"
 
+const DEFAULT_ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
+const DEFAULT_ARK_MODEL = "doubao-seed-2-0-lite-260215"
+
 function trimTrailingSlash(value: string): string {
   return value.endsWith("/") ? value.slice(0, -1) : value
 }
 
-function resolveGatewayModel(env: Env, plan: Plan): string {
-  if (plan === "pro") {
-    return env.AI_GATEWAY_MODEL_PRO || "openai/gpt-4.1-mini"
-  }
-
-  return env.AI_GATEWAY_MODEL_FREE || "openai/gpt-4.1-nano"
+function firstNonEmpty(...values: Array<string | undefined>): string {
+  return values.find(value => value?.trim())?.trim() ?? ""
 }
 
-function isVolcengineModel(model: string): boolean {
-  return model.startsWith("doubao-") || model.includes("/doubao-")
+function resolveArkBaseUrl(env: Env): string {
+  return firstNonEmpty(env.ARK_BASE_URL, env.AI_GATEWAY_BASE_URL, DEFAULT_ARK_BASE_URL)
+}
+
+function resolveArkApiKey(env: Env): string {
+  return firstNonEmpty(env.ARK_API_KEY, env.AI_GATEWAY_API_KEY)
+}
+
+function resolveArkModel(env: Env, plan: Plan): string {
+  if (plan === "pro") {
+    return firstNonEmpty(env.ARK_MODEL_PRO, env.AI_GATEWAY_MODEL_PRO, env.ARK_MODEL, DEFAULT_ARK_MODEL)
+  }
+
+  return firstNonEmpty(env.ARK_MODEL_FREE, env.AI_GATEWAY_MODEL_FREE, env.ARK_MODEL, DEFAULT_ARK_MODEL)
 }
 
 export async function forwardChatCompletions(
@@ -22,29 +33,32 @@ export async function forwardChatCompletions(
   body: Record<string, unknown>,
   plan: Plan,
 ): Promise<Response> {
-  if (!env.AI_GATEWAY_BASE_URL || !env.AI_GATEWAY_API_KEY) {
-    throw new HttpError(500, "AI Gateway is not configured")
+  const apiKey = resolveArkApiKey(env)
+  if (!apiKey) {
+    throw new HttpError(500, "Volcengine Ark is not configured")
   }
 
-  const model = resolveGatewayModel(env, plan)
-  const upstreamUrl = `${trimTrailingSlash(env.AI_GATEWAY_BASE_URL)}/chat/completions`
-
-  // Disable thinking for volcengine models
-  const thinkingOverride = isVolcengineModel(model)
-    ? { thinking: { type: "disabled" as const } }
-    : {}
+  const model = resolveArkModel(env, plan)
+  const upstreamUrl = `${trimTrailingSlash(resolveArkBaseUrl(env))}/chat/completions`
+  const {
+    model: _ignoredModel,
+    thinking: _ignoredThinking,
+    reasoning: _ignoredReasoning,
+    reasoning_effort: _ignoredReasoningEffort,
+    ...restBody
+  } = body
 
   const upstreamBody = JSON.stringify({
-    ...body,
-    ...thinkingOverride,
+    ...restBody,
     model,
+    thinking: { type: "disabled" as const },
   })
 
   const response = await fetch(upstreamUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${env.AI_GATEWAY_API_KEY}`,
+      "Authorization": `Bearer ${apiKey}`,
     },
     body: upstreamBody,
   })

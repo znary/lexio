@@ -44,9 +44,9 @@ describe("buildPublicEnvDiagnostics", () => {
     expect(diagnostics.checks.aiGatewayBaseUrl.looksLikeChatCompletionsEndpoint).toBe(true)
     expect(diagnostics.warnings).toEqual(expect.arrayContaining([
       "CLERK_AUTHORIZED_PARTIES still points to localhost or 127.0.0.1",
-      "AI_GATEWAY_API_KEY is missing",
-      "AI_GATEWAY_BASE_URL still points to localhost or 127.0.0.1",
-      "AI_GATEWAY_BASE_URL should be the gateway root, not a /chat/completions endpoint",
+      "ARK_API_KEY or AI_GATEWAY_API_KEY is missing",
+      "ARK_BASE_URL or AI_GATEWAY_BASE_URL still points to localhost or 127.0.0.1",
+      "ARK_BASE_URL or AI_GATEWAY_BASE_URL should be the API root, not a /chat/completions endpoint",
       "PADDLE_WEBHOOK_SECRET is missing, webhook verification will fail",
       "PADDLE_PRO_PRICE_ID is missing, Paddle webhooks cannot promote users to pro",
     ]))

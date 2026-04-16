@@ -7,6 +7,11 @@ export interface Env {
   CLERK_AUDIENCE?: string
   CLERK_AUTHORIZED_PARTIES?: string
   PLATFORM_EXTENSION_TOKEN_SECRET?: string
+  ARK_API_KEY?: string
+  ARK_BASE_URL?: string
+  ARK_MODEL?: string
+  ARK_MODEL_FREE?: string
+  ARK_MODEL_PRO?: string
   AI_GATEWAY_BASE_URL: string
   AI_GATEWAY_API_KEY: string
   AI_GATEWAY_MODEL_FREE?: string

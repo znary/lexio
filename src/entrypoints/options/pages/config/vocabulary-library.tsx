@@ -16,7 +16,7 @@ function formatDate(timestamp: number): string {
 }
 
 export function VocabularyLibraryCard() {
-  const { query } = useVocabularyItems()
+  const { query, invalidate } = useVocabularyItems()
   const [search, setSearch] = useState("")
   const items = useMemo(() => query.data ?? [], [query.data])
 
@@ -59,7 +59,7 @@ export function VocabularyLibraryCard() {
               type="button"
               variant="destructive"
               onClick={() => {
-                void clearVocabularyItems()
+                void clearVocabularyItems().then(invalidate)
               }}
               disabled={items.length === 0}
             >
@@ -103,7 +103,7 @@ export function VocabularyLibraryCard() {
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => {
-                            void removeVocabularyItem(item.id)
+                            void removeVocabularyItem(item.id).then(invalidate)
                           }}
                         >
                           <IconTrash className="size-4" />

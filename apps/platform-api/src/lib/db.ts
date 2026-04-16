@@ -13,7 +13,7 @@ export interface UserRecord {
 
 export interface SyncPayload {
   settings: Record<string, unknown> | null
-  vocabularyItems: Record<string, unknown>[]
+  vocabularyItems?: Record<string, unknown>[]
 }
 
 const UUID_DASH_PATTERN = /-/g
@@ -190,24 +190,27 @@ export async function pullSyncData(env: Env, userId: string): Promise<SyncPayloa
 export async function pushSyncData(env: Env, userId: string, payload: SyncPayload): Promise<void> {
   const timestamp = nowIso()
 
-  await env.DB.prepare(`
+  const statements = [
+    env.DB.prepare(`
     INSERT INTO user_settings (user_id, settings_json, updated_at)
     VALUES (?1, ?2, ?3)
     ON CONFLICT(user_id) DO UPDATE SET
       settings_json = excluded.settings_json,
       updated_at = excluded.updated_at
-  `).bind(userId, JSON.stringify(payload.settings ?? {}, null, 2), timestamp).run()
-
-  const statements = [
-    env.DB.prepare("DELETE FROM vocabulary_items WHERE user_id = ?1").bind(userId),
-    ...payload.vocabularyItems.map((item) => {
-      const normalizedText = typeof item.normalizedText === "string" ? item.normalizedText : ""
-      const id = typeof item.id === "string" ? item.id : createId("voc")
-      return env.DB.prepare(`
-        INSERT INTO vocabulary_items (id, user_id, item_json, normalized_text, updated_at)
-        VALUES (?1, ?2, ?3, ?4, ?5)
-      `).bind(id, userId, JSON.stringify(item), normalizedText, timestamp)
-    }),
+  `).bind(userId, JSON.stringify(payload.settings ?? {}, null, 2), timestamp),
+    ...(payload.vocabularyItems
+      ? [
+          env.DB.prepare("DELETE FROM vocabulary_items WHERE user_id = ?1").bind(userId),
+          ...payload.vocabularyItems.map((item) => {
+            const normalizedText = typeof item.normalizedText === "string" ? item.normalizedText : ""
+            const id = typeof item.id === "string" ? item.id : createId("voc")
+            return env.DB.prepare(`
+              INSERT INTO vocabulary_items (id, user_id, item_json, normalized_text, updated_at)
+              VALUES (?1, ?2, ?3, ?4, ?5)
+            `).bind(id, userId, JSON.stringify(item), normalizedText, timestamp)
+          }),
+        ]
+      : []),
     env.DB.prepare(`
       INSERT INTO sync_state (user_id, last_push_at, last_pull_at, last_sync_status, updated_at)
       VALUES (?1, ?2, NULL, 'success', ?2)

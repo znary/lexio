@@ -1,5 +1,7 @@
 import type { Entitlements } from "../lib/env"
 
+const ACTIVE_LEASE_TTL_MS = 2 * 60 * 1000
+
 interface UsageState {
   monthKey: string
   requestCount: number
@@ -56,7 +58,7 @@ export class UsageGate {
       const payload = await request.json() as { leaseId?: string }
       if (payload.leaseId && state.leases[payload.leaseId]) {
         delete state.leases[payload.leaseId]
-        state.activeCount = Math.max(0, state.activeCount - 1)
+        state.activeCount = Object.keys(state.leases).length
         await this.persistState(state)
       }
 
@@ -77,10 +79,45 @@ export class UsageGate {
         leases: {},
       }
     }
-    return stored
+
+    const state: UsageState = {
+      monthKey: stored.monthKey,
+      requestCount: Number.isFinite(stored.requestCount) ? stored.requestCount : 0,
+      activeCount: Number.isFinite(stored.activeCount) ? stored.activeCount : 0,
+      leases: stored.leases ?? {},
+    }
+
+    if (this.pruneExpiredLeases(state)) {
+      await this.persistState(state)
+    }
+
+    return state
   }
 
   private async persistState(state: UsageState): Promise<void> {
     await this.ctx.storage.put("usage-state", state)
+  }
+
+  private pruneExpiredLeases(state: UsageState): boolean {
+    const now = Date.now()
+    let changed = false
+
+    for (const [leaseId, startedAt] of Object.entries(state.leases)) {
+      const isExpired = !Number.isFinite(startedAt) || now - startedAt >= ACTIVE_LEASE_TTL_MS
+      if (!isExpired) {
+        continue
+      }
+
+      delete state.leases[leaseId]
+      changed = true
+    }
+
+    const nextActiveCount = Object.keys(state.leases).length
+    if (state.activeCount !== nextActiveCount) {
+      state.activeCount = nextActiveCount
+      changed = true
+    }
+
+    return changed
   }
 }

@@ -1,19 +1,31 @@
-/* eslint-disable import/first */
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
 
 const {
   clearPlatformAuthSessionMock,
+  createOpenAICompatibleMock,
+  getPlatformAuthSessionMock,
   refreshPlatformSessionFromResponseMock,
+  storageGetItemMock,
 } = vi.hoisted(() => {
   return {
     clearPlatformAuthSessionMock: vi.fn(),
+    createOpenAICompatibleMock: vi.fn(() => ({
+      languageModel: vi.fn((modelId: string) => `managed:${modelId}`),
+    })),
+    getPlatformAuthSessionMock: vi.fn(),
     refreshPlatformSessionFromResponseMock: vi.fn(),
+    storageGetItemMock: vi.fn(),
   }
 })
 
+vi.mock("@ai-sdk/openai-compatible", () => ({
+  createOpenAICompatible: createOpenAICompatibleMock,
+}))
+
 vi.mock("@/utils/platform/storage", () => ({
   clearPlatformAuthSession: clearPlatformAuthSessionMock,
+  getPlatformAuthSession: getPlatformAuthSessionMock,
 }))
 
 vi.mock("@/utils/platform/api", () => ({
@@ -22,23 +34,14 @@ vi.mock("@/utils/platform/api", () => ({
 
 vi.mock("#imports", () => ({
   storage: {
-    getItem: vi.fn().mockResolvedValue(DEFAULT_CONFIG),
+    getItem: storageGetItemMock,
   },
 }))
 
-import { fetchManagedCloudWithSessionGuard, supportsStructuredOutputsForCustomProvider } from "../model"
-
-describe("supportsStructuredOutputsForCustomProvider", () => {
+describe("managed cloud model routing", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-  })
-
-  it("disables structured outputs for volcengine", () => {
-    expect(supportsStructuredOutputsForCustomProvider("volcengine")).toBe(false)
-  })
-
-  it("keeps structured outputs enabled for generic OpenAI-compatible providers", () => {
-    expect(supportsStructuredOutputsForCustomProvider("openai-compatible")).toBe(true)
+    storageGetItemMock.mockResolvedValue(DEFAULT_CONFIG)
   })
 
   it("wraps managed cloud requests so 401 clears the local platform session", async () => {
@@ -51,6 +54,7 @@ describe("supportsStructuredOutputsForCustomProvider", () => {
     }))
 
     vi.stubGlobal("fetch", fetchMock)
+    const { fetchManagedCloudWithSessionGuard } = await import("../model")
 
     const guardedResponse = await fetchManagedCloudWithSessionGuard("https://example.com/v1/openai/chat/completions", {
       method: "POST",
@@ -79,6 +83,7 @@ describe("supportsStructuredOutputsForCustomProvider", () => {
     const fetchMock = vi.fn().mockResolvedValue(response)
 
     vi.stubGlobal("fetch", fetchMock)
+    const { fetchManagedCloudWithSessionGuard } = await import("../model")
 
     const guardedResponse = await fetchManagedCloudWithSessionGuard("https://example.com/v1/openai/chat/completions")
 
