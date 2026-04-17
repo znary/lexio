@@ -3,6 +3,7 @@ import type { LLMProviderConfig, ProviderConfig } from "@/types/config/provider"
 import type { BatchQueueConfig, RequestQueueConfig } from "@/types/config/translate"
 import type { SubtitlePromptContext, WebPagePromptContext } from "@/types/content"
 import type { PromptResolver } from "@/utils/host/translate/api/ai"
+import { ISO6393_TO_6391, LANG_CODE_TO_EN_NAME } from "@read-frog/definitions"
 import { isLLMProviderConfig } from "@/types/config/provider"
 import { putBatchRequestRecord } from "@/utils/batch-request-record"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
@@ -11,15 +12,16 @@ import { generateArticleSummary } from "@/utils/content/summary"
 import { cleanText } from "@/utils/content/utils"
 import { db } from "@/utils/db/dexie/db"
 import { Sha256Hex } from "@/utils/hash"
-import { executeTranslate } from "@/utils/host/translate/execute-translate"
 import { normalizePromptContextValue } from "@/utils/host/translate/translate-text"
 import { logger } from "@/utils/logger"
 import { onMessage } from "@/utils/message"
+import { translateWithManagedPlatform } from "@/utils/platform/api"
 import { getSubtitlesTranslatePrompt } from "@/utils/prompts/subtitles"
 import { getTranslatePrompt } from "@/utils/prompts/translate"
 import { BatchCountMismatchError, BatchQueue } from "@/utils/request/batch-queue"
 import { RequestQueue } from "@/utils/request/request-queue"
 import { ensureInitializedConfig } from "./config"
+import { getManagedTranslationTaskScope } from "./managed-translation-tasks"
 
 export const MANAGED_TRANSLATION_MAX_CONCURRENCY = 10
 
@@ -36,15 +38,21 @@ export async function executeBatchTranslation<TContext>(
   promptResolver: PromptResolver<TContext>,
   scene?: string,
 ): Promise<string[]> {
-  const { langConfig, providerConfig, context } = dataList[0]
+  const { langConfig, providerConfig, context, tabId } = dataList[0]
   const texts = dataList.map(d => d.text)
 
   const batchText = texts.join(`\n\n${BATCH_SEPARATOR}\n\n`)
-  const result = await executeTranslate(batchText, langConfig, providerConfig, promptResolver, {
+  const result = await executeManagedTranslation(batchText, langConfig, providerConfig, promptResolver, {
     isBatch: true,
     context,
     scene,
+    tabId,
   })
+
+  if (!result) {
+    return dataList.map(() => "")
+  }
+
   return parseBatchResult(result)
 }
 
@@ -158,6 +166,7 @@ export interface TranslateBatchData<TContext = unknown> {
   scheduleAt: number
   scene?: string
   context?: TContext
+  tabId?: number
 }
 
 interface TranslationQueueSetupConfig<TContext = unknown> {
@@ -165,6 +174,116 @@ interface TranslationQueueSetupConfig<TContext = unknown> {
   batchQueueConfig: BatchQueueConfig
   promptResolver: PromptResolver<TContext>
   scene: string
+}
+
+function buildManagedTranslationQueueHash(hash: string | undefined, tabId: number | undefined): string {
+  if (!hash) {
+    return tabId === undefined ? Sha256Hex("managed-translation") : Sha256Hex("managed-translation", String(tabId))
+  }
+
+  return tabId === undefined ? hash : `${tabId}:${hash}`
+}
+
+function isAbortError(error: unknown): boolean {
+  return (error instanceof DOMException && error.name === "AbortError")
+    || (error instanceof Error && error.name === "AbortError")
+}
+
+async function executeManagedTranslation<TContext>(
+  text: string,
+  langConfig: Config["language"],
+  providerConfig: ProviderConfig,
+  promptResolver: PromptResolver<TContext>,
+  options?: {
+    isBatch?: boolean
+    context?: TContext
+    scene?: string
+    tabId?: number
+  },
+): Promise<string> {
+  const preparedText = cleanText(text)
+  if (!preparedText) {
+    return ""
+  }
+
+  const sourceLang = langConfig.sourceCode === "auto" ? "auto" : (ISO6393_TO_6391[langConfig.sourceCode] ?? "auto")
+  const targetLang = ISO6393_TO_6391[langConfig.targetCode]
+  if (!targetLang) {
+    throw new Error(`Invalid target language code: ${langConfig.targetCode}`)
+  }
+
+  const targetLangName = LANG_CODE_TO_EN_NAME[langConfig.targetCode]
+  const { systemPrompt, prompt } = await promptResolver(targetLangName, preparedText, {
+    isBatch: options?.isBatch,
+    context: options?.context,
+  })
+  const tabScope = typeof options?.tabId === "number"
+    ? getManagedTranslationTaskScope(options.tabId)
+    : null
+
+  let taskId: string | null = null
+
+  try {
+    const translatedText = await translateWithManagedPlatform({
+      scene: options?.scene,
+      text: preparedText,
+      sourceLanguage: sourceLang,
+      targetLanguage: targetLang,
+      systemPrompt,
+      prompt,
+      temperature: isLLMProviderConfig(providerConfig) ? providerConfig.temperature : undefined,
+      isBatch: options?.isBatch,
+    }, {
+      signal: tabScope?.signal,
+      clientRequestKey: buildManagedTranslationQueueHash(
+        Sha256Hex(
+          options?.scene ?? "translate",
+          preparedText,
+          sourceLang,
+          targetLang,
+          systemPrompt,
+          prompt,
+          String(Boolean(options?.isBatch)),
+        ),
+        options?.tabId,
+      ),
+      ownerTabId: options?.tabId,
+      onTaskCreated(createdTaskId) {
+        taskId = createdTaskId
+        tabScope?.registerTaskId(createdTaskId)
+        logger.info("[ManagedTranslationTask]", {
+          taskId: createdTaskId,
+          tabId: options?.tabId ?? null,
+          scene: options?.scene ?? null,
+          action: "create",
+          event: "created",
+        })
+      },
+    })
+
+    return translatedText.trim()
+  }
+  catch (error) {
+    if (isAbortError(error)) {
+      logger.info("[ManagedTranslationTask]", {
+        taskId,
+        tabId: options?.tabId ?? null,
+        scene: options?.scene ?? null,
+        action: "execute",
+        event: "aborted",
+      })
+      return ""
+    }
+    throw error
+  }
+  finally {
+    if (taskId) {
+      tabScope?.completeTask(taskId)
+    }
+    else if (tabScope) {
+      tabScope.completeTask("__cleanup__")
+    }
+  }
 }
 
 async function createTranslationQueues<TContext>(config: TranslationQueueSetupConfig<TContext>) {
@@ -191,7 +310,7 @@ async function createTranslationQueues<TContext>(config: TranslationQueueSetupCo
     enableFallbackToIndividual: true,
     shouldFallbackToIndividual: error => error instanceof BatchCountMismatchError,
     getBatchKey: (data) => {
-      return Sha256Hex(`${data.langConfig.sourceCode}-${data.langConfig.targetCode}-${data.providerConfig.id}`)
+      return Sha256Hex(`${data.tabId ?? "shared"}-${data.langConfig.sourceCode}-${data.langConfig.targetCode}-${data.providerConfig.id}`)
     },
     getCharacters: data => data.text.length,
     executeBatch: async (dataList) => {
@@ -203,7 +322,15 @@ async function createTranslationQueues<TContext>(config: TranslationQueueSetupCo
 
       const batchThunk = async (): Promise<string[]> => {
         await putBatchRequestRecord({ originalRequestCount: dataList.length, providerConfig })
-        return await executeBatchTranslation(dataList, promptResolver, batchScene)
+        try {
+          return await executeBatchTranslation(dataList, promptResolver, batchScene)
+        }
+        catch (error) {
+          if (isAbortError(error)) {
+            return dataList.map(() => "")
+          }
+          throw error
+        }
       }
 
       return requestQueue.enqueue(batchThunk, earliestScheduleAt, hash)
@@ -212,10 +339,19 @@ async function createTranslationQueues<TContext>(config: TranslationQueueSetupCo
       const { text, langConfig, providerConfig, hash, scheduleAt, context } = data
       const thunk = async () => {
         await putBatchRequestRecord({ originalRequestCount: 1, providerConfig })
-        return executeTranslate(text, langConfig, providerConfig, promptResolver, {
-          context,
-          scene: data.scene ?? scene,
-        })
+        try {
+          return await executeManagedTranslation(text, langConfig, providerConfig, promptResolver, {
+            context,
+            scene: data.scene ?? scene,
+            tabId: data.tabId,
+          })
+        }
+        catch (error) {
+          if (isAbortError(error)) {
+            return ""
+          }
+          throw error
+        }
       }
       return requestQueue.enqueue(thunk, scheduleAt, hash)
     },
@@ -244,11 +380,13 @@ export async function setUpWebPageTranslationQueue() {
   })
 
   onMessage("enqueueTranslateRequest", async (message) => {
-    const { data: { text, langConfig, providerConfig, scheduleAt, hash, scene, webTitle, webContent, webSummary } } = message
+    const { data: { text, langConfig, providerConfig, scheduleAt, hash: cacheHash, scene, webTitle, webContent, webSummary } } = message
+    const tabId = message.sender?.tab?.id
+    const queueHash = buildManagedTranslationQueueHash(cacheHash, tabId)
 
     // Check cache first
-    if (hash) {
-      const cached = await db.translationCache.get(hash)
+    if (cacheHash) {
+      const cached = await db.translationCache.get(cacheHash)
       if (cached) {
         return cached.translation
       }
@@ -262,19 +400,21 @@ export async function setUpWebPageTranslationQueue() {
     }
 
     if (shouldUseBatchQueue(providerConfig)) {
-      const data = { text, langConfig, providerConfig, hash, scheduleAt, scene, context }
+      const data = { text, langConfig, providerConfig, hash: queueHash, scheduleAt, scene, context, tabId }
       result = await batchQueue.enqueue(data)
     }
     else {
-      // Create thunk based on type and params
-      const thunk = () => executeTranslate(text, langConfig, providerConfig, getTranslatePrompt, { scene: scene ?? "page" })
-      result = await requestQueue.enqueue(thunk, scheduleAt, hash)
+      const thunk = () => executeManagedTranslation(text, langConfig, providerConfig, getTranslatePrompt, {
+        scene: scene ?? "page",
+        tabId,
+      })
+      result = await requestQueue.enqueue(thunk, scheduleAt, queueHash)
     }
 
     // Cache the translation result if successful
-    if (result && hash) {
+    if (result && cacheHash) {
       await db.translationCache.put({
-        key: hash,
+        key: cacheHash,
         translation: result,
         createdAt: new Date(),
       })
@@ -319,10 +459,12 @@ export async function setUpSubtitlesTranslationQueue() {
   })
 
   onMessage("enqueueSubtitlesTranslateRequest", async (message) => {
-    const { data: { text, langConfig, providerConfig, scheduleAt, hash, videoTitle, summary } } = message
+    const { data: { text, langConfig, providerConfig, scheduleAt, hash: cacheHash, videoTitle, summary } } = message
+    const tabId = message.sender?.tab?.id
+    const queueHash = buildManagedTranslationQueueHash(cacheHash, tabId)
 
-    if (hash) {
-      const cached = await db.translationCache.get(hash)
+    if (cacheHash) {
+      const cached = await db.translationCache.get(cacheHash)
       if (cached) {
         return cached.translation
       }
@@ -335,17 +477,20 @@ export async function setUpSubtitlesTranslationQueue() {
     }
 
     if (shouldUseBatchQueue(providerConfig)) {
-      const data = { text, langConfig, providerConfig, hash, scheduleAt, context }
+      const data = { text, langConfig, providerConfig, hash: queueHash, scheduleAt, context, tabId }
       result = await batchQueue.enqueue(data)
     }
     else {
-      const thunk = () => executeTranslate(text, langConfig, providerConfig, getSubtitlesTranslatePrompt, { scene: "subtitles" })
-      result = await requestQueue.enqueue(thunk, scheduleAt, hash)
+      const thunk = () => executeManagedTranslation(text, langConfig, providerConfig, getSubtitlesTranslatePrompt, {
+        scene: "subtitles",
+        tabId,
+      })
+      result = await requestQueue.enqueue(thunk, scheduleAt, queueHash)
     }
 
-    if (result && hash) {
+    if (result && cacheHash) {
       await db.translationCache.put({
-        key: hash,
+        key: cacheHash,
         translation: result,
         createdAt: new Date(),
       })

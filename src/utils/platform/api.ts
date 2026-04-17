@@ -1,6 +1,7 @@
 import type { BackgroundTextStreamSnapshot, ThinkingSnapshot } from "@/types/background-stream"
 import type { Config } from "@/types/config/config"
 import type { VocabularyItem } from "@/types/vocabulary"
+import { Sha256Hex } from "@/utils/hash"
 import { buildPlatformApiUrl } from "../constants/platform"
 import { clearPlatformAuthSession, getPlatformAuthSession, setPlatformAuthSession } from "./storage"
 
@@ -49,6 +50,27 @@ export interface ManagedTranslateRequest {
   prompt: string
   temperature?: number
   isBatch?: boolean
+}
+
+export interface ManagedTranslationTaskCreatedResponse {
+  taskId: string
+}
+
+export interface ManagedTranslationTaskExecutionOptions {
+  signal?: AbortSignal
+  onTaskCreated?: (taskId: string) => void
+  onChunk?: (snapshot: BackgroundTextStreamSnapshot) => void
+  clientRequestKey?: string
+  ownerTabId?: number
+}
+
+interface ManagedTranslationTaskStreamOptions {
+  signal?: AbortSignal
+  onChunk?: (snapshot: BackgroundTextStreamSnapshot) => void
+}
+
+interface ManagedTranslationTaskResult {
+  text: string
 }
 
 export class PlatformAPIError extends Error {
@@ -153,17 +175,82 @@ export async function pushPlatformSync(payload: {
   return await response.json() as { ok: true, syncedAt: string }
 }
 
-export async function translateWithManagedPlatform(payload: ManagedTranslateRequest): Promise<string> {
-  const response = await platformFetch("/v1/translate", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-    },
-    body: JSON.stringify(payload),
-  })
+const STREAM_THINKING_PENDING: ThinkingSnapshot = {
+  status: "thinking",
+  text: "",
+}
 
-  const data = await response.json() as { text: string }
-  return data.text
+const STREAM_THINKING_COMPLETE: ThinkingSnapshot = {
+  status: "complete",
+  text: "",
+}
+
+const STREAM_LINE_SPLIT_RE = /\r?\n/
+const LEADING_SPACE_RE = /^\s/
+
+function extractManagedTranslationText(payload: unknown): string {
+  if (typeof payload === "string") {
+    return payload
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return ""
+  }
+
+  const record = payload as {
+    text?: unknown
+    output?: unknown
+    result?: unknown
+  }
+
+  if (typeof record.text === "string") {
+    return record.text
+  }
+
+  if (typeof record.output === "string") {
+    return record.output
+  }
+
+  if (typeof record.result === "string") {
+    return record.result
+  }
+
+  return ""
+}
+
+function parseManagedTranslationEventData(payloadText: string): unknown {
+  try {
+    return JSON.parse(payloadText)
+  }
+  catch {
+    return payloadText
+  }
+}
+
+function buildManagedTranslationClientRequestKey(
+  payload: ManagedTranslateRequest,
+  ownerTabId?: number,
+  explicitClientRequestKey?: string,
+): string {
+  if (explicitClientRequestKey?.trim()) {
+    return explicitClientRequestKey.trim()
+  }
+
+  return [
+    payload.scene?.trim() || "translate",
+    ownerTabId ?? "shared",
+    Sha256Hex(JSON.stringify({
+      scene: payload.scene ?? null,
+      ownerTabId: ownerTabId ?? null,
+      text: payload.text,
+      sourceLanguage: payload.sourceLanguage ?? null,
+      targetLanguage: payload.targetLanguage ?? null,
+      systemPrompt: payload.systemPrompt,
+      prompt: payload.prompt,
+      temperature: payload.temperature ?? null,
+      isBatch: Boolean(payload.isBatch),
+    })),
+  ].join(":")
 }
 
 function extractStreamTextPart(payloadText: string): string {
@@ -189,17 +276,154 @@ function extractStreamTextPart(payloadText: string): string {
     .join("")
 }
 
-const STREAM_THINKING_PENDING: ThinkingSnapshot = {
-  status: "thinking",
-  text: "",
+async function createManagedTranslationTask(
+  payload: ManagedTranslateRequest,
+  options: {
+    clientRequestKey?: string
+    ownerTabId?: number
+  } = {},
+): Promise<ManagedTranslationTaskCreatedResponse> {
+  const response = await platformFetch("/v1/translate/tasks", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      ...payload,
+      clientRequestKey: buildManagedTranslationClientRequestKey(payload, options.ownerTabId, options.clientRequestKey),
+      ownerTabId: options.ownerTabId,
+    }),
+  })
+
+  const data = await response.json() as Partial<ManagedTranslationTaskCreatedResponse> & { id?: string }
+  const taskId = data.taskId?.trim() || data.id?.trim()
+  if (!taskId) {
+    throw new Error("Managed translation task id is missing")
+  }
+
+  return {
+    taskId,
+  }
 }
 
-const STREAM_THINKING_COMPLETE: ThinkingSnapshot = {
-  status: "complete",
-  text: "",
-}
+async function consumeManagedTranslationTaskStream(
+  taskId: string,
+  options: ManagedTranslationTaskStreamOptions = {},
+): Promise<ManagedTranslationTaskResult> {
+  const response = await platformFetch(`/v1/translate/tasks/${encodeURIComponent(taskId)}/stream`, {
+    method: "GET",
+    signal: options.signal,
+  })
 
-const STREAM_LINE_SPLIT_RE = /\r?\n/
+  if (!response.body) {
+    throw new Error("Managed translation stream is unavailable")
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+  let streamedText = ""
+  let completedText = ""
+  let currentEventName = "message"
+  let currentDataLines: string[] = []
+
+  const emitCurrentEvent = () => {
+    if (!currentDataLines.length) {
+      currentEventName = "message"
+      return
+    }
+
+    const payloadText = currentDataLines.join("\n").trim()
+    currentDataLines = []
+    const eventName = currentEventName
+    currentEventName = "message"
+
+    if (!payloadText) {
+      return
+    }
+
+    const eventPayload = parseManagedTranslationEventData(payloadText)
+
+    if (eventName === "completed") {
+      completedText = extractManagedTranslationText(eventPayload)
+      return
+    }
+
+    if (eventName === "failed") {
+      const errorMessage = extractManagedTranslationText(eventPayload) || "Managed translation failed"
+      throw new Error(errorMessage)
+    }
+
+    if (eventName === "canceled") {
+      const errorMessage = extractManagedTranslationText(eventPayload) || "Managed translation task was canceled"
+      throw new DOMException(errorMessage, "AbortError")
+    }
+
+    if (eventName !== "progress" && eventName !== "chunk" && eventName !== "delta") {
+      return
+    }
+
+    const chunkText = extractManagedTranslationText(eventPayload)
+    if (!chunkText) {
+      return
+    }
+
+    streamedText += chunkText
+    options.onChunk?.({
+      output: streamedText,
+      thinking: STREAM_THINKING_PENDING,
+    })
+  }
+
+  const processLine = (line: string) => {
+    if (!line.trim()) {
+      emitCurrentEvent()
+      return
+    }
+
+    if (line.startsWith("event:")) {
+      currentEventName = line.slice(6).trim() || "message"
+      return
+    }
+
+    if (line.startsWith("data:")) {
+      currentDataLines.push(line.slice(5).replace(LEADING_SPACE_RE, ""))
+    }
+  }
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split(STREAM_LINE_SPLIT_RE)
+      buffer = lines.pop() ?? ""
+
+      for (const line of lines) {
+        processLine(line)
+      }
+    }
+
+    buffer += decoder.decode()
+    if (buffer.trim()) {
+      for (const line of buffer.split(STREAM_LINE_SPLIT_RE)) {
+        processLine(line)
+      }
+    }
+
+    emitCurrentEvent()
+  }
+  finally {
+    reader.releaseLock()
+  }
+
+  return {
+    text: completedText || streamedText,
+  }
+}
 
 export async function streamManagedTranslation(
   payload: ManagedTranslateRequest,
@@ -275,6 +499,40 @@ export async function streamManagedTranslation(
     output: translatedText,
     thinking: STREAM_THINKING_COMPLETE,
   }
+}
+
+export async function translateWithManagedPlatform(
+  payload: ManagedTranslateRequest,
+  options: ManagedTranslationTaskExecutionOptions = {},
+): Promise<string> {
+  const createdTask = await createManagedTranslationTask(payload, {
+    clientRequestKey: options.clientRequestKey,
+    ownerTabId: options.ownerTabId,
+  })
+  options.onTaskCreated?.(createdTask.taskId)
+
+  const handleAbort = () => {
+    void cancelManagedTranslationTask(createdTask.taskId).catch(() => undefined)
+  }
+  options.signal?.addEventListener("abort", handleAbort, { once: true })
+
+  try {
+    const result = await consumeManagedTranslationTaskStream(createdTask.taskId, {
+      signal: options.signal,
+      onChunk: options.onChunk,
+    })
+
+    return result.text
+  }
+  finally {
+    options.signal?.removeEventListener("abort", handleAbort)
+  }
+}
+
+export async function cancelManagedTranslationTask(taskId: string): Promise<void> {
+  await platformFetch(`/v1/translate/tasks/${encodeURIComponent(taskId)}/cancel`, {
+    method: "POST",
+  })
 }
 
 // Vocabulary API

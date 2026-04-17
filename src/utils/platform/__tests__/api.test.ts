@@ -152,8 +152,8 @@ describe("platform api helpers", () => {
     expect((error as { statusCode: number }).statusCode).toBe(429)
   })
 
-  it("streams managed translation chunks through the platform endpoint", async () => {
-    const { streamManagedTranslation } = await import("../api")
+  it("creates a managed translation task and resolves the completed SSE result", async () => {
+    const { translateWithManagedPlatform } = await import("../api")
     getPlatformAuthSessionMock.mockResolvedValue({
       token: "platform-token",
       user: {
@@ -163,63 +163,55 @@ describe("platform api helpers", () => {
     })
 
     const encoder = new TextEncoder()
-    const fetchMock = vi.fn().mockResolvedValue(new Response(new ReadableStream({
-      start(controller) {
-        controller.enqueue(encoder.encode("data: {\"choices\":[{\"delta\":{\"content\":\"A\"}}]}\n\n"))
-        controller.enqueue(encoder.encode("data: {\"choices\":[{\"delta\":{\"content\":[{\"text\":\"B\"}]}}]}\n\n"))
-        controller.enqueue(encoder.encode("data: [DONE]\n\n"))
-        controller.close()
-      },
-    }), {
-      status: 200,
-      headers: {
-        "Content-Type": "text/event-stream",
-      },
-    }))
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        taskId: "task-123",
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }))
+      .mockResolvedValueOnce(new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode("event: progress\ndata: {\"text\":\"A\"}\n\n"))
+          controller.enqueue(encoder.encode("event: completed\ndata: {\"text\":\"AB\"}\n\n"))
+          controller.close()
+        },
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "text/event-stream",
+        },
+      }))
     vi.stubGlobal("fetch", fetchMock)
 
-    const snapshots: Array<{ output: string, thinkingStatus: string }> = []
-    const result = await streamManagedTranslation(
+    const createdTaskIds: string[] = []
+    const result = await translateWithManagedPlatform(
       {
+        scene: "page",
         text: "hello",
+        sourceLanguage: "en",
+        targetLanguage: "zh",
         systemPrompt: "system",
         prompt: "prompt",
       },
       {
-        onChunk(snapshot) {
-          snapshots.push({
-            output: snapshot.output,
-            thinkingStatus: snapshot.thinking.status,
-          })
+        onTaskCreated(taskId) {
+          createdTaskIds.push(taskId)
         },
       },
     )
 
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    const [url, init] = fetchMock.mock.calls[0]
-    expect(url).toBe("https://platform.example.com/v1/translate/stream")
-    expect(init).toMatchObject({
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "https://platform.example.com/v1/translate/tasks", expect.objectContaining({
       method: "POST",
-      body: JSON.stringify({
-        text: "hello",
-        systemPrompt: "system",
-        prompt: "prompt",
-      }),
-    })
-    expect(init.headers).toBeInstanceOf(Headers)
-    expect((init.headers as Headers).get("Authorization")).toBe("Bearer platform-token")
-    expect((init.headers as Headers).get("Content-Type")).toBe("application/json; charset=utf-8")
-
-    expect(snapshots).toEqual([
-      { output: "A", thinkingStatus: "thinking" },
-      { output: "AB", thinkingStatus: "thinking" },
-    ])
-    expect(result).toEqual({
-      output: "AB",
-      thinking: {
-        status: "complete",
-        text: "",
-      },
-    })
+      body: expect.stringContaining("\"clientRequestKey\""),
+    }))
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "https://platform.example.com/v1/translate/tasks/task-123/stream", expect.objectContaining({
+      method: "GET",
+    }))
+    expect(createdTaskIds).toEqual(["task-123"])
+    expect(result).toBe("AB")
   })
 })

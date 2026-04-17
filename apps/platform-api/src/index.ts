@@ -10,7 +10,14 @@ import { handleHealthCheck } from "./routes/health"
 import { handleMe } from "./routes/me"
 import { handlePaddleWebhook } from "./routes/paddle"
 import { handleSyncPull, handleSyncPush } from "./routes/sync"
-import { handleTranslateStream, handleTranslateText } from "./routes/translate"
+import {
+  handleManagedTranslationQueueMessage,
+  handleTranslateStream,
+  handleTranslateTaskCancel,
+  handleTranslateTasksCreate,
+  handleTranslateTaskStream,
+  handleTranslateText,
+} from "./routes/translate"
 import {
   handleVocabularyClear,
   handleVocabularyCreate,
@@ -19,11 +26,32 @@ import {
   handleVocabularyUpdate,
 } from "./routes/vocabulary"
 
+interface PlatformEnv extends Env {
+  USAGE_GATE_BACKGROUND_QUEUE?: Queue
+}
+
+interface UsageGateQueueMessage {
+  taskId: string
+  requestId: string
+  userId: string
+  scene: string | null
+  lane: "interactive" | "background"
+  ownerTabId: number | null
+}
+
+interface UsageGateQueueBatch {
+  messages: ReadonlyArray<{
+    body: UsageGateQueueMessage
+  }>
+}
+
 const PLATFORM_TOKEN_HEADER = "x-lexio-platform-token"
 const PLATFORM_TOKEN_EXPIRES_AT_HEADER = "x-lexio-platform-token-expires-at"
 const VOCABULARY_ITEM_PATH_REGEX = /^\/v1\/vocabulary\/([^/]+)$/
+const TRANSLATE_TASK_STREAM_PATH_REGEX = /^\/v1\/translate\/tasks\/([^/]+)\/stream$/
+const TRANSLATE_TASK_CANCEL_PATH_REGEX = /^\/v1\/translate\/tasks\/([^/]+)\/cancel$/
 
-async function withRefreshedExtensionSession(response: Response, session: SessionContext | null, env: Env): Promise<Response> {
+async function withRefreshedExtensionSession(response: Response, session: SessionContext | null, env: PlatformEnv): Promise<Response> {
   if (!session || session.tokenType !== "extension") {
     return response
   }
@@ -40,7 +68,13 @@ async function withRefreshedExtensionSession(response: Response, session: Sessio
   })
 }
 
-const handler: ExportedHandler<Env> = {
+async function handleUsageGateQueue(batch: UsageGateQueueBatch, env: PlatformEnv): Promise<void> {
+  for (const message of batch.messages) {
+    await handleManagedTranslationQueueMessage(env, message.body)
+  }
+}
+
+const handler: ExportedHandler<PlatformEnv> = {
   async fetch(request, env) {
     let session: SessionContext | null = null
 
@@ -109,6 +143,38 @@ const handler: ExportedHandler<Env> = {
         return withRefreshedExtensionSession(response, session, env)
       }
 
+      if (request.method === "POST" && url.pathname === "/v1/translate/stream") {
+        response = await handleTranslateStream(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      if (request.method === "POST" && url.pathname === "/v1/translate") {
+        response = await handleTranslateText(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      if (request.method === "POST" && url.pathname === "/v1/translate/tasks") {
+        response = await handleTranslateTasksCreate(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      const translateTaskStreamMatch = request.method === "GET" && url.pathname.match(TRANSLATE_TASK_STREAM_PATH_REGEX)
+      if (translateTaskStreamMatch) {
+        response = await handleTranslateTaskStream(request, env, session, translateTaskStreamMatch[1])
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      const translateTaskCancelMatch = request.method === "POST" && url.pathname.match(TRANSLATE_TASK_CANCEL_PATH_REGEX)
+      if (translateTaskCancelMatch) {
+        response = await handleTranslateTaskCancel(request, env, session, translateTaskCancelMatch[1])
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      if (request.method === "POST" && url.pathname === "/v1/openai/chat/completions") {
+        response = await handleOpenAiChatCompletions(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
       if (request.method === "POST" && url.pathname === "/v1/ai/generate") {
         response = await handleAiGenerate(request, env, session)
         return withRefreshedExtensionSession(response, session, env)
@@ -119,27 +185,16 @@ const handler: ExportedHandler<Env> = {
         return withRefreshedExtensionSession(response, session, env)
       }
 
-      if (request.method === "POST" && url.pathname === "/v1/translate") {
-        response = await handleTranslateText(request, env, session)
-        return withRefreshedExtensionSession(response, session, env)
-      }
-
-      if (request.method === "POST" && url.pathname === "/v1/translate/stream") {
-        response = await handleTranslateStream(request, env, session)
-        return withRefreshedExtensionSession(response, session, env)
-      }
-
-      if (request.method === "POST" && url.pathname === "/v1/openai/chat/completions") {
-        response = await handleOpenAiChatCompletions(request, env, session)
-        return withRefreshedExtensionSession(response, session, env)
-      }
-
       response = new Response("Not found", { status: 404 })
       return withRefreshedExtensionSession(response, session, env)
     }
     catch (error) {
       return withRefreshedExtensionSession(handleRouteError(error), session, env)
     }
+  },
+
+  async queue(batch, env) {
+    await handleUsageGateQueue(batch as unknown as UsageGateQueueBatch, env)
   },
 }
 

@@ -99,14 +99,14 @@ async function handleManagedChat(request: Request, env: Env, session: SessionCon
   }
 }
 
+export async function handleOpenAiChatCompletions(request: Request, env: Env, session: SessionContext) {
+  return handleManagedChat(request, env, session)
+}
+
 export async function handleAiGenerate(request: Request, env: Env, session: SessionContext) {
   return handleManagedChat(request, env, session, false)
 }
 
 export async function handleAiStream(request: Request, env: Env, session: SessionContext) {
   return handleManagedChat(request, env, session, true)
-}
-
-export async function handleOpenAiChatCompletions(request: Request, env: Env, session: SessionContext) {
-  return handleManagedChat(request, env, session)
 }

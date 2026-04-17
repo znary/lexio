@@ -4,13 +4,16 @@ import { DEFAULT_CONFIG } from "@/utils/constants/config"
 
 const onMessageMock = vi.fn()
 const ensureInitializedConfigMock = vi.fn()
-const executeTranslateMock = vi.fn()
+const translateWithManagedPlatformMock = vi.fn()
 const generateArticleSummaryMock = vi.fn()
 const putBatchRequestRecordMock = vi.fn()
 const articleSummaryCacheGetMock = vi.fn()
 const articleSummaryCachePutMock = vi.fn()
 const translationCacheGetMock = vi.fn()
 const translationCachePutMock = vi.fn()
+const getManagedTranslationTaskScopeMock = vi.fn()
+const getTranslatePromptMock = vi.fn()
+const getSubtitlesTranslatePromptMock = vi.fn()
 
 vi.mock("@/utils/message", () => ({
   onMessage: onMessageMock,
@@ -20,12 +23,20 @@ vi.mock("../config", () => ({
   ensureInitializedConfig: ensureInitializedConfigMock,
 }))
 
-vi.mock("@/utils/host/translate/execute-translate", () => ({
-  executeTranslate: executeTranslateMock,
+vi.mock("@/utils/platform/api", () => ({
+  translateWithManagedPlatform: translateWithManagedPlatformMock,
 }))
 
 vi.mock("@/utils/content/summary", () => ({
   generateArticleSummary: generateArticleSummaryMock,
+}))
+
+vi.mock("@/utils/prompts/translate", () => ({
+  getTranslatePrompt: getTranslatePromptMock,
+}))
+
+vi.mock("@/utils/prompts/subtitles", () => ({
+  getSubtitlesTranslatePrompt: getSubtitlesTranslatePromptMock,
 }))
 
 vi.mock("@/utils/batch-request-record", () => ({
@@ -43,6 +54,10 @@ vi.mock("@/utils/db/dexie/db", () => ({
       put: translationCachePutMock,
     },
   },
+}))
+
+vi.mock("../managed-translation-tasks", () => ({
+  getManagedTranslationTaskScope: getManagedTranslationTaskScopeMock,
 }))
 
 function getRegisteredMessageHandler(name: string) {
@@ -87,13 +102,33 @@ describe("translation queue helpers", () => {
       },
     })
 
-    executeTranslateMock.mockResolvedValue("translated subtitle")
+    getTranslatePromptMock.mockResolvedValue({
+      systemPrompt: "system prompt",
+      prompt: "page prompt",
+    })
+    getSubtitlesTranslatePromptMock.mockResolvedValue({
+      systemPrompt: "system prompt",
+      prompt: "subtitle prompt",
+    })
+    translateWithManagedPlatformMock.mockImplementation(async (_payload: unknown, options?: { onTaskCreated?: (taskId: string) => void }) => {
+      options?.onTaskCreated?.("task-123")
+      return "translated subtitle"
+    })
     generateArticleSummaryMock.mockResolvedValue("Generated summary")
     putBatchRequestRecordMock.mockResolvedValue(undefined)
     articleSummaryCacheGetMock.mockResolvedValue(undefined)
     articleSummaryCachePutMock.mockResolvedValue(undefined)
     translationCacheGetMock.mockResolvedValue(undefined)
     translationCachePutMock.mockResolvedValue(undefined)
+    getManagedTranslationTaskScopeMock.mockImplementation((tabId: number) => {
+      const controller = new AbortController()
+      return {
+        signal: controller.signal,
+        registerTaskId: vi.fn(),
+        completeTask: vi.fn(),
+        tabId,
+      }
+    })
   })
 
   it(
@@ -130,6 +165,11 @@ describe("translation queue helpers", () => {
 
     const handler = getRegisteredMessageHandler("enqueueSubtitlesTranslateRequest")
     const result = await handler({
+      sender: {
+        tab: {
+          id: 12,
+        },
+      },
       data: {
         text: "hello",
         langConfig: DEFAULT_CONFIG.language,
@@ -139,21 +179,18 @@ describe("translation queue helpers", () => {
         videoTitle: "Video title",
         summary: "Ready summary",
       },
-    })
+    } as any)
 
     expect(result).toBe("translated subtitle")
     expect(generateArticleSummaryMock).not.toHaveBeenCalled()
-    expect(executeTranslateMock).toHaveBeenCalledWith(
-      "hello",
-      DEFAULT_CONFIG.language,
-      llmProvider,
-      expect.any(Function),
+    expect(translateWithManagedPlatformMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        isBatch: true,
-        context: {
-          videoTitle: "Video title",
-          videoSummary: "Ready summary",
-        },
+        text: "hello",
+        scene: "subtitles",
+      }),
+      expect.objectContaining({
+        signal: expect.any(Object),
+        onTaskCreated: expect.any(Function),
       }),
     )
   })
@@ -164,6 +201,11 @@ describe("translation queue helpers", () => {
 
     const handler = getRegisteredMessageHandler("enqueueTranslateRequest")
     const result = await handler({
+      sender: {
+        tab: {
+          id: 12,
+        },
+      },
       data: {
         text: "hello",
         langConfig: DEFAULT_CONFIG.language,
@@ -174,21 +216,19 @@ describe("translation queue helpers", () => {
         webContent: "Page body",
         webSummary: "Ready summary",
       },
-    })
+    } as any)
 
     expect(result).toBe("translated subtitle")
     expect(generateArticleSummaryMock).not.toHaveBeenCalled()
-    expect(executeTranslateMock).toHaveBeenCalledWith(
-      "hello",
-      DEFAULT_CONFIG.language,
-      llmProvider,
-      expect.any(Function),
+    expect(translateWithManagedPlatformMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        context: {
-          webTitle: "Page title",
-          webContent: "Page body",
-          webSummary: "Ready summary",
-        },
+        text: "hello",
+        scene: "page",
+        isBatch: true,
+      }),
+      expect.objectContaining({
+        signal: expect.any(Object),
+        onTaskCreated: expect.any(Function),
       }),
     )
   })
@@ -197,6 +237,81 @@ describe("translation queue helpers", () => {
     const { MANAGED_TRANSLATION_MAX_CONCURRENCY } = await import("../translation-queues")
 
     expect(MANAGED_TRANSLATION_MAX_CONCURRENCY).toBe(10)
+  })
+
+  it("keeps same-text translations separate across tabs", async () => {
+    const deeplProvider: ProviderConfig = {
+      id: "deepl",
+      name: "DeepL",
+      provider: "deepl",
+      enabled: true,
+      apiKey: "key",
+    }
+
+    ensureInitializedConfigMock.mockResolvedValueOnce({
+      ...DEFAULT_CONFIG,
+      translate: {
+        ...DEFAULT_CONFIG.translate,
+        enableAIContentAware: true,
+      },
+      videoSubtitles: {
+        ...DEFAULT_CONFIG.videoSubtitles,
+        providerId: deeplProvider.id,
+        requestQueueConfig: {
+          rate: 10,
+          capacity: 10,
+        },
+        batchQueueConfig: {
+          maxCharactersPerBatch: 1000,
+          maxItemsPerBatch: 1,
+        },
+      },
+    })
+
+    const { setUpWebPageTranslationQueue } = await import("../translation-queues")
+    await setUpWebPageTranslationQueue()
+
+    const handler = getRegisteredMessageHandler("enqueueTranslateRequest")
+    const firstRequest = handler({
+      sender: {
+        tab: {
+          id: 101,
+        },
+      },
+      data: {
+        text: "hello",
+        langConfig: DEFAULT_CONFIG.language,
+        providerConfig: deeplProvider,
+        scheduleAt: Date.now(),
+        hash: "shared-hash",
+        webTitle: "Page title",
+        webContent: "Page body",
+        webSummary: "Ready summary",
+      },
+    } as any)
+    const secondRequest = handler({
+      sender: {
+        tab: {
+          id: 202,
+        },
+      },
+      data: {
+        text: "hello",
+        langConfig: DEFAULT_CONFIG.language,
+        providerConfig: deeplProvider,
+        scheduleAt: Date.now(),
+        hash: "shared-hash",
+        webTitle: "Page title",
+        webContent: "Page body",
+        webSummary: "Ready summary",
+      },
+    } as any)
+
+    await expect(Promise.all([firstRequest, secondRequest])).resolves.toEqual([
+      "translated subtitle",
+      "translated subtitle",
+    ])
+    expect(translateWithManagedPlatformMock).toHaveBeenCalledTimes(2)
   })
 
   it("exposes webpage summary generation as a separate background handler", async () => {

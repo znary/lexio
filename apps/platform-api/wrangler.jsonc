@@ -20,6 +20,21 @@
       }
     ]
   },
+  "queues": {
+    "producers": [
+      {
+        "binding": "USAGE_GATE_BACKGROUND_QUEUE",
+        "queue": "usage-gate-background"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "usage-gate-background",
+        "max_batch_size": 100,
+        "max_batch_timeout": 30
+      }
+    ]
+  },
   "migrations": [
     {
       "new_sqlite_classes": ["UsageGate"],
@@ -34,6 +49,21 @@
           {
             "class_name": "UsageGate",
             "name": "USAGE_GATE"
+          }
+        ]
+      },
+      "queues": {
+        "producers": [
+          {
+            "binding": "USAGE_GATE_BACKGROUND_QUEUE",
+            "queue": "usage-gate-background"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "usage-gate-background",
+            "max_batch_size": 100,
+            "max_batch_timeout": 30
           }
         ]
       },

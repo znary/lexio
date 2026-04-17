@@ -1,7 +1,9 @@
 import type { SessionContext } from "./auth"
 import type { Entitlements, Env, Plan } from "./env"
+import type { TranslationTaskLane, TranslationTaskStatus } from "./translation-task-log"
 import { getClerkClient } from "./auth"
 import { buildEntitlements } from "./env"
+import { HttpError } from "./http"
 
 export interface UserRecord {
   id: string
@@ -16,6 +18,73 @@ export interface SyncPayload {
   vocabularyItems?: Record<string, unknown>[]
 }
 
+export interface TranslationTaskRecord {
+  id: string
+  userId: string
+  clientRequestKey: string
+  scene: string | null
+  lane: TranslationTaskLane
+  mode: "generate" | "stream"
+  ownerTabId: number | null
+  text: string
+  sourceLanguage: string | null
+  targetLanguage: string | null
+  systemPrompt: string
+  prompt: string
+  temperature: number | null
+  isBatch: boolean
+  status: TranslationTaskStatus
+  resultText: string | null
+  errorCode: string | null
+  errorMessage: string | null
+  createdAt: string
+  updatedAt: string
+  startedAt: string | null
+  finishedAt: string | null
+  canceledAt: string | null
+}
+
+export interface TranslationTaskInput {
+  clientRequestKey: string
+  scene?: string
+  lane?: TranslationTaskLane
+  mode?: "generate" | "stream"
+  ownerTabId?: number | null
+  text: string
+  sourceLanguage?: string
+  targetLanguage?: string
+  systemPrompt: string
+  prompt: string
+  temperature?: number
+  isBatch?: boolean
+}
+
+interface TranslationTaskRow {
+  id: string
+  user_id: string
+  client_request_key: string
+  scene: string | null
+  lane: TranslationTaskLane
+  mode: "generate" | "stream"
+  owner_tab_id: number | null
+  text: string
+  source_language: string | null
+  target_language: string | null
+  system_prompt: string
+  prompt: string
+  temperature: number | null
+  is_batch: number
+  status: TranslationTaskStatus
+  result_text: string | null
+  error_code: string | null
+  error_message: string | null
+  created_at: string
+  updated_at: string
+  started_at: string | null
+  finished_at: string | null
+  canceled_at: string | null
+}
+
 const UUID_DASH_PATTERN = /-/g
 
 function createId(prefix: string): string {
@@ -28,6 +97,316 @@ function nowIso(): string {
 
 function toBooleanInteger(value: boolean): number {
   return value ? 1 : 0
+}
+
+function mapTranslationTaskRow(row: TranslationTaskRow): TranslationTaskRecord {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    clientRequestKey: row.client_request_key,
+    scene: row.scene,
+    lane: row.lane,
+    mode: row.mode,
+    ownerTabId: row.owner_tab_id,
+    text: row.text,
+    sourceLanguage: row.source_language,
+    targetLanguage: row.target_language,
+    systemPrompt: row.system_prompt,
+    prompt: row.prompt,
+    temperature: row.temperature,
+    isBatch: row.is_batch === 1,
+    status: row.status,
+    resultText: row.result_text,
+    errorCode: row.error_code,
+    errorMessage: row.error_message,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    startedAt: row.started_at,
+    finishedAt: row.finished_at,
+    canceledAt: row.canceled_at,
+  }
+}
+
+async function getTranslationTaskRowById(env: Env, taskId: string, userId?: string): Promise<TranslationTaskRow | null> {
+  if (userId) {
+    return await env.DB.prepare(`
+    SELECT *
+    FROM translation_tasks
+    WHERE id = ?1 AND user_id = ?2
+    LIMIT 1
+  `).bind(taskId, userId).first<TranslationTaskRow>()
+  }
+
+  return await env.DB.prepare(`
+    SELECT *
+    FROM translation_tasks
+    WHERE id = ?1
+    LIMIT 1
+  `).bind(taskId).first<TranslationTaskRow>()
+}
+
+async function getTranslationTaskRowByClientRequestKey(env: Env, clientRequestKey: string): Promise<TranslationTaskRow | null> {
+  return await env.DB.prepare(`
+    SELECT *
+    FROM translation_tasks
+    WHERE client_request_key = ?1
+    LIMIT 1
+  `).bind(clientRequestKey).first<TranslationTaskRow>()
+}
+
+export async function getTranslationTaskForWorker(
+  env: Env,
+  taskId: string,
+): Promise<TranslationTaskRecord | null> {
+  const row = await getTranslationTaskRowById(env, taskId)
+  return row ? mapTranslationTaskRow(row) : null
+}
+
+export async function getTranslationTaskById(
+  env: Env,
+  userId: string,
+  taskId: string,
+): Promise<TranslationTaskRecord | null> {
+  const row = await getTranslationTaskRowById(env, taskId, userId)
+  return row ? mapTranslationTaskRow(row) : null
+}
+
+export async function getTranslationTaskByClientRequestKey(
+  env: Env,
+  userId: string,
+  clientRequestKey: string,
+): Promise<TranslationTaskRecord | null> {
+  const row = await getTranslationTaskRowByClientRequestKey(env, clientRequestKey)
+  if (!row) {
+    return null
+  }
+
+  if (row.user_id !== userId) {
+    throw new HttpError(409, "Client request key already exists")
+  }
+
+  return mapTranslationTaskRow(row)
+}
+
+export async function createTranslationTask(
+  env: Env,
+  userId: string,
+  input: TranslationTaskInput,
+): Promise<{ created: boolean, task: TranslationTaskRecord }> {
+  const existing = await getTranslationTaskRowByClientRequestKey(env, input.clientRequestKey)
+  if (existing) {
+    if (existing.user_id !== userId) {
+      throw new HttpError(409, "Client request key already exists")
+    }
+
+    return {
+      created: false,
+      task: mapTranslationTaskRow(existing),
+    }
+  }
+
+  const id = createId("trt")
+  const timestamp = nowIso()
+  await env.DB.prepare(`
+    INSERT INTO translation_tasks (
+      id,
+      user_id,
+      client_request_key,
+      scene,
+      lane,
+      mode,
+      owner_tab_id,
+      text,
+      source_language,
+      target_language,
+      system_prompt,
+      prompt,
+      temperature,
+      is_batch,
+      status,
+      result_text,
+      error_code,
+      error_message,
+      created_at,
+      updated_at,
+      started_at,
+      finished_at,
+      canceled_at
+    )
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 'queued', NULL, NULL, NULL, ?15, ?15, NULL, NULL, NULL)
+  `).bind(
+    id,
+    userId,
+    input.clientRequestKey,
+    input.scene ?? null,
+    input.lane ?? "background",
+    input.mode ?? "generate",
+    input.ownerTabId ?? null,
+    input.text,
+    input.sourceLanguage ?? null,
+    input.targetLanguage ?? null,
+    input.systemPrompt,
+    input.prompt,
+    input.temperature ?? null,
+    toBooleanInteger(Boolean(input.isBatch)),
+    timestamp,
+  ).run()
+
+  const task = await getTranslationTaskRowById(env, id, userId)
+  if (!task) {
+    throw new Error("Failed to load translation task after insert")
+  }
+
+  return {
+    created: true,
+    task: mapTranslationTaskRow(task),
+  }
+}
+
+export async function markTranslationTaskDispatched(
+  env: Env,
+  taskId: string,
+): Promise<TranslationTaskRecord | null> {
+  const current = await getTranslationTaskRowById(env, taskId)
+  if (!current) {
+    return null
+  }
+
+  if (current.status !== "queued") {
+    return mapTranslationTaskRow(current)
+  }
+
+  const timestamp = nowIso()
+  await env.DB.prepare(`
+    UPDATE translation_tasks
+    SET status = 'dispatched',
+        updated_at = ?2
+    WHERE id = ?1
+  `).bind(taskId, timestamp).run()
+
+  const next = await getTranslationTaskRowById(env, taskId)
+  return next ? mapTranslationTaskRow(next) : null
+}
+
+export async function markTranslationTaskRunning(
+  env: Env,
+  userId: string,
+  taskId: string,
+): Promise<TranslationTaskRecord | null> {
+  const current = await getTranslationTaskRowById(env, taskId, userId)
+  if (!current) {
+    return null
+  }
+
+  if (current.status !== "queued" && current.status !== "dispatched") {
+    return mapTranslationTaskRow(current)
+  }
+
+  const timestamp = nowIso()
+  await env.DB.prepare(`
+    UPDATE translation_tasks
+    SET status = 'running',
+        started_at = COALESCE(started_at, ?3),
+        updated_at = ?3
+    WHERE id = ?1 AND user_id = ?2
+  `).bind(taskId, userId, timestamp).run()
+
+  const next = await getTranslationTaskRowById(env, taskId, userId)
+  return next ? mapTranslationTaskRow(next) : null
+}
+
+export async function completeTranslationTask(
+  env: Env,
+  userId: string,
+  taskId: string,
+  resultText: string,
+): Promise<TranslationTaskRecord | null> {
+  const current = await getTranslationTaskRowById(env, taskId, userId)
+  if (!current) {
+    return null
+  }
+
+  if (current.status === "canceled") {
+    return mapTranslationTaskRow(current)
+  }
+
+  const timestamp = nowIso()
+  await env.DB.prepare(`
+    UPDATE translation_tasks
+    SET status = 'completed',
+        result_text = ?3,
+        error_code = NULL,
+        error_message = NULL,
+        finished_at = ?4,
+        updated_at = ?4
+    WHERE id = ?1 AND user_id = ?2
+  `).bind(taskId, userId, resultText, timestamp).run()
+
+  const next = await getTranslationTaskRowById(env, taskId, userId)
+  return next ? mapTranslationTaskRow(next) : null
+}
+
+export async function failTranslationTask(
+  env: Env,
+  userId: string,
+  taskId: string,
+  errorMessage: string,
+  errorCode: string | null = null,
+): Promise<TranslationTaskRecord | null> {
+  const current = await getTranslationTaskRowById(env, taskId, userId)
+  if (!current) {
+    return null
+  }
+
+  if (current.status === "canceled") {
+    return mapTranslationTaskRow(current)
+  }
+
+  const timestamp = nowIso()
+  await env.DB.prepare(`
+    UPDATE translation_tasks
+    SET status = 'failed',
+        error_code = ?3,
+        error_message = ?4,
+        finished_at = ?5,
+        updated_at = ?5
+    WHERE id = ?1 AND user_id = ?2
+  `).bind(taskId, userId, errorCode, errorMessage, timestamp).run()
+
+  const next = await getTranslationTaskRowById(env, taskId, userId)
+  return next ? mapTranslationTaskRow(next) : null
+}
+
+export async function cancelTranslationTask(
+  env: Env,
+  userId: string,
+  taskId: string,
+  errorCode: string | null = "canceled",
+  errorMessage: string | null = "Translation task was canceled",
+): Promise<TranslationTaskRecord | null> {
+  const current = await getTranslationTaskRowById(env, taskId, userId)
+  if (!current) {
+    return null
+  }
+
+  if (current.status === "completed") {
+    return mapTranslationTaskRow(current)
+  }
+
+  const timestamp = nowIso()
+  await env.DB.prepare(`
+    UPDATE translation_tasks
+    SET status = 'canceled',
+        error_code = COALESCE(error_code, ?4),
+        error_message = COALESCE(error_message, ?5),
+        canceled_at = COALESCE(canceled_at, ?3),
+        finished_at = COALESCE(finished_at, ?3),
+        updated_at = ?3
+    WHERE id = ?1 AND user_id = ?2
+  `).bind(taskId, userId, timestamp, errorCode, errorMessage).run()
+
+  const next = await getTranslationTaskRowById(env, taskId, userId)
+  return next ? mapTranslationTaskRow(next) : null
 }
 
 export async function syncUserFromClerkId(env: Env, clerkUserId: string): Promise<UserRecord> {

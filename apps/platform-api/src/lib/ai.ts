@@ -32,6 +32,7 @@ export async function forwardChatCompletions(
   env: Env,
   body: Record<string, unknown>,
   plan: Plan,
+  signal?: AbortSignal,
 ): Promise<Response> {
   const apiKey = resolveArkApiKey(env)
   if (!apiKey) {
@@ -61,6 +62,7 @@ export async function forwardChatCompletions(
       "Authorization": `Bearer ${apiKey}`,
     },
     body: upstreamBody,
+    signal,
   })
 
   if (!response.ok) {
