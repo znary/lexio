@@ -18,5 +18,8 @@ export interface UsageGateLogEntry {
 }
 
 export function logUsageGateEvent(entry: UsageGateLogEntry): void {
-  console.warn(entry)
+  console.warn({
+    namespace: "usage-gate",
+    ...entry,
+  })
 }

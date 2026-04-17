@@ -325,6 +325,32 @@ describe("requestQueue – timeout handling", () => {
     await expect(promise).rejects.toThrow("timed out after 2000ms")
   })
 
+  it("aborts the running task when the timeout fires", async () => {
+    vi.useFakeTimers()
+    const q = new RequestQueue({
+      ...baseConfig,
+      timeoutMs: 2000,
+    })
+
+    let aborted = false
+    const abortAwareThunk = (signal: AbortSignal) => new Promise((resolve, reject) => {
+      signal.addEventListener("abort", () => {
+        aborted = true
+        reject(signal.reason ?? new DOMException("Aborted", "AbortError"))
+      }, { once: true })
+
+      setTimeout(resolve, 3000, "too-slow")
+    })
+
+    const promise = q.enqueue(abortAwareThunk, Date.now(), "abort-on-timeout")
+    promise.catch(() => {})
+
+    await vi.advanceTimersByTimeAsync(2000)
+
+    expect(aborted).toBe(true)
+    await expect(promise).rejects.toThrow("timed out after 2000ms")
+  })
+
   it("resolves task when it completes before timeout", async () => {
     vi.useFakeTimers()
     const q = new RequestQueue({

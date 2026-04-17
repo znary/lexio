@@ -56,5 +56,8 @@ docs/specs/*
 /repos
 
 scripts/output/
+tmp/translation-observability/
 
 reference/
+
+!docs/specs/2026-04-17-translation-observability.md

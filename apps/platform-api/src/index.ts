@@ -69,9 +69,9 @@ async function withRefreshedExtensionSession(response: Response, session: Sessio
 }
 
 async function handleUsageGateQueue(batch: UsageGateQueueBatch, env: PlatformEnv): Promise<void> {
-  for (const message of batch.messages) {
+  await Promise.all(batch.messages.map(async (message) => {
     await handleManagedTranslationQueueMessage(env, message.body)
-  }
+  }))
 }
 
 const handler: ExportedHandler<PlatformEnv> = {

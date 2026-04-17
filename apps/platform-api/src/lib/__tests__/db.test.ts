@@ -211,3 +211,50 @@ describe("translation task helpers", () => {
     expect(prepareMock.mock.calls.some(([sql]) => String(sql).includes("UPDATE translation_tasks"))).toBe(true)
   })
 })
+
+describe("ensureEntitlements", () => {
+  it("refreshes stale plan limits even when the plan name has not changed", async () => {
+    const runMock = vi.fn().mockResolvedValue(undefined)
+    const prepareMock = vi.fn((sql: string) => {
+      if (sql.includes("FROM entitlements")) {
+        return {
+          sql,
+          bind: () => ({
+            first: async () => ({
+              plan: "free",
+              monthly_request_limit: 500,
+              monthly_token_limit: 500000,
+              concurrent_request_limit: 2,
+            }),
+          }),
+        }
+      }
+
+      return {
+        sql,
+        bind: (...args: unknown[]) => ({
+          sql,
+          args,
+          run: runMock,
+        }),
+      }
+    })
+
+    const env = {
+      DB: {
+        prepare: prepareMock,
+      },
+    } as unknown as Env
+
+    const { ensureEntitlements } = await import("../db")
+    const result = await ensureEntitlements(env, "user_1", "free")
+
+    expect(result).toMatchObject({
+      plan: "free",
+      monthlyRequestLimit: 500,
+      monthlyTokenLimit: 500000,
+      concurrentRequestLimit: 10,
+    })
+    expect(runMock).toHaveBeenCalledTimes(1)
+  })
+})

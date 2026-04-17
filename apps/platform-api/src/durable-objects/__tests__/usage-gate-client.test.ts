@@ -166,4 +166,41 @@ describe("usage-gate queue consumer", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
+
+  it("does not fail the whole queue batch when a task is still queued", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input))
+      expect(url.pathname).toBe("/tasks/assign")
+      return Response.json({
+        taskId: "task-queued",
+        requestId: "request-queued",
+        status: "queued",
+        lane: "background",
+        queuePosition: 3,
+        queueWaitMs: null,
+        leaseId: null,
+        requestCount: 1,
+      })
+    })
+
+    const env = createEnv(fetchMock) as any
+
+    await expect(handler.queue?.({
+      queue: "usage-gate-background",
+      messages: [
+        {
+          body: {
+            taskId: "task-queued",
+            requestId: "request-queued",
+            userId: "user_123",
+            scene: "translation-hub",
+            lane: "background",
+            ownerTabId: 12,
+          },
+        },
+      ],
+    } as never, env, {} as never)).resolves.toBeUndefined()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
 })

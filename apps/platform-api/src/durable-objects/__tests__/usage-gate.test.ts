@@ -227,6 +227,37 @@ describe("usageGate scheduler", () => {
     })
   })
 
+  it("falls back to queued when a background task cannot be enqueued", async () => {
+    const { ctx, env, queue, readState } = createContext()
+    queue.send.mockRejectedValueOnce(new Error("queue unavailable"))
+    vi.spyOn(console, "error").mockImplementation(() => undefined)
+    const gate = new UsageGate(ctx, env)
+
+    const response = await gate.fetch(createTaskRequest("task-enqueue-failed", "background"))
+    const payload = await response.json() as {
+      taskId: string
+      status: UsageTaskStatus
+      lane: UsageLane
+      queuePosition: number | null
+      leaseId: string | null
+    }
+
+    expect(response.status).toBe(200)
+    expect(payload).toMatchObject({
+      taskId: "task-enqueue-failed",
+      status: "queued",
+      lane: "background",
+      queuePosition: 1,
+      leaseId: null,
+    })
+    expect(readState()).toMatchObject({
+      activeCount: 0,
+      interactiveActiveCount: 0,
+      backgroundActiveCount: 0,
+      queueOrder: ["task-enqueue-failed"],
+    })
+  })
+
   it("does not let a background task take an interactive slot", async () => {
     const now = Date.now()
     const { ctx, env, queue, readState } = createContext({
@@ -437,6 +468,52 @@ describe("usageGate scheduler", () => {
       lane: "interactive",
       status: "running",
       queueWaitMs: 500,
+    })
+  })
+
+  it("wakes the next queued background task when a background slot is released", async () => {
+    const now = Date.now()
+    const { ctx, env, queue, readState } = createContext({
+      monthKey: "2026-04",
+      requestCount: 2,
+      activeCount: 1,
+      interactiveActiveCount: 0,
+      backgroundActiveCount: 1,
+      queueOrder: ["queued_background"],
+      tasks: {
+        running_background: createTask("running_background", "background", "running", now - 1000),
+        queued_background: {
+          ...createTask("queued_background", "background", "queued", now - 500),
+          leaseId: null,
+        },
+      },
+      leases: {
+        "running_background-lease": now - 1000,
+      },
+    })
+    const gate = new UsageGate(ctx, env)
+
+    const response = await gate.fetch(createRequest("/tasks/release", {
+      leaseId: "running_background-lease",
+      releaseReason: "completed",
+    }))
+    const payload = await response.json() as { status: UsageTaskStatus }
+
+    expect(response.status).toBe(200)
+    expect(payload.status).toBe("released")
+    expect(queue.send).toHaveBeenCalledTimes(1)
+    expect(queue.send).toHaveBeenCalledWith(expect.objectContaining({
+      taskId: "queued_background",
+      requestId: "queued_background-request",
+      userId: "user_123",
+      lane: "background",
+      ownerTabId: 12,
+    }))
+    expect(readState()).toMatchObject({
+      activeCount: 0,
+      interactiveActiveCount: 0,
+      backgroundActiveCount: 0,
+      queueOrder: ["queued_background"],
     })
   })
 

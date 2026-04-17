@@ -24,6 +24,7 @@ import { ensureInitializedConfig } from "./config"
 import { getManagedTranslationTaskScope } from "./managed-translation-tasks"
 
 export const MANAGED_TRANSLATION_MAX_CONCURRENCY = 10
+export const MANAGED_TRANSLATION_QUEUE_TIMEOUT_MS = 3 * 60_000
 
 export function parseBatchResult(result: string): string[] {
   return result.split(BATCH_SEPARATOR).map(t => t.trim())
@@ -37,6 +38,7 @@ export async function executeBatchTranslation<TContext>(
   dataList: TranslateBatchData<TContext>[],
   promptResolver: PromptResolver<TContext>,
   scene?: string,
+  signal?: AbortSignal,
 ): Promise<string[]> {
   const { langConfig, providerConfig, context, tabId } = dataList[0]
   const texts = dataList.map(d => d.text)
@@ -46,6 +48,7 @@ export async function executeBatchTranslation<TContext>(
     isBatch: true,
     context,
     scene,
+    signal,
     tabId,
   })
 
@@ -189,6 +192,67 @@ function isAbortError(error: unknown): boolean {
     || (error instanceof Error && error.name === "AbortError")
 }
 
+export function isManagedTranslationQueueTimeout(signal: AbortSignal | undefined): boolean {
+  if (!signal?.aborted) {
+    return false
+  }
+
+  const reason = signal.reason
+  return reason instanceof Error && reason.message.includes("timed out")
+}
+
+function resolveAbortError(signal: AbortSignal | undefined, error: unknown): unknown {
+  if (isManagedTranslationQueueTimeout(signal) && signal?.reason instanceof Error) {
+    return signal.reason
+  }
+
+  return error
+}
+
+function combineAbortSignals(...signals: Array<AbortSignal | undefined>): {
+  signal: AbortSignal | undefined
+  cleanup: () => void
+} {
+  const activeSignals = signals.filter((signal): signal is AbortSignal => Boolean(signal))
+  if (activeSignals.length === 0) {
+    return {
+      signal: undefined,
+      cleanup: () => {},
+    }
+  }
+
+  if (activeSignals.length === 1) {
+    return {
+      signal: activeSignals[0],
+      cleanup: () => {},
+    }
+  }
+
+  const controller = new AbortController()
+  const cleanupList: Array<() => void> = []
+
+  for (const signal of activeSignals) {
+    if (signal.aborted) {
+      controller.abort(signal.reason)
+      continue
+    }
+
+    const onAbort = () => {
+      if (!controller.signal.aborted) {
+        controller.abort(signal.reason)
+      }
+    }
+
+    signal.addEventListener("abort", onAbort, { once: true })
+    cleanupList.push(() => signal.removeEventListener("abort", onAbort))
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup: () => cleanupList.forEach(cleanup => cleanup()),
+  }
+}
+
 async function executeManagedTranslation<TContext>(
   text: string,
   langConfig: Config["language"],
@@ -198,6 +262,7 @@ async function executeManagedTranslation<TContext>(
     isBatch?: boolean
     context?: TContext
     scene?: string
+    signal?: AbortSignal
     tabId?: number
   },
 ): Promise<string> {
@@ -220,6 +285,7 @@ async function executeManagedTranslation<TContext>(
   const tabScope = typeof options?.tabId === "number"
     ? getManagedTranslationTaskScope(options.tabId)
     : null
+  const managedSignal = combineAbortSignals(tabScope?.signal, options?.signal)
 
   let taskId: string | null = null
 
@@ -234,7 +300,7 @@ async function executeManagedTranslation<TContext>(
       temperature: isLLMProviderConfig(providerConfig) ? providerConfig.temperature : undefined,
       isBatch: options?.isBatch,
     }, {
-      signal: tabScope?.signal,
+      signal: managedSignal.signal,
       clientRequestKey: buildManagedTranslationQueueHash(
         Sha256Hex(
           options?.scene ?? "translate",
@@ -272,11 +338,15 @@ async function executeManagedTranslation<TContext>(
         action: "execute",
         event: "aborted",
       })
+      if (isManagedTranslationQueueTimeout(managedSignal.signal)) {
+        throw resolveAbortError(managedSignal.signal, error)
+      }
       return ""
     }
     throw error
   }
   finally {
+    managedSignal.cleanup()
     if (taskId) {
       tabScope?.completeTask(taskId)
     }
@@ -294,7 +364,7 @@ async function createTranslationQueues<TContext>(config: TranslationQueueSetupCo
   const requestQueue = new RequestQueue({
     rate,
     capacity,
-    timeoutMs: 20_000,
+    timeoutMs: MANAGED_TRANSLATION_QUEUE_TIMEOUT_MS,
     maxRetries: 2,
     baseRetryDelayMs: 1_000,
     // Keep the client queue at the free-tier platform limit so requests can flow
@@ -320,13 +390,16 @@ async function createTranslationQueues<TContext>(config: TranslationQueueSetupCo
 
       const batchScene = dataList[0]?.scene ?? scene
 
-      const batchThunk = async (): Promise<string[]> => {
+      const batchThunk = async (signal: AbortSignal): Promise<string[]> => {
         await putBatchRequestRecord({ originalRequestCount: dataList.length, providerConfig })
         try {
-          return await executeBatchTranslation(dataList, promptResolver, batchScene)
+          return await executeBatchTranslation(dataList, promptResolver, batchScene, signal)
         }
         catch (error) {
           if (isAbortError(error)) {
+            if (isManagedTranslationQueueTimeout(signal)) {
+              throw resolveAbortError(signal, error)
+            }
             return dataList.map(() => "")
           }
           throw error
@@ -337,17 +410,21 @@ async function createTranslationQueues<TContext>(config: TranslationQueueSetupCo
     },
     executeIndividual: async (data) => {
       const { text, langConfig, providerConfig, hash, scheduleAt, context } = data
-      const thunk = async () => {
+      const thunk = async (signal: AbortSignal) => {
         await putBatchRequestRecord({ originalRequestCount: 1, providerConfig })
         try {
           return await executeManagedTranslation(text, langConfig, providerConfig, promptResolver, {
             context,
             scene: data.scene ?? scene,
+            signal,
             tabId: data.tabId,
           })
         }
         catch (error) {
           if (isAbortError(error)) {
+            if (isManagedTranslationQueueTimeout(signal)) {
+              throw resolveAbortError(signal, error)
+            }
             return ""
           }
           throw error
@@ -404,8 +481,9 @@ export async function setUpWebPageTranslationQueue() {
       result = await batchQueue.enqueue(data)
     }
     else {
-      const thunk = () => executeManagedTranslation(text, langConfig, providerConfig, getTranslatePrompt, {
+      const thunk = (signal: AbortSignal) => executeManagedTranslation(text, langConfig, providerConfig, getTranslatePrompt, {
         scene: scene ?? "page",
+        signal,
         tabId,
       })
       result = await requestQueue.enqueue(thunk, scheduleAt, queueHash)
@@ -481,8 +559,9 @@ export async function setUpSubtitlesTranslationQueue() {
       result = await batchQueue.enqueue(data)
     }
     else {
-      const thunk = () => executeManagedTranslation(text, langConfig, providerConfig, getSubtitlesTranslatePrompt, {
+      const thunk = (signal: AbortSignal) => executeManagedTranslation(text, langConfig, providerConfig, getSubtitlesTranslatePrompt, {
         scene: "subtitles",
+        signal,
         tabId,
       })
       result = await requestQueue.enqueue(thunk, scheduleAt, queueHash)

@@ -5,7 +5,7 @@ import { BinaryHeapPQ } from "./priority-queue"
 
 export interface RequestTask {
   id: string
-  thunk: () => Promise<any>
+  thunk: (signal: AbortSignal) => Promise<any>
   promise: Promise<any>
   resolve: (value: any) => void
   reject: (error: any) => void
@@ -42,7 +42,7 @@ export class RequestQueue {
     this.waitingQueue = new BinaryHeapPQ<RequestTask & { hash: string }>()
   }
 
-  enqueue<T>(thunk: () => Promise<T>, scheduleAt: number, hash: string): Promise<T> {
+  enqueue<T>(thunk: (signal: AbortSignal) => Promise<T>, scheduleAt: number, hash: string): Promise<T> {
     const duplicateTask = this.duplicateTask(hash)
     if (duplicateTask) {
       // console.info(`🔄 Found duplicate task for hash: ${hash}, returning existing promise`)
@@ -139,19 +139,22 @@ export class RequestQueue {
     // console.info(`🏃 Starting execution of task ${task.id} (attempt ${task.retryCount + 1}) at ${Date.now()}`)
 
     let timeoutId: NodeJS.Timeout | null = null
+    const abortController = new AbortController()
 
     try {
       // Create a timeout promise
       const timeoutPromise = new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
           // console.info(`⏰ Task ${task.id} timed out after ${this.options.timeoutMs}ms`)
-          reject(new Error(`Task ${task.id} timed out after ${this.options.timeoutMs}ms`))
+          const timeoutError = new Error(`Task ${task.id} timed out after ${this.options.timeoutMs}ms`)
+          reject(timeoutError)
+          abortController.abort(timeoutError)
         }, this.options.timeoutMs)
       })
 
       // Race between the actual task and timeout
       const result = await Promise.race([
-        task.thunk(),
+        task.thunk(abortController.signal),
         timeoutPromise,
       ])
 

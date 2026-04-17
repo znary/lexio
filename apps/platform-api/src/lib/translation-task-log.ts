@@ -28,8 +28,18 @@ export interface TranslationTaskLogEntry {
   errorMessage?: string | null
 }
 
+export interface TranslationTaskStreamLogEntry {
+  event: "attach-immediate" | "attach-live"
+  taskId: string
+  userId: string
+  status: TranslationTaskStatus
+}
+
 function write(level: "info" | "warn" | "error", entry: TranslationTaskLogEntry): void {
-  console[level](entry)
+  console[level]({
+    namespace: "translation-task",
+    ...entry,
+  })
 }
 
 export function logTranslationTaskInfo(entry: TranslationTaskLogEntry): void {
@@ -42,4 +52,11 @@ export function logTranslationTaskWarn(entry: TranslationTaskLogEntry): void {
 
 export function logTranslationTaskError(entry: TranslationTaskLogEntry): void {
   write("error", entry)
+}
+
+export function logTranslationTaskStreamInfo(entry: TranslationTaskStreamLogEntry): void {
+  console.info({
+    namespace: "translation-task-stream",
+    ...entry,
+  })
 }

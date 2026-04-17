@@ -21,6 +21,7 @@ import { HttpError, json, readJson, withCors } from "../lib/http"
 import {
   logTranslationTaskError,
   logTranslationTaskInfo,
+  logTranslationTaskStreamInfo,
   logTranslationTaskWarn,
 
 } from "../lib/translation-task-log"
@@ -29,6 +30,7 @@ import {
   cancelUsageTask,
   completeUsage,
   createUsageTask,
+  kickUsageTask,
   publishTranslationTaskEvent,
   releaseUsageTask,
   reserveUsage,
@@ -564,19 +566,83 @@ export async function handleTranslateTaskStream(
   }
 
   if (task.status === "completed") {
+    logTranslationTaskStreamInfo({
+      event: "attach-immediate",
+      taskId,
+      userId: user.id,
+      status: task.status,
+    })
     return buildManagedTaskImmediateStream(task, "completed")
   }
 
   if (task.status === "canceled") {
+    logTranslationTaskStreamInfo({
+      event: "attach-immediate",
+      taskId,
+      userId: user.id,
+      status: task.status,
+    })
     return buildManagedTaskImmediateStream(task, "canceled")
   }
 
   if (task.status === "failed") {
+    logTranslationTaskStreamInfo({
+      event: "attach-immediate",
+      taskId,
+      userId: user.id,
+      status: task.status,
+    })
     return buildManagedTaskImmediateStream(task, "failed")
   }
 
   if (task.status !== "queued" && task.status !== "dispatched" && task.status !== "running") {
     throw new HttpError(409, `Translation task cannot be streamed from status "${task.status}"`)
+  }
+
+  logTranslationTaskStreamInfo({
+    event: "attach-live",
+    taskId,
+    userId: user.id,
+    status: task.status,
+  })
+
+  if (task.lane === "background" && (task.status === "queued" || task.status === "dispatched")) {
+    try {
+      const kickResult = await kickUsageTask(env, user.id, {
+        taskId: task.id,
+        requestId: task.id,
+      })
+
+      if (!kickResult.enqueued) {
+        const me = await buildMePayload(env, user)
+        const recovered = await createUsageTask(env, user.id, me.entitlements, task.mode, {
+          requestId: task.id,
+          taskId: task.id,
+          scene: task.scene,
+          ownerTabId: task.ownerTabId,
+          lane: "background",
+        })
+        console.warn({
+          namespace: "translation-task-stream",
+          event: "recreated-background-task",
+          taskId,
+          userId: user.id,
+          previousStatus: task.status,
+          recoveredStatus: recovered.status,
+          ownerTabId: task.ownerTabId,
+        })
+      }
+    }
+    catch (error) {
+      console.warn({
+        namespace: "translation-task-stream",
+        event: "kick-failed",
+        taskId,
+        userId: user.id,
+        status: task.status,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   const response = await streamTranslationTask(env, user.id, {
@@ -785,7 +851,12 @@ async function createOrAssignBackgroundUsageTask(
   })
 
   if (usageTask.status === "queued") {
-    throw new Error("Usage task is still queued")
+    return {
+      taskId: usageTask.taskId,
+      requestId: usageTask.requestId,
+      leaseId: null,
+      requestCount: usageTask.requestCount,
+    }
   }
 
   if (usageTask.status === "canceled") {

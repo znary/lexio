@@ -89,6 +89,11 @@ interface LeaseExpiredRequest {
   requestId?: string
 }
 
+interface KickTaskRequest {
+  taskId: string
+  requestId?: string
+}
+
 interface TranslationTaskStreamRequest {
   taskId: string
   snapshot: Record<string, unknown>
@@ -405,6 +410,10 @@ export class UsageGate {
       return await this.handleLeaseExpired(request)
     }
 
+    if (url.pathname === "/tasks/kick") {
+      return await this.handleKick(request)
+    }
+
     if (url.pathname === "/translation-tasks/stream") {
       return await this.handleTranslationTaskStream(request)
     }
@@ -470,13 +479,25 @@ export class UsageGate {
       state.leases[task.leaseId] = now
       syncState(state)
       await this.persistState(state)
-      await this.enqueueTask(task)
+      const enqueued = task.lane !== "background" || await this.enqueueTask(task)
+      if (task.lane === "background" && !enqueued) {
+        delete state.tasks[task.taskId]
+        delete state.leases[task.leaseId]
+        task.status = "queued"
+        task.queuedAt = now
+        task.startedAt = null
+        task.leaseId = null
+        state.tasks[task.taskId] = task
+        state.queueOrder.push(task.taskId)
+        syncState(state)
+        await this.persistState(state)
+      }
 
       const response = buildTaskResponse(task, state)
       logUsageGateEvent(buildTaskLog(task, {
-        status: "running",
-        queuePosition: null,
-        queueWaitMs: 0,
+        status: enqueued ? "running" : "queued",
+        queuePosition: enqueued ? null : getTaskQueuePosition(state, task.taskId),
+        queueWaitMs: enqueued ? 0 : null,
         runMs: null,
         upstreamStatus: null,
         cancelReason: null,
@@ -592,6 +613,7 @@ export class UsageGate {
       delete state.leases[task.leaseId]
     }
 
+    const shouldKickNextBackgroundTask = task.lane === "background"
     releaseTask(task, now, payload.releaseReason ?? "released", payload.upstreamStatus ?? null)
     syncState(state)
     await this.persistState(state)
@@ -605,6 +627,10 @@ export class UsageGate {
       upstreamStatus: payload.upstreamStatus ?? null,
       releaseReason: payload.releaseReason ?? "released",
     }))
+
+    if (shouldKickNextBackgroundTask) {
+      await this.enqueueNextBackgroundTask(state)
+    }
 
     return Response.json({ ok: true, status: "released", ...buildTaskResponse(task, state) })
   }
@@ -624,6 +650,7 @@ export class UsageGate {
       delete state.leases[task.leaseId]
     }
 
+    const shouldKickNextBackgroundTask = task.lane === "background" && task.status === "running"
     cancelTask(task, now, payload.cancelReason ?? "canceled")
     syncState(state)
     await this.persistState(state)
@@ -637,6 +664,10 @@ export class UsageGate {
       cancelReason: payload.cancelReason ?? "canceled",
       releaseReason: null,
     }))
+
+    if (shouldKickNextBackgroundTask) {
+      await this.enqueueNextBackgroundTask(state)
+    }
 
     return Response.json({ ok: true, status: "canceled", ...buildTaskResponse(task, state) })
   }
@@ -663,6 +694,7 @@ export class UsageGate {
       delete state.leases[task.leaseId]
     }
 
+    const shouldKickNextBackgroundTask = task.lane === "background"
     expireTask(task, now)
     syncState(state)
     await this.persistState(state)
@@ -678,7 +710,28 @@ export class UsageGate {
       releaseReason: "lease-expired",
     }))
 
+    if (shouldKickNextBackgroundTask) {
+      await this.enqueueNextBackgroundTask(state)
+    }
+
     return Response.json({ ok: true, status: "expired", ...buildTaskResponse(task, state) })
+  }
+
+  private async handleKick(request: Request): Promise<Response> {
+    const payload = await request.json() as KickTaskRequest
+    const state = await this.loadState()
+    const task = state.tasks[payload.taskId]
+
+    if (!task || task.lane !== "background") {
+      return Response.json({ ok: true, enqueued: false })
+    }
+
+    if (task.status === "released" || task.status === "canceled" || task.status === "expired") {
+      return Response.json({ ok: true, enqueued: false, status: task.status })
+    }
+
+    const enqueued = await this.enqueueTask(task)
+    return Response.json({ ok: true, enqueued, status: task.status })
   }
 
   private async handleTranslationTaskStream(request: Request): Promise<Response> {
@@ -724,6 +777,14 @@ export class UsageGate {
     const payload = await request.json() as TranslationTaskPublishRequest
     const controllers = this.translationTaskControllers.get(payload.taskId)
     if (!controllers?.size) {
+      if (payload.event === "completed" || payload.event === "failed" || payload.event === "canceled") {
+        console.warn({
+          namespace: "translation-task-stream",
+          event: "terminal-event-without-subscriber",
+          taskId: payload.taskId,
+          status: payload.event,
+        })
+      }
       return Response.json({ ok: true })
     }
 
@@ -801,14 +862,28 @@ export class UsageGate {
     }
   }
 
-  private async enqueueTask(task: UsageTask): Promise<void> {
+  private async enqueueNextBackgroundTask(state: UsageState): Promise<boolean> {
+    const nextTaskId = state.queueOrder.find(taskId => state.tasks[taskId]?.lane === "background")
+    if (!nextTaskId) {
+      return false
+    }
+
+    const nextTask = state.tasks[nextTaskId]
+    if (!nextTask) {
+      return false
+    }
+
+    return await this.enqueueTask(nextTask)
+  }
+
+  private async enqueueTask(task: UsageTask): Promise<boolean> {
     if (task.lane !== "background") {
-      return
+      return false
     }
 
     const queue = this.env.USAGE_GATE_BACKGROUND_QUEUE
     if (!queue) {
-      return
+      return false
     }
 
     const message: UsageGateQueueMessage = {
@@ -822,9 +897,20 @@ export class UsageGate {
 
     try {
       await queue.send(message)
+      return true
     }
-    catch {
-      // Leave the task queued; the direct caller can still poll /tasks/assign.
+    catch (error) {
+      console.error({
+        namespace: "usage-gate-queue",
+        event: "enqueue-failed",
+        taskId: task.taskId,
+        requestId: task.requestId,
+        userId: task.userId,
+        lane: task.lane,
+        ownerTabId: task.ownerTabId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return false
     }
   }
 

@@ -464,6 +464,7 @@ export async function getPlanForUser(env: Env, userId: string): Promise<Plan> {
 }
 
 export async function ensureEntitlements(env: Env, userId: string, plan: Plan): Promise<Entitlements> {
+  const next = buildEntitlements(plan)
   const existing = await env.DB.prepare(`
     SELECT plan, monthly_request_limit, monthly_token_limit, concurrent_request_limit
     FROM entitlements
@@ -475,7 +476,13 @@ export async function ensureEntitlements(env: Env, userId: string, plan: Plan): 
     concurrent_request_limit: number
   }>()
 
-  if (existing && existing.plan === plan) {
+  if (
+    existing
+    && existing.plan === next.plan
+    && existing.monthly_request_limit === next.monthlyRequestLimit
+    && existing.monthly_token_limit === next.monthlyTokenLimit
+    && existing.concurrent_request_limit === next.concurrentRequestLimit
+  ) {
     return {
       plan: existing.plan,
       monthlyRequestLimit: existing.monthly_request_limit,
@@ -484,7 +491,6 @@ export async function ensureEntitlements(env: Env, userId: string, plan: Plan): 
     }
   }
 
-  const next = buildEntitlements(plan)
   await env.DB.prepare(`
     INSERT INTO entitlements (user_id, plan, monthly_request_limit, monthly_token_limit, concurrent_request_limit, updated_at)
     VALUES (?1, ?2, ?3, ?4, ?5, ?6)

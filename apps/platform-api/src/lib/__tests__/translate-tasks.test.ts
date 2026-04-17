@@ -19,6 +19,7 @@ const cancelUsageTaskMock = vi.fn()
 const streamTranslationTaskMock = vi.fn()
 const publishTranslationTaskEventMock = vi.fn()
 const assignUsageTaskMock = vi.fn()
+const kickUsageTaskMock = vi.fn()
 const releaseUsageTaskMock = vi.fn()
 const reserveUsageMock = vi.fn()
 const completeUsageMock = vi.fn()
@@ -48,6 +49,7 @@ vi.mock("../usage-gate", () => ({
   completeUsage: (...args: unknown[]) => completeUsageMock(...args),
   releaseUsageTask: (...args: unknown[]) => releaseUsageTaskMock(...args),
   assignUsageTask: (...args: unknown[]) => assignUsageTaskMock(...args),
+  kickUsageTask: (...args: unknown[]) => kickUsageTaskMock(...args),
 }))
 
 vi.mock("../ai", () => ({
@@ -235,6 +237,11 @@ describe("translation task routes", () => {
       ...queuedTask,
       status: "queued",
     })
+    kickUsageTaskMock.mockResolvedValue({
+      ok: true,
+      enqueued: true,
+      status: "queued",
+    })
     streamTranslationTaskMock.mockResolvedValue(new Response("event: snapshot\ndata: {}\n\n", {
       status: 200,
       headers: {
@@ -255,6 +262,129 @@ describe("translation task routes", () => {
       expect.objectContaining({
         taskId: "task_1",
       }),
+    )
+    expect(kickUsageTaskMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "user_1",
+      {
+        taskId: "task_1",
+        requestId: "task_1",
+      },
+    )
+  })
+
+  it("re-kicks dispatched background tasks before attaching SSE", async () => {
+    syncUserFromClerkMock.mockResolvedValue({
+      id: "user_1",
+      clerkUserId: "clerk_user_1",
+      email: "user@example.com",
+      name: "User",
+      avatarUrl: null,
+    })
+    getTranslationTaskByIdMock.mockResolvedValue({
+      ...queuedTask,
+      status: "dispatched",
+    })
+    kickUsageTaskMock.mockResolvedValue({
+      ok: true,
+      enqueued: true,
+      status: "running",
+    })
+    streamTranslationTaskMock.mockResolvedValue(new Response("event: snapshot\ndata: {}\n\n", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+      },
+    }))
+
+    const { handleTranslateTaskStream } = await import("../../routes/translate")
+    const response = await handleTranslateTaskStream(new Request("https://example.com/v1/translate/tasks/task_1/stream", {
+      method: "GET",
+    }), createEnv(), session, "task_1")
+
+    expect(response.status).toBe(200)
+    expect(kickUsageTaskMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "user_1",
+      {
+        taskId: "task_1",
+        requestId: "task_1",
+      },
+    )
+  })
+
+  it("recreates orphaned dispatched background tasks when kick cannot enqueue them", async () => {
+    syncUserFromClerkMock.mockResolvedValue({
+      id: "user_1",
+      clerkUserId: "clerk_user_1",
+      email: "user@example.com",
+      name: "User",
+      avatarUrl: null,
+    })
+    getTranslationTaskByIdMock.mockResolvedValue({
+      ...queuedTask,
+      status: "dispatched",
+    })
+    kickUsageTaskMock.mockResolvedValue({
+      ok: true,
+      enqueued: false,
+      status: "dispatched",
+    })
+    buildMePayloadMock.mockResolvedValue({
+      entitlements: {
+        plan: "free",
+        monthlyRequestLimit: 500,
+        monthlyTokenLimit: 500000,
+        concurrentRequestLimit: 10,
+      },
+    })
+    createUsageTaskMock.mockResolvedValue({
+      taskId: "task_1",
+      requestId: "task_1",
+      leaseId: null,
+      requestCount: 1,
+      status: "queued",
+      lane: "background",
+      queuePosition: 1,
+      queueWaitMs: null,
+      runMs: null,
+      upstreamStatus: null,
+      cancelReason: null,
+      releaseReason: null,
+    })
+    streamTranslationTaskMock.mockResolvedValue(new Response("event: snapshot\ndata: {}\n\n", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+      },
+    }))
+
+    const { handleTranslateTaskStream } = await import("../../routes/translate")
+    const response = await handleTranslateTaskStream(new Request("https://example.com/v1/translate/tasks/task_1/stream", {
+      method: "GET",
+    }), createEnv(), session, "task_1")
+
+    expect(response.status).toBe(200)
+    expect(buildMePayloadMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        id: "user_1",
+      }),
+    )
+    expect(createUsageTaskMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "user_1",
+      expect.objectContaining({
+        concurrentRequestLimit: 10,
+      }),
+      "generate",
+      {
+        requestId: "task_1",
+        taskId: "task_1",
+        scene: "page",
+        ownerTabId: 12,
+        lane: "background",
+      },
     )
   })
 

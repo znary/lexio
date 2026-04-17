@@ -1,5 +1,5 @@
 import type { ProviderConfig } from "@/types/config/provider"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
 
 const onMessageMock = vi.fn()
@@ -131,6 +131,10 @@ describe("translation queue helpers", () => {
     })
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it(
     "routes only llm providers through the batch queue",
     async () => {
@@ -234,9 +238,28 @@ describe("translation queue helpers", () => {
   })
 
   it("keeps the managed translation queue cap at the free-tier limit", async () => {
-    const { MANAGED_TRANSLATION_MAX_CONCURRENCY } = await import("../translation-queues")
+    const {
+      MANAGED_TRANSLATION_MAX_CONCURRENCY,
+      MANAGED_TRANSLATION_QUEUE_TIMEOUT_MS,
+    } = await import("../translation-queues")
 
     expect(MANAGED_TRANSLATION_MAX_CONCURRENCY).toBe(10)
+    expect(MANAGED_TRANSLATION_QUEUE_TIMEOUT_MS).toBe(180_000)
+  })
+
+  it("recognizes local request-queue timeout abort reasons", async () => {
+    const {
+      MANAGED_TRANSLATION_QUEUE_TIMEOUT_MS,
+      isManagedTranslationQueueTimeout,
+    } = await import("../translation-queues")
+
+    const timeoutController = new AbortController()
+    timeoutController.abort(new Error(`Task timeout-hash timed out after ${MANAGED_TRANSLATION_QUEUE_TIMEOUT_MS}ms`))
+    expect(isManagedTranslationQueueTimeout(timeoutController.signal)).toBe(true)
+
+    const manualController = new AbortController()
+    manualController.abort(new Error("user canceled task"))
+    expect(isManagedTranslationQueueTimeout(manualController.signal)).toBe(false)
   })
 
   it("keeps same-text translations separate across tabs", async () => {

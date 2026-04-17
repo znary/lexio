@@ -170,6 +170,17 @@ export async function cancelUsageTask(
   })
 }
 
+export async function kickUsageTask(
+  env: UsageGateClientEnv,
+  userId: string,
+  options: { taskId: string, requestId?: string },
+): Promise<{ ok: boolean, enqueued: boolean, status?: string }> {
+  return await postUsageGate<{ ok: boolean, enqueued: boolean, status?: string }>(env, userId, "/tasks/kick", {
+    taskId: options.taskId,
+    requestId: options.requestId,
+  })
+}
+
 export async function expireUsageLease(
   env: UsageGateClientEnv,
   userId: string,
