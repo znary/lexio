@@ -1,12 +1,38 @@
 // @vitest-environment jsdom
 import type { VocabularyItem } from "@/types/vocabulary"
+import { cleanup, render, waitFor } from "@testing-library/react"
+import { atom } from "jotai"
 import Mark from "mark.js"
-import { describe, expect, it } from "vitest"
+import { createElement } from "react"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   VOCABULARY_HIGHLIGHT_BOUNDARY_LIMITERS,
   VOCABULARY_HIGHLIGHT_CLASS_NAME,
 } from "@/utils/constants/vocabulary"
-import { shouldHighlightAcrossElements } from "../use-vocabulary-highlighting"
+import { shouldHighlightAcrossElements, useVocabularyHighlighting } from "../use-vocabulary-highlighting"
+
+const getVocabularyItemsMock = vi.fn<() => Promise<VocabularyItem[]>>()
+
+vi.mock("@/utils/atoms/config", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/utils/atoms/config")>()
+  return {
+    ...actual,
+    configFieldsAtomMap: {
+      ...actual.configFieldsAtomMap,
+      vocabulary: atom({
+        autoSave: true,
+        highlightEnabled: true,
+        maxPhraseWords: 8,
+        highlightColor: "#fde68a",
+      }),
+    },
+  }
+})
+
+vi.mock("@/utils/vocabulary/service", () => ({
+  getVocabularyItems: (...args: unknown[]) => getVocabularyItemsMock(...args),
+  VOCABULARY_CHANGED_EVENT: "lexio:vocabulary-changed",
+}))
 
 function createVocabularyItem(overrides: Partial<VocabularyItem>): VocabularyItem {
   return {
@@ -44,6 +70,20 @@ function markVocabularyItem(item: VocabularyItem, html: string) {
     })
   })
 }
+
+function VocabularyHighlightingHarness() {
+  useVocabularyHighlighting()
+  return null
+}
+
+beforeEach(() => {
+  document.body.innerHTML = ""
+  getVocabularyItemsMock.mockReset()
+})
+
+afterEach(() => {
+  cleanup()
+})
 
 describe("shouldHighlightAcrossElements", () => {
   it("keeps single-word highlights inside their own node when adjacent nodes omit whitespace", async () => {
@@ -99,5 +139,29 @@ describe("shouldHighlightAcrossElements", () => {
     const highlights = [...document.querySelectorAll("mark")]
     expect(highlights).toHaveLength(1)
     expect(highlights[0]?.textContent).toBe("please")
+  })
+
+  it("keeps highlighting vocabulary inside tracked page paragraphs", async () => {
+    const item = createVocabularyItem({
+      sourceText: "integration",
+      normalizedText: "integration",
+      kind: "word",
+      wordCount: 1,
+    })
+
+    getVocabularyItemsMock.mockResolvedValue([item])
+    document.body.innerHTML = `
+      <main>
+        <p data-read-frog-paragraph="">Integration is working.</p>
+      </main>
+    `
+
+    const container = document.createElement("div")
+    document.body.append(container)
+    render(createElement(VocabularyHighlightingHarness), { container })
+
+    await waitFor(() => {
+      expect(document.querySelector("p mark")?.textContent).toBe("Integration")
+    })
   })
 })

@@ -32,7 +32,6 @@ const HIGHLIGHT_EXCLUDE_SELECTORS = [
   "[contenteditable='true']",
   ".read-frog-translated-content-wrapper",
   "[data-read-frog-host-toast]",
-  "[data-read-frog-paragraph]",
 ]
 
 interface ActiveHoverHighlight {
