@@ -5,6 +5,7 @@ import { atom } from "jotai"
 import Mark from "mark.js"
 import { createElement } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { NOTRANSLATE_CLASS } from "@/utils/constants/dom-labels"
 import {
   VOCABULARY_HIGHLIGHT_BOUNDARY_LIMITERS,
   VOCABULARY_HIGHLIGHT_CLASS_NAME,
@@ -161,7 +162,9 @@ describe("shouldHighlightAcrossElements", () => {
     render(createElement(VocabularyHighlightingHarness), { container })
 
     await waitFor(() => {
-      expect(document.querySelector("p mark")?.textContent).toBe("Integration")
+      const highlight = document.querySelector("p mark")
+      expect(highlight?.textContent).toBe("Integration")
+      expect(highlight).toHaveClass(NOTRANSLATE_CLASS)
     })
   })
 })

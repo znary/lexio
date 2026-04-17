@@ -78,6 +78,7 @@ function markVocabularyItem(
       caseSensitive: false,
       className: VOCABULARY_HIGHLIGHT_CLASS_NAME,
       each: (element) => {
+        element.classList.add(NOTRANSLATE_CLASS)
         element.setAttribute(VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE, item.id)
       },
       exclude: HIGHLIGHT_EXCLUDE_SELECTORS,
