@@ -427,16 +427,23 @@ export function SelectionTranslationProvider({
       }
 
       if (selectionText && nextTranslatedText) {
-        const savedItem = await saveTranslatedSelectionToVocabulary({
-          sourceText: selectionText,
-          translatedText: nextTranslatedText,
-          sourceLang: translateRequest.language.sourceCode,
-          targetLang: translateRequest.language.targetCode,
-          settings: vocabularySettings,
-        })
+        try {
+          const savedItem = await saveTranslatedSelectionToVocabulary({
+            sourceText: selectionText,
+            translatedText: nextTranslatedText,
+            sourceLang: translateRequest.language.sourceCode,
+            targetLang: translateRequest.language.targetCode,
+            settings: vocabularySettings,
+          })
 
-        if (runIdRef.current === runId) {
-          setSavedVocabularyText(savedItem?.sourceText ?? null)
+          if (runIdRef.current === runId) {
+            setSavedVocabularyText(savedItem?.sourceText ?? null)
+          }
+        }
+        catch {
+          if (runIdRef.current === runId) {
+            setSavedVocabularyText(null)
+          }
         }
       }
 

@@ -77,7 +77,11 @@ async function resolveVoiceForText(
 
 function getTTSFriendlyErrorDescription(error: Error): string | undefined {
   if (error.message.includes("Edge TTS returned empty audio data")) {
-    return "The current voice may not support this language. Try switching to a matching voice."
+    return "Speech generation returned empty audio. Please try again."
+  }
+
+  if (error.message.includes("empty audio payload")) {
+    return "Speech generation returned empty audio. Please try again."
   }
 
   if (error.message.includes("[SYNTH_RATE_LIMITED]")) {

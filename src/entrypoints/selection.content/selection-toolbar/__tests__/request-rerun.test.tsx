@@ -873,6 +873,27 @@ describe("selection toolbar requests", () => {
     expect(screen.queryByRole("alert")).toBeNull()
   })
 
+  it("keeps a successful translation visible when saving to vocabulary fails", async () => {
+    translateTextCoreMock.mockResolvedValue("Translated text")
+    saveTranslatedSelectionToVocabularyMock.mockRejectedValueOnce(new Error("Save failed"))
+    getOrCreateWebPageContextMock.mockResolvedValue(null)
+
+    const store = createStore()
+    store.set(configAtom, createStandardTranslateConfig())
+    setSelectionState(store, { text: "Selected text" })
+    renderWithProviders(<TranslateButton />, store)
+
+    fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId("translation-result").textContent).toBe("Translated text")
+    })
+
+    expect(saveTranslatedSelectionToVocabularyMock).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole("alert")).toBeNull()
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
   it("shows a precheck alert when the translate provider is unavailable", async () => {
     const store = createStore()
     const updatedConfig = cloneConfig(DEFAULT_CONFIG)

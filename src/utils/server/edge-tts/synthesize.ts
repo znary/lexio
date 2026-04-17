@@ -128,8 +128,15 @@ async function synthesizeChunk(request: EdgeTTSSynthesizeRequest): Promise<EdgeT
     })
   }
 
+  const audio = await response.arrayBuffer()
+  if (audio.byteLength === 0) {
+    throw new EdgeTTSError("SYNTH_REQUEST_FAILED", "Edge TTS returned an empty audio payload", {
+      retryable: true,
+    })
+  }
+
   return {
-    audio: await response.arrayBuffer(),
+    audio,
     contentType: response.headers.get("content-type") || "audio/mpeg",
   }
 }
