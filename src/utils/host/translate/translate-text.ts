@@ -109,6 +109,7 @@ export interface TranslateTextOptions {
   extraHashTags?: string[]
   webPageContext?: WebPagePromptContext
   scene?: string
+  onStatusKeyReady?: (statusKey: string) => void
 }
 
 /**
@@ -116,6 +117,7 @@ export interface TranslateTextOptions {
  * All dependencies must be provided explicitly.
  */
 export async function translateTextCore(options: TranslateTextOptions): Promise<string> {
+  const startedAt = Date.now()
   const {
     text,
     langConfig,
@@ -127,11 +129,17 @@ export async function translateTextCore(options: TranslateTextOptions): Promise<
 
   const preparedText = prepareTranslationText(text)
   if (preparedText === "") {
+    logger.info("[TranslateTextCore]", {
+      event: "skip",
+      scene: options.scene ?? null,
+      reason: "empty-text",
+    })
     return ""
   }
 
   const normalizedWebPageContext = normalizeWebPagePromptContext(webPageContext)
 
+  const hashStartedAt = Date.now()
   const hashComponents = await buildWebPageHashComponents(
     preparedText,
     providerConfig,
@@ -139,21 +147,38 @@ export async function translateTextCore(options: TranslateTextOptions): Promise<
     enableAIContentAware,
     normalizedWebPageContext,
   )
+  const hashBuildMs = Date.now() - hashStartedAt
 
   // Add extra hash tags for cache differentiation
   hashComponents.push(...extraHashTags)
 
-  return await sendMessage("enqueueTranslateRequest", {
+  const messageStartedAt = Date.now()
+  const statusKey = Sha256Hex(...hashComponents)
+  options.onStatusKeyReady?.(statusKey)
+  const result = await sendMessage("enqueueTranslateRequest", {
     text: preparedText,
     langConfig,
     providerConfig,
     scheduleAt: Date.now(),
-    hash: Sha256Hex(...hashComponents),
+    hash: statusKey,
     scene: options.scene,
     webTitle: normalizedWebPageContext?.webTitle,
     webContent: normalizedWebPageContext?.webContent,
     webSummary: normalizedWebPageContext?.webSummary,
   })
+
+  logger.info("[TranslateTextCore]", {
+    event: "complete",
+    scene: options.scene ?? null,
+    providerId: providerConfig.id,
+    textLength: preparedText.length,
+    hashBuildMs,
+    backgroundMs: Date.now() - messageStartedAt,
+    totalMs: Date.now() - startedAt,
+    resultLength: result.length,
+  })
+
+  return result
 }
 
 export function validateTranslationConfigAndToast(

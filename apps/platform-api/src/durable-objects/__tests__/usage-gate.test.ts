@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { UsageGate } from "../usage-gate"
 
 type UsageLane = "interactive" | "background"
-type UsageTaskStatus = "queued" | "running" | "released" | "canceled" | "expired"
+type UsageTaskStatus = "queued" | "dispatched" | "running" | "released" | "canceled" | "expired"
 
 interface StoredUsageTask {
   taskId: string
@@ -16,6 +16,7 @@ interface StoredUsageTask {
   concurrentRequestLimit: number
   createdAt: number
   queuedAt: number | null
+  dispatchedAt: number | null
   startedAt: number | null
   releasedAt: number | null
   canceledAt: number | null
@@ -49,6 +50,7 @@ function createTask(taskId: string, lane: UsageLane, status: UsageTaskStatus, st
     concurrentRequestLimit: 4,
     createdAt: startedAt,
     queuedAt: status === "queued" ? startedAt : null,
+    dispatchedAt: status === "dispatched" ? startedAt : null,
     startedAt: status === "running" ? startedAt : null,
     releasedAt: null,
     canceledAt: null,
@@ -206,7 +208,7 @@ describe("usageGate scheduler", () => {
     }
 
     expect(response.status).toBe(200)
-    expect(payload.status).toBe("queued")
+    expect(payload.status).toBe("dispatched")
     expect(payload.lane).toBe("background")
     expect(payload.queuePosition).toBe(1)
     expect(queue.send).toHaveBeenCalledTimes(1)
@@ -225,6 +227,67 @@ describe("usageGate scheduler", () => {
       backgroundActiveCount: 2,
       queueOrder: [payload.taskId],
     })
+  })
+
+  it("dispatches a background task without consuming a running slot before the worker starts", async () => {
+    const { ctx, env, queue, readState } = createContext()
+    const gate = new UsageGate(ctx, env)
+
+    const response = await gate.fetch(createTaskRequest("task-background-dispatched", "background"))
+    const payload = await response.json() as {
+      taskId: string
+      status: UsageTaskStatus
+      lane: UsageLane
+      queuePosition: number | null
+      leaseId: string | null
+    }
+
+    expect(response.status).toBe(200)
+    expect(payload).toMatchObject({
+      taskId: "task-background-dispatched",
+      status: "dispatched",
+      lane: "background",
+      queuePosition: 1,
+      leaseId: null,
+    })
+    expect(queue.send).toHaveBeenCalledTimes(1)
+    expect(readState()).toMatchObject({
+      activeCount: 0,
+      interactiveActiveCount: 0,
+      backgroundActiveCount: 0,
+      queueOrder: ["task-background-dispatched"],
+    })
+  })
+
+  it("does not enqueue the same dispatched background task twice", async () => {
+    const { ctx, env, queue } = createContext()
+    const gate = new UsageGate(ctx, env)
+
+    const createResponse = await gate.fetch(createTaskRequest("task-background-dispatched", "background"))
+    const createPayload = await createResponse.json() as {
+      taskId: string
+      status: UsageTaskStatus
+    }
+
+    expect(createPayload.status).toBe("dispatched")
+    expect(queue.send).toHaveBeenCalledTimes(1)
+
+    const kickResponse = await gate.fetch(createRequest("/tasks/kick", {
+      taskId: createPayload.taskId,
+    }))
+    const kickPayload = await kickResponse.json() as {
+      ok: boolean
+      enqueued: boolean
+      status: UsageTaskStatus
+    }
+
+    expect(kickResponse.status).toBe(200)
+    expect(kickPayload).toMatchObject({
+      ok: true,
+      enqueued: false,
+      status: "dispatched",
+    })
+    expect(queue.send).toHaveBeenCalledTimes(1)
   })
 
   it("falls back to queued when a background task cannot be enqueued", async () => {
@@ -258,7 +321,7 @@ describe("usageGate scheduler", () => {
     })
   })
 
-  it("does not let a background task take an interactive slot", async () => {
+  it("keeps dispatching background tasks even when there are already running tasks", async () => {
     const now = Date.now()
     const { ctx, env, queue, readState } = createContext({
       monthKey: "2026-04",
@@ -292,7 +355,7 @@ describe("usageGate scheduler", () => {
     expect(response.status).toBe(200)
     expect(payload).toMatchObject({
       taskId: "task-background",
-      status: "queued",
+      status: "dispatched",
       lane: "background",
       queuePosition: 1,
       leaseId: null,
@@ -306,7 +369,7 @@ describe("usageGate scheduler", () => {
     })
   })
 
-  it("does not let an interactive task take a background slot", async () => {
+  it("runs an interactive task immediately even when many tasks are already running", async () => {
     const now = Date.now()
     const { ctx, env, queue, readState } = createContext({
       monthKey: "2026-04",
@@ -340,23 +403,22 @@ describe("usageGate scheduler", () => {
     expect(response.status).toBe(200)
     expect(payload).toMatchObject({
       taskId: "task-interactive",
-      status: "queued",
+      status: "running",
       lane: "interactive",
-      queuePosition: 1,
-      leaseId: null,
+      queuePosition: null,
     })
     expect(queue.send).not.toHaveBeenCalled()
     expect(readState()).toMatchObject({
-      activeCount: 3,
-      interactiveActiveCount: 2,
+      activeCount: 4,
+      interactiveActiveCount: 3,
       backgroundActiveCount: 1,
-      queueOrder: ["task-interactive"],
+      queueOrder: [],
     })
   })
 
-  it("returns 429 when the queue is already full", async () => {
+  it("still dispatches a background task even when the in-memory queue is very large", async () => {
     const now = Date.now()
-    const queuedTaskIds = Array.from({ length: 100 }, (_, index) => `queued_${index + 1}`)
+    const queuedTaskIds = Array.from({ length: 1000 }, (_, index) => `queued_${index + 1}`)
     const runningTasks = {
       interactive_1: createTask("interactive_1", "interactive", "running", now - 1000),
       interactive_2: createTask("interactive_2", "interactive", "running", now - 900),
@@ -378,6 +440,7 @@ describe("usageGate scheduler", () => {
         concurrentRequestLimit: 4,
         createdAt: now - index,
         queuedAt: now - index,
+        dispatchedAt: null,
         startedAt: null,
         releasedAt: null,
         canceledAt: null,
@@ -408,12 +471,24 @@ describe("usageGate scheduler", () => {
     })
     const gate = new UsageGate(ctx, env)
 
-    const response = await gate.fetch(createTaskRequest("task-overflow"))
-    const payload = await response.json() as { error: string }
+    const response = await gate.fetch(createTaskRequest("task-overflow", "background"))
+    const payload = await response.json() as {
+      taskId: string
+      status: UsageTaskStatus
+      lane: UsageLane
+      queuePosition: number | null
+      leaseId: string | null
+    }
 
-    expect(response.status).toBe(429)
-    expect(payload.error).toBe("Background queue is full")
-    expect(queue.send).not.toHaveBeenCalled()
+    expect(response.status).toBe(200)
+    expect(payload).toMatchObject({
+      taskId: "task-overflow",
+      status: "dispatched",
+      lane: "background",
+      queuePosition: 1001,
+      leaseId: null,
+    })
+    expect(queue.send).toHaveBeenCalledTimes(1)
   })
 
   it("releases a task and lets the next queued task take the slot", async () => {

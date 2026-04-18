@@ -14,7 +14,7 @@ import { db } from "@/utils/db/dexie/db"
 import { Sha256Hex } from "@/utils/hash"
 import { normalizePromptContextValue } from "@/utils/host/translate/translate-text"
 import { logger } from "@/utils/logger"
-import { onMessage } from "@/utils/message"
+import { onMessage, sendMessage } from "@/utils/message"
 import { translateWithManagedPlatform } from "@/utils/platform/api"
 import { getSubtitlesTranslatePrompt } from "@/utils/prompts/subtitles"
 import { getTranslatePrompt } from "@/utils/prompts/translate"
@@ -23,8 +23,32 @@ import { RequestQueue } from "@/utils/request/request-queue"
 import { ensureInitializedConfig } from "./config"
 import { getManagedTranslationTaskScope } from "./managed-translation-tasks"
 
-export const MANAGED_TRANSLATION_MAX_CONCURRENCY = 10
+export const MANAGED_TRANSLATION_MAX_CONCURRENCY = 100
 export const MANAGED_TRANSLATION_QUEUE_TIMEOUT_MS = 3 * 60_000
+
+interface ManagedTranslationTaskStatusNotification {
+  state: "queued" | "running" | "completed" | "failed" | "canceled"
+  taskId?: string | null
+}
+
+function logTranslationPerf(level: "info" | "warn" | "error", event: string, details: Record<string, unknown>) {
+  const payload = {
+    event,
+    ...details,
+  }
+
+  if (level === "warn") {
+    logger.warn("[TranslationPerf]", payload)
+    return
+  }
+
+  if (level === "error") {
+    logger.error("[TranslationPerf]", payload)
+    return
+  }
+
+  logger.info("[TranslationPerf]", payload)
+}
 
 export function parseBatchResult(result: string): string[] {
   return result.split(BATCH_SEPARATOR).map(t => t.trim())
@@ -50,6 +74,7 @@ export async function executeBatchTranslation<TContext>(
     scene,
     signal,
     tabId,
+    statusKeys: dataList.map(data => data.statusKey ?? data.hash),
   })
 
   if (!result) {
@@ -65,8 +90,14 @@ async function getOrGenerateWebPageSummary(
   providerConfig: LLMProviderConfig,
   requestQueue: RequestQueue,
 ): Promise<string | null> {
+  const startedAt = Date.now()
   const preparedText = cleanText(webContent)
   if (!preparedText) {
+    logTranslationPerf("info", "summary-skip", {
+      summaryType: "webpage",
+      providerId: providerConfig.id,
+      reason: "empty-content",
+    })
     return null
   }
 
@@ -75,9 +106,21 @@ async function getOrGenerateWebPageSummary(
 
   const cached = await db.articleSummaryCache.get(cacheKey)
   if (cached) {
-    logger.info("Using cached summary")
+    logTranslationPerf("info", "summary-cache-hit", {
+      summaryType: "webpage",
+      providerId: providerConfig.id,
+      cacheKey,
+      totalMs: Date.now() - startedAt,
+    })
     return cached.summary
   }
+
+  logTranslationPerf("info", "summary-cache-miss", {
+    summaryType: "webpage",
+    providerId: providerConfig.id,
+    cacheKey,
+    contentLength: preparedText.length,
+  })
 
   const thunk = async () => {
     const cachedAgain = await db.articleSummaryCache.get(cacheKey)
@@ -96,16 +139,34 @@ async function getOrGenerateWebPageSummary(
       createdAt: new Date(),
     })
 
-    logger.info("Generated and cached new summary")
+    logTranslationPerf("info", "summary-generated", {
+      summaryType: "webpage",
+      providerId: providerConfig.id,
+      cacheKey,
+      summaryLength: summary.length,
+    })
     return summary
   }
 
   try {
     const summary = await requestQueue.enqueue(thunk, Date.now(), cacheKey)
+    logTranslationPerf("info", "summary-complete", {
+      summaryType: "webpage",
+      providerId: providerConfig.id,
+      cacheKey,
+      totalMs: Date.now() - startedAt,
+      summaryLength: summary?.length ?? 0,
+    })
     return summary || null
   }
   catch (error) {
-    logger.warn("Failed to get/generate summary:", error)
+    logTranslationPerf("warn", "summary-failed", {
+      summaryType: "webpage",
+      providerId: providerConfig.id,
+      cacheKey,
+      totalMs: Date.now() - startedAt,
+      error: error instanceof Error ? error.message : String(error),
+    })
     return null
   }
 }
@@ -116,8 +177,14 @@ async function getOrGenerateSubtitleSummary(
   providerConfig: LLMProviderConfig,
   requestQueue: RequestQueue,
 ): Promise<string | null> {
+  const startedAt = Date.now()
   const preparedText = cleanText(subtitlesContext)
   if (!preparedText) {
+    logTranslationPerf("info", "summary-skip", {
+      summaryType: "subtitle",
+      providerId: providerConfig.id,
+      reason: "empty-content",
+    })
     return null
   }
 
@@ -126,9 +193,21 @@ async function getOrGenerateSubtitleSummary(
 
   const cached = await db.articleSummaryCache.get(cacheKey)
   if (cached) {
-    logger.info("Using cached summary")
+    logTranslationPerf("info", "summary-cache-hit", {
+      summaryType: "subtitle",
+      providerId: providerConfig.id,
+      cacheKey,
+      totalMs: Date.now() - startedAt,
+    })
     return cached.summary
   }
+
+  logTranslationPerf("info", "summary-cache-miss", {
+    summaryType: "subtitle",
+    providerId: providerConfig.id,
+    cacheKey,
+    contentLength: preparedText.length,
+  })
 
   const thunk = async () => {
     const cachedAgain = await db.articleSummaryCache.get(cacheKey)
@@ -147,16 +226,34 @@ async function getOrGenerateSubtitleSummary(
       createdAt: new Date(),
     })
 
-    logger.info("Generated and cached new summary")
+    logTranslationPerf("info", "summary-generated", {
+      summaryType: "subtitle",
+      providerId: providerConfig.id,
+      cacheKey,
+      summaryLength: summary.length,
+    })
     return summary
   }
 
   try {
     const summary = await requestQueue.enqueue(thunk, Date.now(), cacheKey)
+    logTranslationPerf("info", "summary-complete", {
+      summaryType: "subtitle",
+      providerId: providerConfig.id,
+      cacheKey,
+      totalMs: Date.now() - startedAt,
+      summaryLength: summary?.length ?? 0,
+    })
     return summary || null
   }
   catch (error) {
-    logger.warn("Failed to get/generate summary:", error)
+    logTranslationPerf("warn", "summary-failed", {
+      summaryType: "subtitle",
+      providerId: providerConfig.id,
+      cacheKey,
+      totalMs: Date.now() - startedAt,
+      error: error instanceof Error ? error.message : String(error),
+    })
     return null
   }
 }
@@ -166,10 +263,30 @@ export interface TranslateBatchData<TContext = unknown> {
   langConfig: Config["language"]
   providerConfig: ProviderConfig
   hash: string
+  statusKey?: string
   scheduleAt: number
   scene?: string
   context?: TContext
   tabId?: number
+}
+
+function notifyManagedTranslationTaskStatus(
+  tabId: number | undefined,
+  statusKeys: string[] | undefined,
+  update: ManagedTranslationTaskStatusNotification,
+) {
+  if (typeof tabId !== "number" || !statusKeys?.length) {
+    return
+  }
+
+  const uniqueStatusKeys = [...new Set(statusKeys.map(key => key.trim()).filter(Boolean))]
+  for (const statusKey of uniqueStatusKeys) {
+    void sendMessage("notifyManagedTranslationTaskStatus", {
+      statusKey,
+      state: update.state,
+      taskId: update.taskId ?? null,
+    }, tabId)
+  }
 }
 
 interface TranslationQueueSetupConfig<TContext = unknown> {
@@ -264,10 +381,17 @@ async function executeManagedTranslation<TContext>(
     scene?: string
     signal?: AbortSignal
     tabId?: number
+    statusKeys?: string[]
   },
 ): Promise<string> {
+  const startedAt = Date.now()
   const preparedText = cleanText(text)
   if (!preparedText) {
+    logTranslationPerf("info", "managed-translation-skip", {
+      providerId: providerConfig.id,
+      scene: options?.scene ?? null,
+      reason: "empty-text",
+    })
     return ""
   }
 
@@ -278,16 +402,29 @@ async function executeManagedTranslation<TContext>(
   }
 
   const targetLangName = LANG_CODE_TO_EN_NAME[langConfig.targetCode]
+  const promptStartedAt = Date.now()
   const { systemPrompt, prompt } = await promptResolver(targetLangName, preparedText, {
     isBatch: options?.isBatch,
     context: options?.context,
   })
+  const promptMs = Date.now() - promptStartedAt
   const tabScope = typeof options?.tabId === "number"
     ? getManagedTranslationTaskScope(options.tabId)
     : null
   const managedSignal = combineAbortSignals(tabScope?.signal, options?.signal)
 
   let taskId: string | null = null
+
+  logTranslationPerf("info", "managed-translation-start", {
+    providerId: providerConfig.id,
+    scene: options?.scene ?? null,
+    tabId: options?.tabId ?? null,
+    isBatch: Boolean(options?.isBatch),
+    textLength: preparedText.length,
+    promptMs,
+    promptLength: prompt.length,
+    systemPromptLength: systemPrompt.length,
+  })
 
   try {
     const translatedText = await translateWithManagedPlatform({
@@ -325,6 +462,19 @@ async function executeManagedTranslation<TContext>(
           event: "created",
         })
       },
+      onStatusChange(update) {
+        notifyManagedTranslationTaskStatus(options?.tabId, options?.statusKeys, update)
+      },
+    })
+
+    logTranslationPerf("info", "managed-translation-complete", {
+      providerId: providerConfig.id,
+      scene: options?.scene ?? null,
+      tabId: options?.tabId ?? null,
+      taskId,
+      isBatch: Boolean(options?.isBatch),
+      totalMs: Date.now() - startedAt,
+      resultLength: translatedText.length,
     })
 
     return translatedText.trim()
@@ -343,6 +493,15 @@ async function executeManagedTranslation<TContext>(
       }
       return ""
     }
+    logTranslationPerf("error", "managed-translation-failed", {
+      providerId: providerConfig.id,
+      scene: options?.scene ?? null,
+      tabId: options?.tabId ?? null,
+      taskId,
+      isBatch: Boolean(options?.isBatch),
+      totalMs: Date.now() - startedAt,
+      error: error instanceof Error ? error.message : String(error),
+    })
     throw error
   }
   finally {
@@ -362,6 +521,7 @@ async function createTranslationQueues<TContext>(config: TranslationQueueSetupCo
   const { promptResolver, scene } = config
 
   const requestQueue = new RequestQueue({
+    name: `${scene}-request-queue`,
     rate,
     capacity,
     timeoutMs: MANAGED_TRANSLATION_QUEUE_TIMEOUT_MS,
@@ -373,6 +533,7 @@ async function createTranslationQueues<TContext>(config: TranslationQueueSetupCo
   })
 
   const batchQueue = new BatchQueue<TranslateBatchData<TContext>, string>({
+    name: `${scene}-batch-queue`,
     maxCharactersPerBatch,
     maxItemsPerBatch,
     batchDelay: 100,
@@ -418,6 +579,7 @@ async function createTranslationQueues<TContext>(config: TranslationQueueSetupCo
             scene: data.scene ?? scene,
             signal,
             tabId: data.tabId,
+            statusKeys: [data.statusKey ?? hash],
           })
         }
         catch (error) {
@@ -457,14 +619,32 @@ export async function setUpWebPageTranslationQueue() {
   })
 
   onMessage("enqueueTranslateRequest", async (message) => {
+    const startedAt = Date.now()
     const { data: { text, langConfig, providerConfig, scheduleAt, hash: cacheHash, scene, webTitle, webContent, webSummary } } = message
     const tabId = message.sender?.tab?.id
     const queueHash = buildManagedTranslationQueueHash(cacheHash, tabId)
+
+    logTranslationPerf("info", "enqueue-translate-request", {
+      scene: scene ?? "page",
+      tabId: tabId ?? null,
+      providerId: providerConfig.id,
+      textLength: text.length,
+      cacheHash,
+      queueHash,
+      usesBatchQueue: shouldUseBatchQueue(providerConfig),
+    })
 
     // Check cache first
     if (cacheHash) {
       const cached = await db.translationCache.get(cacheHash)
       if (cached) {
+        logTranslationPerf("info", "translation-cache-hit", {
+          scene: scene ?? "page",
+          tabId: tabId ?? null,
+          providerId: providerConfig.id,
+          cacheHash,
+          totalMs: Date.now() - startedAt,
+        })
         return cached.translation
       }
     }
@@ -477,7 +657,7 @@ export async function setUpWebPageTranslationQueue() {
     }
 
     if (shouldUseBatchQueue(providerConfig)) {
-      const data = { text, langConfig, providerConfig, hash: queueHash, scheduleAt, scene, context, tabId }
+      const data = { text, langConfig, providerConfig, hash: queueHash, statusKey: cacheHash || queueHash, scheduleAt, scene, context, tabId }
       result = await batchQueue.enqueue(data)
     }
     else {
@@ -485,6 +665,7 @@ export async function setUpWebPageTranslationQueue() {
         scene: scene ?? "page",
         signal,
         tabId,
+        statusKeys: [cacheHash || queueHash],
       })
       result = await requestQueue.enqueue(thunk, scheduleAt, queueHash)
     }
@@ -497,6 +678,16 @@ export async function setUpWebPageTranslationQueue() {
         createdAt: new Date(),
       })
     }
+
+    logTranslationPerf("info", "translation-request-complete", {
+      scene: scene ?? "page",
+      tabId: tabId ?? null,
+      providerId: providerConfig.id,
+      cacheHash,
+      queueHash,
+      totalMs: Date.now() - startedAt,
+      resultLength: result.length,
+    })
 
     return result
   })
@@ -537,13 +728,31 @@ export async function setUpSubtitlesTranslationQueue() {
   })
 
   onMessage("enqueueSubtitlesTranslateRequest", async (message) => {
+    const startedAt = Date.now()
     const { data: { text, langConfig, providerConfig, scheduleAt, hash: cacheHash, videoTitle, summary } } = message
     const tabId = message.sender?.tab?.id
     const queueHash = buildManagedTranslationQueueHash(cacheHash, tabId)
 
+    logTranslationPerf("info", "enqueue-subtitles-request", {
+      scene: "subtitles",
+      tabId: tabId ?? null,
+      providerId: providerConfig.id,
+      textLength: text.length,
+      cacheHash,
+      queueHash,
+      usesBatchQueue: shouldUseBatchQueue(providerConfig),
+    })
+
     if (cacheHash) {
       const cached = await db.translationCache.get(cacheHash)
       if (cached) {
+        logTranslationPerf("info", "translation-cache-hit", {
+          scene: "subtitles",
+          tabId: tabId ?? null,
+          providerId: providerConfig.id,
+          cacheHash,
+          totalMs: Date.now() - startedAt,
+        })
         return cached.translation
       }
     }
@@ -555,7 +764,7 @@ export async function setUpSubtitlesTranslationQueue() {
     }
 
     if (shouldUseBatchQueue(providerConfig)) {
-      const data = { text, langConfig, providerConfig, hash: queueHash, scheduleAt, context, tabId }
+      const data = { text, langConfig, providerConfig, hash: queueHash, statusKey: cacheHash || queueHash, scheduleAt, context, tabId }
       result = await batchQueue.enqueue(data)
     }
     else {
@@ -563,6 +772,7 @@ export async function setUpSubtitlesTranslationQueue() {
         scene: "subtitles",
         signal,
         tabId,
+        statusKeys: [cacheHash || queueHash],
       })
       result = await requestQueue.enqueue(thunk, scheduleAt, queueHash)
     }
@@ -574,6 +784,16 @@ export async function setUpSubtitlesTranslationQueue() {
         createdAt: new Date(),
       })
     }
+
+    logTranslationPerf("info", "translation-request-complete", {
+      scene: "subtitles",
+      tabId: tabId ?? null,
+      providerId: providerConfig.id,
+      cacheHash,
+      queueHash,
+      totalMs: Date.now() - startedAt,
+      resultLength: result.length,
+    })
 
     return result
   })

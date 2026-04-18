@@ -1,6 +1,7 @@
 import type { SessionContext } from "../auth"
 import type { Env } from "../env"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { HttpError } from "../http"
 
 const syncUserFromClerkMock = vi.fn()
 const createTranslationTaskMock = vi.fn()
@@ -117,7 +118,7 @@ describe("translation task routes", () => {
     vi.unstubAllGlobals()
   })
 
-  it("creates a translation task and returns task id, status, and lane", async () => {
+  it("creates a translation task and returns dispatched status after enqueuing background work", async () => {
     syncUserFromClerkMock.mockResolvedValue({
       id: "user_1",
       clerkUserId: "clerk_user_1",
@@ -140,9 +141,9 @@ describe("translation task routes", () => {
     createUsageTaskMock.mockResolvedValue({
       taskId: "task_1",
       requestId: "request_1",
-      leaseId: "lease_1",
+      leaseId: null,
       requestCount: 1,
-      status: "running",
+      status: "dispatched",
       lane: "background",
       queuePosition: null,
     })
@@ -273,7 +274,7 @@ describe("translation task routes", () => {
     )
   })
 
-  it("re-kicks dispatched background tasks before attaching SSE", async () => {
+  it("does not re-kick dispatched background tasks before attaching SSE", async () => {
     syncUserFromClerkMock.mockResolvedValue({
       id: "user_1",
       clerkUserId: "clerk_user_1",
@@ -311,9 +312,10 @@ describe("translation task routes", () => {
         requestId: "task_1",
       },
     )
+    expect(createUsageTaskMock).not.toHaveBeenCalled()
   })
 
-  it("recreates orphaned dispatched background tasks when kick cannot enqueue them", async () => {
+  it("recreates orphaned dispatched background tasks when usage gate forgets them", async () => {
     syncUserFromClerkMock.mockResolvedValue({
       id: "user_1",
       clerkUserId: "clerk_user_1",
@@ -325,10 +327,80 @@ describe("translation task routes", () => {
       ...queuedTask,
       status: "dispatched",
     })
+    getPlanForUserMock.mockResolvedValue("free")
     kickUsageTaskMock.mockResolvedValue({
       ok: true,
       enqueued: false,
+    })
+    createUsageTaskMock.mockResolvedValue({
+      taskId: "task_1",
+      requestId: "task_1",
+      leaseId: null,
+      requestCount: 1,
       status: "dispatched",
+      lane: "background",
+      queuePosition: 1,
+      queueWaitMs: null,
+      runMs: null,
+      upstreamStatus: null,
+      cancelReason: null,
+      releaseReason: null,
+    })
+    streamTranslationTaskMock.mockResolvedValue(new Response("event: snapshot\ndata: {}\n\n", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+      },
+    }))
+
+    const { handleTranslateTaskStream } = await import("../../routes/translate")
+    const response = await handleTranslateTaskStream(new Request("https://example.com/v1/translate/tasks/task_1/stream", {
+      method: "GET",
+    }), createEnv(), session, "task_1")
+
+    expect(response.status).toBe(200)
+    expect(kickUsageTaskMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "user_1",
+      {
+        taskId: "task_1",
+        requestId: "task_1",
+      },
+    )
+    expect(createUsageTaskMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "user_1",
+      expect.objectContaining({
+        plan: "free",
+      }),
+      "generate",
+      {
+        requestId: "task_1",
+        taskId: "task_1",
+        scene: "page",
+        ownerTabId: 12,
+        lane: "background",
+      },
+    )
+  })
+
+  it("recreates orphaned queued background tasks when kick cannot enqueue them", async () => {
+    syncUserFromClerkMock.mockResolvedValue({
+      id: "user_1",
+      clerkUserId: "clerk_user_1",
+      email: "user@example.com",
+      name: "User",
+      avatarUrl: null,
+    })
+    getTranslationTaskByIdMock.mockResolvedValue({
+      ...queuedTask,
+      status: "queued",
+    })
+    getPlanForUserMock.mockResolvedValue("free")
+    kickUsageTaskMock.mockResolvedValue({
+      ok: true,
+      enqueued: false,
+      status: "queued",
     })
     buildMePayloadMock.mockResolvedValue({
       entitlements: {
@@ -365,17 +437,11 @@ describe("translation task routes", () => {
     }), createEnv(), session, "task_1")
 
     expect(response.status).toBe(200)
-    expect(buildMePayloadMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        id: "user_1",
-      }),
-    )
     expect(createUsageTaskMock).toHaveBeenCalledWith(
       expect.anything(),
       "user_1",
       expect.objectContaining({
-        concurrentRequestLimit: 10,
+        plan: "free",
       }),
       "generate",
       {
@@ -385,6 +451,95 @@ describe("translation task routes", () => {
         ownerTabId: 12,
         lane: "background",
       },
+    )
+  })
+
+  it("fails queued background tasks immediately when recovery hits the monthly request limit", async () => {
+    syncUserFromClerkMock.mockResolvedValue({
+      id: "user_1",
+      clerkUserId: "clerk_user_1",
+      email: "user@example.com",
+      name: "User",
+      avatarUrl: null,
+    })
+    getTranslationTaskByIdMock.mockResolvedValue({
+      ...queuedTask,
+      status: "queued",
+    })
+    kickUsageTaskMock.mockResolvedValue({
+      ok: true,
+      enqueued: false,
+      status: "queued",
+    })
+    buildMePayloadMock.mockResolvedValue({
+      entitlements: {
+        plan: "free",
+        monthlyRequestLimit: 500,
+        monthlyTokenLimit: 500000,
+        concurrentRequestLimit: 10,
+      },
+    })
+    createUsageTaskMock.mockRejectedValue(new Error("Monthly request limit reached"))
+    cancelUsageTaskMock.mockResolvedValue({
+      taskId: "task_1",
+      requestId: "task_1",
+      leaseId: null,
+      requestCount: 1,
+      status: "canceled",
+      lane: "background",
+      queuePosition: null,
+      queueWaitMs: null,
+      runMs: null,
+      upstreamStatus: null,
+      cancelReason: "monthly-request-limit",
+      releaseReason: null,
+    })
+    failTranslationTaskMock.mockResolvedValue({
+      ...queuedTask,
+      status: "failed",
+      errorCode: "monthly_request_limit",
+      errorMessage: "Monthly request limit reached",
+      finishedAt: "2026-04-16T00:01:00.000Z",
+      updatedAt: "2026-04-16T00:01:00.000Z",
+    })
+
+    const { handleTranslateTaskStream } = await import("../../routes/translate")
+    const response = await handleTranslateTaskStream(new Request("https://example.com/v1/translate/tasks/task_1/stream", {
+      method: "GET",
+    }), createEnv(), session, "task_1")
+
+    expect(response.status).toBe(200)
+    await expect(response.text()).resolves.toContain("event: failed")
+    expect(streamTranslationTaskMock).not.toHaveBeenCalled()
+    expect(cancelUsageTaskMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "user_1",
+      "task_1",
+      {
+        cancelReason: "monthly-request-limit",
+        requestId: "task_1",
+      },
+    )
+    expect(failTranslationTaskMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "user_1",
+      "task_1",
+      "Monthly request limit reached",
+      "monthly_request_limit",
+    )
+    expect(publishTranslationTaskEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "user_1",
+      expect.objectContaining({
+        taskId: "task_1",
+        event: "failed",
+        data: expect.objectContaining({
+          taskId: "task_1",
+          status: "failed",
+          errorCode: "monthly_request_limit",
+          errorMessage: "Monthly request limit reached",
+        }),
+      }),
     )
   })
 
@@ -434,6 +589,57 @@ describe("translation task routes", () => {
         }),
       }),
     )
+  })
+
+  it("recreates missing usage-gate background tasks instead of failing the whole queue batch", async () => {
+    assignUsageTaskMock.mockRejectedValue(new HttpError(404, "Task not found"))
+    getTranslationTaskForWorkerMock.mockResolvedValue({
+      ...queuedTask,
+      status: "dispatched",
+    })
+    getPlanForUserMock.mockResolvedValue("free")
+    createUsageTaskMock.mockResolvedValue({
+      taskId: "task_1",
+      requestId: "task_1",
+      leaseId: null,
+      requestCount: 1,
+      status: "dispatched",
+      lane: "background",
+      queuePosition: 1,
+      queueWaitMs: null,
+      runMs: null,
+      upstreamStatus: null,
+      cancelReason: null,
+      releaseReason: null,
+    })
+
+    const { handleManagedTranslationQueueMessage } = await import("../../routes/translate")
+
+    await expect(handleManagedTranslationQueueMessage(createEnv(), {
+      taskId: "task_1",
+      requestId: "task_1",
+      userId: "user_1",
+      scene: "page",
+      lane: "background",
+      ownerTabId: 12,
+    })).resolves.toBeUndefined()
+
+    expect(createUsageTaskMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "user_1",
+      expect.objectContaining({
+        plan: "free",
+      }),
+      "generate",
+      {
+        requestId: "task_1",
+        taskId: "task_1",
+        scene: "page",
+        ownerTabId: 12,
+        lane: "background",
+      },
+    )
+    expect(forwardChatCompletionsMock).not.toHaveBeenCalled()
   })
 
   it("returns final SSE immediately for completed tasks", async () => {

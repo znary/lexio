@@ -29,7 +29,7 @@ describe("forwardChatCompletions", () => {
     vi.unstubAllGlobals()
   })
 
-  it("always forwards managed chat requests with thinking disabled", async () => {
+  it("always forwards managed chat requests with thinking disabled and uses the highest tier configured model", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }))
     vi.stubGlobal("fetch", fetchMock)
 
@@ -55,7 +55,7 @@ describe("forwardChatCompletions", () => {
 
     const body = JSON.parse(String(init.body)) as Record<string, unknown>
     expect(body).toEqual(expect.objectContaining({
-      model: "ep-ark-free",
+      model: "pro-model",
       thinking: { type: "disabled" },
       stream: false,
       messages: [{ role: "user", content: "hello" }],

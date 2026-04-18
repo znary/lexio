@@ -22,6 +22,7 @@ vi.mock("../../constants/platform", () => ({
 
 describe("platform api helpers", () => {
   beforeEach(() => {
+    vi.resetModules()
     vi.clearAllMocks()
   })
 
@@ -213,5 +214,120 @@ describe("platform api helpers", () => {
     }))
     expect(createdTaskIds).toEqual(["task-123"])
     expect(result).toBe("AB")
+  })
+
+  it("reports queued and running task states before completion", async () => {
+    const { translateWithManagedPlatform } = await import("../api")
+    getPlatformAuthSessionMock.mockResolvedValue({
+      token: "platform-token",
+      user: {
+        email: "user@example.com",
+      },
+      updatedAt: Date.now(),
+    })
+
+    const encoder = new TextEncoder()
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        taskId: "task-queued",
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }))
+      .mockResolvedValueOnce(new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode("event: snapshot\ndata: {\"status\":\"queued\"}\n\n"))
+          controller.enqueue(encoder.encode("event: running\ndata: {\"status\":\"running\"}\n\n"))
+          controller.enqueue(encoder.encode("event: completed\ndata: {\"text\":\"\\u5b8c\\u6210\"}\n\n"))
+          controller.close()
+        },
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "text/event-stream",
+        },
+      }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const statusChanges: string[] = []
+    const result = await translateWithManagedPlatform(
+      {
+        scene: "page",
+        text: "hello",
+        sourceLanguage: "en",
+        targetLanguage: "zh",
+        systemPrompt: "system",
+        prompt: "prompt",
+      },
+      {
+        onStatusChange(update) {
+          statusChanges.push(update.state)
+        },
+      },
+    )
+
+    expect(result).toBe("完成")
+    expect(statusChanges).toEqual(["queued", "running", "completed"])
+  })
+
+  it("blocks repeated identical managed translation task requests before they can loop", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-04-17T08:00:00.000Z"))
+
+    const { translateWithManagedPlatform } = await import("../api")
+    getPlatformAuthSessionMock.mockResolvedValue({
+      token: "platform-token",
+      user: {
+        email: "user@example.com",
+      },
+      updatedAt: Date.now(),
+    })
+
+    const encoder = new TextEncoder()
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith("/v1/translate/tasks")) {
+        return new Response(JSON.stringify({
+          taskId: "task-123",
+        }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+      }
+
+      return new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode("event: completed\ndata: {\"text\":\"AB\"}\n\n"))
+          controller.close()
+        },
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "text/event-stream",
+        },
+      })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const payload = {
+      scene: "page",
+      text: "hello",
+      sourceLanguage: "en",
+      targetLanguage: "zh",
+      systemPrompt: "system",
+      prompt: "prompt",
+    } as const
+
+    await expect(translateWithManagedPlatform(payload)).resolves.toBe("AB")
+    await expect(translateWithManagedPlatform(payload)).resolves.toBe("AB")
+    await expect(translateWithManagedPlatform(payload)).resolves.toBe("AB")
+    await expect(translateWithManagedPlatform(payload)).rejects.toThrow(
+      "Blocked repeated managed translation request to prevent a retry loop.",
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(6)
   })
 })

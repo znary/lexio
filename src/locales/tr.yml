@@ -844,6 +844,9 @@ languageDetection:
 translation:
   sameLanguage: Kaynak ve hedef diller farklı olmalıdır
   autoModeSameLanguage: Algılanan dil '$1' hedef dille aynı
+  loadingStatus:
+    queued: Çeviri için sırada
+    translating: Çevriliyor
 speak:
   fetchingAudio: Ses oluşturuluyor...
   playingAudio: Ses çalınıyor...

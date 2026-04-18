@@ -987,6 +987,9 @@ languageDetection:
 translation:
   sameLanguage: Source and target languages must be different
   autoModeSameLanguage: Detected language '$1' is the same as target language
+  loadingStatus:
+    queued: Queued for translation
+    translating: Translating
 speak:
   fetchingAudio: Generating audio...
   playingAudio: Playing audio...

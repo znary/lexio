@@ -2,6 +2,7 @@ import type { BackgroundTextStreamSnapshot, ThinkingSnapshot } from "@/types/bac
 import type { Config } from "@/types/config/config"
 import type { VocabularyItem } from "@/types/vocabulary"
 import { Sha256Hex } from "@/utils/hash"
+import { logger } from "@/utils/logger"
 import { buildPlatformApiUrl } from "../constants/platform"
 import { clearPlatformAuthSession, getPlatformAuthSession, setPlatformAuthSession } from "./storage"
 
@@ -60,6 +61,7 @@ export interface ManagedTranslationTaskExecutionOptions {
   signal?: AbortSignal
   onTaskCreated?: (taskId: string) => void
   onChunk?: (snapshot: BackgroundTextStreamSnapshot) => void
+  onStatusChange?: (update: ManagedTranslationTaskStatusUpdate) => void
   clientRequestKey?: string
   ownerTabId?: number
 }
@@ -67,11 +69,42 @@ export interface ManagedTranslationTaskExecutionOptions {
 interface ManagedTranslationTaskStreamOptions {
   signal?: AbortSignal
   onChunk?: (snapshot: BackgroundTextStreamSnapshot) => void
+  onStatusChange?: (update: ManagedTranslationTaskStatusUpdate) => void
 }
 
 interface ManagedTranslationTaskResult {
   text: string
 }
+
+export type ManagedTranslationTaskState = "queued" | "running" | "completed" | "failed" | "canceled"
+
+export interface ManagedTranslationTaskStatusUpdate {
+  taskId: string
+  state: ManagedTranslationTaskState
+}
+
+function logManagedTranslationEvent(level: "info" | "warn" | "error", event: string, details: Record<string, unknown>) {
+  const payload = {
+    event,
+    ...details,
+  }
+
+  if (level === "warn") {
+    logger.warn("[ManagedTranslationAPI]", payload)
+    return
+  }
+
+  if (level === "error") {
+    logger.error("[ManagedTranslationAPI]", payload)
+    return
+  }
+
+  logger.info("[ManagedTranslationAPI]", payload)
+}
+
+const MANAGED_TRANSLATION_LOOP_GUARD_WINDOW_MS = 20_000
+const MANAGED_TRANSLATION_LOOP_GUARD_MAX_ATTEMPTS = 3
+const managedTranslationAttemptHistory = new Map<string, number[]>()
 
 export class PlatformAPIError extends Error {
   statusCode: number
@@ -227,6 +260,29 @@ function parseManagedTranslationEventData(payloadText: string): unknown {
   }
 }
 
+function extractManagedTranslationTaskState(eventName: string, payload: unknown): ManagedTranslationTaskState | null {
+  if (eventName === "completed" || eventName === "failed" || eventName === "canceled") {
+    return eventName
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return null
+  }
+
+  const rawStatus = (payload as { status?: unknown }).status
+  if (rawStatus === "queued" || rawStatus === "dispatched") {
+    return "queued"
+  }
+  if (rawStatus === "running") {
+    return "running"
+  }
+  if (rawStatus === "completed" || rawStatus === "failed" || rawStatus === "canceled") {
+    return rawStatus
+  }
+
+  return null
+}
+
 function buildManagedTranslationClientRequestKey(
   payload: ManagedTranslateRequest,
   ownerTabId?: number,
@@ -251,6 +307,30 @@ function buildManagedTranslationClientRequestKey(
       isBatch: Boolean(payload.isBatch),
     })),
   ].join(":")
+}
+
+function pruneManagedTranslationAttempts(requestKey: string, now: number) {
+  const attempts = managedTranslationAttemptHistory.get(requestKey) ?? []
+  const recentAttempts = attempts.filter(timestamp => now - timestamp < MANAGED_TRANSLATION_LOOP_GUARD_WINDOW_MS)
+
+  if (recentAttempts.length === 0) {
+    managedTranslationAttemptHistory.delete(requestKey)
+    return recentAttempts
+  }
+
+  managedTranslationAttemptHistory.set(requestKey, recentAttempts)
+  return recentAttempts
+}
+
+function registerManagedTranslationAttempt(requestKey: string) {
+  const now = Date.now()
+  const recentAttempts = pruneManagedTranslationAttempts(requestKey, now)
+  if (recentAttempts.length >= MANAGED_TRANSLATION_LOOP_GUARD_MAX_ATTEMPTS) {
+    throw new Error("Blocked repeated managed translation request to prevent a retry loop.")
+  }
+
+  recentAttempts.push(now)
+  managedTranslationAttemptHistory.set(requestKey, recentAttempts)
 }
 
 function extractStreamTextPart(payloadText: string): string {
@@ -283,6 +363,7 @@ async function createManagedTranslationTask(
     ownerTabId?: number
   } = {},
 ): Promise<ManagedTranslationTaskCreatedResponse> {
+  const startedAt = Date.now()
   const response = await platformFetch("/v1/translate/tasks", {
     method: "POST",
     headers: {
@@ -301,6 +382,17 @@ async function createManagedTranslationTask(
     throw new Error("Managed translation task id is missing")
   }
 
+  logManagedTranslationEvent("info", "create-task", {
+    taskId,
+    scene: payload.scene ?? null,
+    ownerTabId: options.ownerTabId ?? null,
+    isBatch: Boolean(payload.isBatch),
+    textLength: payload.text.length,
+    promptLength: payload.prompt.length,
+    systemPromptLength: payload.systemPrompt.length,
+    createMs: Date.now() - startedAt,
+  })
+
   return {
     taskId,
   }
@@ -310,6 +402,7 @@ async function consumeManagedTranslationTaskStream(
   taskId: string,
   options: ManagedTranslationTaskStreamOptions = {},
 ): Promise<ManagedTranslationTaskResult> {
+  const startedAt = Date.now()
   const response = await platformFetch(`/v1/translate/tasks/${encodeURIComponent(taskId)}/stream`, {
     method: "GET",
     signal: options.signal,
@@ -324,6 +417,8 @@ async function consumeManagedTranslationTaskStream(
   let buffer = ""
   let streamedText = ""
   let completedText = ""
+  let firstChunkMs: number | null = null
+  let lastTaskState: ManagedTranslationTaskState | null = null
   let currentEventName = "message"
   let currentDataLines: string[] = []
 
@@ -343,6 +438,19 @@ async function consumeManagedTranslationTaskStream(
     }
 
     const eventPayload = parseManagedTranslationEventData(payloadText)
+    const nextTaskState = extractManagedTranslationTaskState(eventName, eventPayload)
+    if (nextTaskState && nextTaskState !== lastTaskState) {
+      lastTaskState = nextTaskState
+      options.onStatusChange?.({
+        taskId,
+        state: nextTaskState,
+      })
+      logManagedTranslationEvent("info", "task-state", {
+        taskId,
+        state: nextTaskState,
+        streamMs: Date.now() - startedAt,
+      })
+    }
 
     if (eventName === "completed") {
       completedText = extractManagedTranslationText(eventPayload)
@@ -351,12 +459,26 @@ async function consumeManagedTranslationTaskStream(
 
     if (eventName === "failed") {
       const errorMessage = extractManagedTranslationText(eventPayload) || "Managed translation failed"
+      logManagedTranslationEvent("error", "stream-failed", {
+        taskId,
+        streamMs: Date.now() - startedAt,
+        error: errorMessage,
+      })
       throw new Error(errorMessage)
     }
 
     if (eventName === "canceled") {
       const errorMessage = extractManagedTranslationText(eventPayload) || "Managed translation task was canceled"
+      logManagedTranslationEvent("warn", "stream-canceled", {
+        taskId,
+        streamMs: Date.now() - startedAt,
+        error: errorMessage,
+      })
       throw new DOMException(errorMessage, "AbortError")
+    }
+
+    if (eventName === "snapshot" || eventName === "running" || eventName === "keepalive") {
+      return
     }
 
     if (eventName !== "progress" && eventName !== "chunk" && eventName !== "delta") {
@@ -369,6 +491,13 @@ async function consumeManagedTranslationTaskStream(
     }
 
     streamedText += chunkText
+    if (firstChunkMs === null) {
+      firstChunkMs = Date.now() - startedAt
+      logManagedTranslationEvent("info", "stream-first-chunk", {
+        taskId,
+        firstChunkMs,
+      })
+    }
     options.onChunk?.({
       output: streamedText,
       thinking: STREAM_THINKING_PENDING,
@@ -420,6 +549,14 @@ async function consumeManagedTranslationTaskStream(
     reader.releaseLock()
   }
 
+  logManagedTranslationEvent("info", "stream-complete", {
+    taskId,
+    streamMs: Date.now() - startedAt,
+    firstChunkMs,
+    streamedLength: streamedText.length,
+    completedLength: completedText.length,
+  })
+
   return {
     text: completedText || streamedText,
   }
@@ -432,6 +569,10 @@ export async function streamManagedTranslation(
     onChunk?: (snapshot: BackgroundTextStreamSnapshot) => void
   } = {},
 ): Promise<BackgroundTextStreamSnapshot> {
+  registerManagedTranslationAttempt(
+    `stream:${buildManagedTranslationClientRequestKey(payload)}`,
+  )
+
   const response = await platformFetch("/v1/translate/stream", {
     method: "POST",
     headers: {
@@ -505,6 +646,11 @@ export async function translateWithManagedPlatform(
   payload: ManagedTranslateRequest,
   options: ManagedTranslationTaskExecutionOptions = {},
 ): Promise<string> {
+  const startedAt = Date.now()
+  registerManagedTranslationAttempt(
+    `task:${buildManagedTranslationClientRequestKey(payload, options.ownerTabId, options.clientRequestKey)}`,
+  )
+
   const createdTask = await createManagedTranslationTask(payload, {
     clientRequestKey: options.clientRequestKey,
     ownerTabId: options.ownerTabId,
@@ -520,9 +666,34 @@ export async function translateWithManagedPlatform(
     const result = await consumeManagedTranslationTaskStream(createdTask.taskId, {
       signal: options.signal,
       onChunk: options.onChunk,
+      onStatusChange: options.onStatusChange,
+    })
+
+    logManagedTranslationEvent("info", "task-complete", {
+      taskId: createdTask.taskId,
+      scene: payload.scene ?? null,
+      ownerTabId: options.ownerTabId ?? null,
+      isBatch: Boolean(payload.isBatch),
+      totalMs: Date.now() - startedAt,
+      resultLength: result.text.length,
     })
 
     return result.text
+  }
+  catch (error) {
+    logManagedTranslationEvent(
+      error instanceof DOMException && error.name === "AbortError" ? "warn" : "error",
+      "task-failed",
+      {
+        taskId: createdTask.taskId,
+        scene: payload.scene ?? null,
+        ownerTabId: options.ownerTabId ?? null,
+        isBatch: Boolean(payload.isBatch),
+        totalMs: Date.now() - startedAt,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    )
+    throw error
   }
   finally {
     options.signal?.removeEventListener("abort", handleAbort)

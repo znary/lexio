@@ -18,6 +18,15 @@ export interface SelectionSession {
   contextSnapshot: ContextSnapshot
 }
 
+export interface SelectionToolbarRect {
+  top: number
+  right: number
+  bottom: number
+  left: number
+  width: number
+  height: number
+}
+
 let nextSelectionSessionId = 0
 
 function createSelectionSession(
@@ -64,6 +73,7 @@ export const contextAtom = atom(
   },
 )
 export const isSelectionToolbarVisibleAtom = atom<boolean>(false)
+export const selectionToolbarRectAtom = atom<SelectionToolbarRect | null>(null)
 
 export const selectionContentAtom = atom(get => get(selectionAtom)?.text ?? null)
 

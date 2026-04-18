@@ -844,6 +844,9 @@ languageDetection:
 translation:
   sameLanguage: 원본 언어와 대상 언어는 달라야 합니다
   autoModeSameLanguage: 감지된 언어 '$1'은(는) 대상 언어와 같습니다
+  loadingStatus:
+    queued: 대기 중
+    translating: 번역 중
 speak:
   fetchingAudio: 오디오 생성 중...
   playingAudio: 오디오 재생 중...

@@ -14,6 +14,7 @@ import { buildContextSnapshot, readSelectionSnapshot } from "../utils"
 import {
   clearSelectionStateAtom,
   isSelectionToolbarVisibleAtom,
+  selectionToolbarRectAtom,
   setSelectionStateAtom,
 } from "./atoms"
 import { CloseButton, DropEvent } from "./close-button"
@@ -225,14 +226,17 @@ export function SelectionToolbar() {
   const isPointerDownInsideOverlayRef = useRef(false)
   const preserveSelectionStateRef = useRef(false)
   const [isSelectionToolbarVisible, setIsSelectionToolbarVisible] = useAtom(isSelectionToolbarVisibleAtom)
+  const setSelectionToolbarRect = useSetAtom(selectionToolbarRectAtom)
   const setSelectionState = useSetAtom(setSelectionStateAtom)
   const clearSelectionState = useSetAtom(clearSelectionStateAtom)
   const selectionToolbar = useAtomValue(configFieldsAtomMap.selectionToolbar)
   const dropdownOpenRef = useRef(false)
 
   const updatePosition = useCallback(() => {
-    if (!isSelectionToolbarVisible || !tooltipRef.current || !selectionPositionRef.current)
+    if (!isSelectionToolbarVisible || !tooltipRef.current || !selectionPositionRef.current) {
+      setSelectionToolbarRect(null)
       return
+    }
 
     const scrollY = window.scrollY
     const viewportHeight = window.innerHeight
@@ -262,7 +266,15 @@ export function SelectionToolbar() {
     // directly operate the DOM, avoid React re-rendering
     tooltipRef.current.style.top = `${clampedY}px`
     tooltipRef.current.style.left = `${clampedX}px`
-  }, [isSelectionToolbarVisible])
+    setSelectionToolbarRect({
+      top: clampedY,
+      right: clampedX + tooltipWidth,
+      bottom: clampedY + tooltipHeight,
+      left: clampedX,
+      width: tooltipWidth,
+      height: tooltipHeight,
+    })
+  }, [isSelectionToolbarVisible, setSelectionToolbarRect])
 
   useLayoutEffect(() => {
     updatePosition()
@@ -363,6 +375,7 @@ export function SelectionToolbar() {
       selectionStartRef.current = { x: e.clientX, y: e.clientY }
 
       clearSelectionState()
+      setSelectionToolbarRect(null)
       setIsSelectionToolbarVisible(false)
     }
 
@@ -382,6 +395,7 @@ export function SelectionToolbar() {
         }
 
         clearSelectionState()
+        setSelectionToolbarRect(null)
         // Don't hide toolbar when dropdown is open to prevent unwanted dismissal
         // (Firefox clears selection when dropdown gains focus)
         if (!dropdownOpenRef.current)
@@ -413,7 +427,13 @@ export function SelectionToolbar() {
         cancelAnimationFrame(animationFrameId)
       }
     }
-  }, [clearSelectionState, isSelectionToolbarVisible, setIsSelectionToolbarVisible, setSelectionState, updatePosition])
+  }, [clearSelectionState, isSelectionToolbarVisible, setIsSelectionToolbarVisible, setSelectionState, setSelectionToolbarRect, updatePosition])
+
+  useEffect(() => {
+    return () => {
+      setSelectionToolbarRect(null)
+    }
+  }, [setSelectionToolbarRect])
 
   useEffect(() => {
     const handler = (e: Event) => {

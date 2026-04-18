@@ -1,6 +1,7 @@
 import { deepmerge } from "deepmerge-ts"
 import { requestQueueConfigSchema } from "@/types/config/translate"
 import { getRandomUUID } from "@/utils/crypto-polyfill"
+import { logger } from "@/utils/logger"
 import { BinaryHeapPQ } from "./priority-queue"
 
 export interface RequestTask {
@@ -15,6 +16,7 @@ export interface RequestTask {
 }
 
 export interface QueueOptions {
+  name?: string
   rate: number // tokens/sec
   capacity: number // token bucket size
   timeoutMs: number
@@ -42,10 +44,44 @@ export class RequestQueue {
     this.waitingQueue = new BinaryHeapPQ<RequestTask & { hash: string }>()
   }
 
+  private log(level: "info" | "warn" | "error", event: string, details: Record<string, unknown>) {
+    const payload = {
+      queue: this.options.name ?? "request-queue",
+      event,
+      ...details,
+    }
+
+    if (level === "warn") {
+      logger.warn("[RequestQueue]", payload)
+      return
+    }
+
+    if (level === "error") {
+      logger.error("[RequestQueue]", payload)
+      return
+    }
+
+    logger.info("[RequestQueue]", payload)
+  }
+
+  private getQueueState() {
+    return {
+      waitingCount: this.waitingQueue.size(),
+      waitingTaskCount: this.waitingTasks.size,
+      executingCount: this.executingTasks.size,
+      bucketTokens: Number(this.bucketTokens.toFixed(2)),
+    }
+  }
+
   enqueue<T>(thunk: (signal: AbortSignal) => Promise<T>, scheduleAt: number, hash: string): Promise<T> {
     const duplicateTask = this.duplicateTask(hash)
     if (duplicateTask) {
-      // console.info(`🔄 Found duplicate task for hash: ${hash}, returning existing promise`)
+      this.log("info", "duplicate", {
+        hash,
+        taskId: duplicateTask.id,
+        retryCount: duplicateTask.retryCount,
+        ...this.getQueueState(),
+      })
       return duplicateTask.promise
     }
 
@@ -70,7 +106,14 @@ export class RequestQueue {
     this.waitingTasks.set(hash, task)
     this.waitingQueue.push({ ...task, hash }, scheduleAt)
 
-    // console.info(`✅ Task ${task.id} added to queue. Queue size: ${this.waitingQueue.size()}, waiting: ${this.waitingTasks.size}, executing: ${this.executingTasks.size}`)
+    this.log("info", "enqueue", {
+      hash,
+      taskId: task.id,
+      scheduleAt,
+      createdAt: task.createdAt,
+      scheduledDelayMs: Math.max(0, scheduleAt - task.createdAt),
+      ...this.getQueueState(),
+    })
 
     this.schedule()
     return promise
@@ -136,7 +179,15 @@ export class RequestQueue {
   }
 
   private async executeTask(task: RequestTask & { hash: string }) {
-    // console.info(`🏃 Starting execution of task ${task.id} (attempt ${task.retryCount + 1}) at ${Date.now()}`)
+    const startedAt = Date.now()
+    this.log("info", "start", {
+      hash: task.hash,
+      taskId: task.id,
+      retryCount: task.retryCount,
+      queueWaitMs: Math.max(0, startedAt - task.scheduleAt),
+      totalWaitMs: startedAt - task.createdAt,
+      ...this.getQueueState(),
+    })
 
     let timeoutId: NodeJS.Timeout | null = null
     const abortController = new AbortController()
@@ -164,7 +215,13 @@ export class RequestQueue {
         timeoutId = null
       }
 
-      // console.info(`✅ Task ${task.id} completed successfully at ${Date.now()}`)
+      this.log("info", "complete", {
+        hash: task.hash,
+        taskId: task.id,
+        retryCount: task.retryCount,
+        executeMs: Date.now() - startedAt,
+        totalMs: Date.now() - task.createdAt,
+      })
       task.resolve(result)
     }
     catch (error) {
@@ -173,8 +230,6 @@ export class RequestQueue {
         clearTimeout(timeoutId)
         timeoutId = null
       }
-
-      // console.error(`❌ Task ${task.id} failed at ${Date.now()}:`, error)
 
       // Check if we should retry
       if (task.retryCount < this.options.maxRetries) {
@@ -191,7 +246,14 @@ export class RequestQueue {
         const retryAt = Date.now() + delayMs
         task.scheduleAt = retryAt
 
-        // console.warn(`🔄 Retrying task ${task.id} (attempt ${task.retryCount}/${this.options.maxRetries}) after ${Math.round(delayMs)}ms`)
+        this.log("warn", "retry", {
+          hash: task.hash,
+          taskId: task.id,
+          retryCount: task.retryCount,
+          maxRetries: this.options.maxRetries,
+          backoffDelayMs: Math.round(delayMs),
+          error: error instanceof Error ? error.message : String(error),
+        })
 
         // Move task back to waiting queue for retry
         this.waitingTasks.set(task.hash, task)
@@ -200,7 +262,13 @@ export class RequestQueue {
       }
       else {
         // Max retries exceeded, reject the promise
-        // console.error(`💀 Task ${task.id} failed permanently after ${this.options.maxRetries} retries`)
+        this.log("error", "failed", {
+          hash: task.hash,
+          taskId: task.id,
+          retryCount: task.retryCount,
+          totalMs: Date.now() - task.createdAt,
+          error: error instanceof Error ? error.message : String(error),
+        })
         task.reject(error)
       }
     }

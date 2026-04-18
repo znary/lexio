@@ -156,6 +156,22 @@ describe("translate-text", () => {
       expect(mockGetOrCreateWebPageContext).toHaveBeenCalledTimes(1)
       expect(mockGetOrGenerateWebPageSummary).toHaveBeenCalledTimes(1)
     })
+
+    it("reports the page translation status key before sending the request", async () => {
+      mockSendMessage.mockResolvedValue("translated text")
+      const statusKeys: string[] = []
+
+      await translateTextForPage("test text", {
+        onStatusKeyReady(statusKey) {
+          statusKeys.push(statusKey)
+        },
+      })
+
+      expect(statusKeys).toHaveLength(1)
+      expect(mockSendMessage).toHaveBeenCalledWith("enqueueTranslateRequest", expect.objectContaining({
+        hash: statusKeys[0],
+      }))
+    })
   })
 
   describe("translateTextForPageTitle", () => {

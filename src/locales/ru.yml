@@ -844,6 +844,9 @@ languageDetection:
 translation:
   sameLanguage: Исходный и целевой языки должны различаться
   autoModeSameLanguage: Обнаруженный язык '$1' совпадает с целевым языком
+  loadingStatus:
+    queued: В очереди
+    translating: Переводится
 speak:
   fetchingAudio: Генерация аудио...
   playingAudio: Воспроизведение аудио...

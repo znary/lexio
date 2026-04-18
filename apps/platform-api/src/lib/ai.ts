@@ -20,12 +20,15 @@ function resolveArkApiKey(env: Env): string {
   return firstNonEmpty(env.ARK_API_KEY, env.AI_GATEWAY_API_KEY)
 }
 
-function resolveArkModel(env: Env, plan: Plan): string {
-  if (plan === "pro") {
-    return firstNonEmpty(env.ARK_MODEL_PRO, env.AI_GATEWAY_MODEL_PRO, env.ARK_MODEL, DEFAULT_ARK_MODEL)
-  }
-
-  return firstNonEmpty(env.ARK_MODEL_FREE, env.AI_GATEWAY_MODEL_FREE, env.ARK_MODEL, DEFAULT_ARK_MODEL)
+function resolveArkModel(env: Env, _plan: Plan): string {
+  return firstNonEmpty(
+    env.ARK_MODEL_PRO,
+    env.AI_GATEWAY_MODEL_PRO,
+    env.ARK_MODEL,
+    env.ARK_MODEL_FREE,
+    env.AI_GATEWAY_MODEL_FREE,
+    DEFAULT_ARK_MODEL,
+  )
 }
 
 export async function forwardChatCompletions(

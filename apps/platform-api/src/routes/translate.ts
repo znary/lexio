@@ -17,13 +17,13 @@ import {
   recordUsage,
   syncUserFromClerk,
 } from "../lib/db"
+import { buildEntitlements } from "../lib/env"
 import { HttpError, json, readJson, withCors } from "../lib/http"
 import {
   logTranslationTaskError,
   logTranslationTaskInfo,
   logTranslationTaskStreamInfo,
   logTranslationTaskWarn,
-
 } from "../lib/translation-task-log"
 import {
   assignUsageTask,
@@ -92,7 +92,31 @@ interface ManagedTranslationQueueMessage {
   ownerTabId: number | null
 }
 
+interface BackgroundUsageTaskAssignment {
+  taskId: string
+  requestId: string
+  leaseId: string | null
+  requestCount: number
+  status: "queued" | "dispatched" | "running" | "released" | "canceled" | "expired"
+  queuePosition: number | null
+  queueWaitMs: number | null
+  cancelReason: string | null
+  releaseReason: string | null
+  skipReason?: "usage-task-missing" | null
+  taskStatus?: TranslationTaskStatus | null
+  recoveredStatus?: "queued" | "dispatched" | "running" | "released" | "canceled" | "expired" | null
+  recoveryAction?: "recreated" | "ignored" | null
+}
+
 const activeManagedTranslationControllers = new Map<string, AbortController>()
+
+function logTranslationTaskPerf(event: string, details: Record<string, unknown>): void {
+  console.warn({
+    namespace: "translation-task-perf",
+    event,
+    ...details,
+  })
+}
 
 function resolveManagedTranslationEngine(env: Env): SupportedTranslationEngine {
   const rawValue = env.MANAGED_TRANSLATION_ENGINE?.trim()
@@ -209,6 +233,42 @@ function buildTaskEventData(task: TranslationTaskRecord): Record<string, unknown
     finishedAt: task.finishedAt,
     canceledAt: task.canceledAt,
   }
+}
+
+function isMonthlyRequestLimitError(error: unknown): boolean {
+  if (error instanceof HttpError && error.status === 402) {
+    return true
+  }
+
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes("Monthly request limit reached")
+}
+
+function isUsageTaskMissingError(error: unknown): error is HttpError {
+  return typeof error === "object"
+    && error !== null
+    && "status" in error
+    && Number((error as { status?: unknown }).status) === 404
+}
+
+async function recreateBackgroundUsageTask(
+  env: Env,
+  task: TranslationTaskRecord,
+  requestId: string,
+) {
+  return await createUsageTask(
+    env,
+    task.userId,
+    buildEntitlements(await getPlanForUser(env, task.userId)),
+    task.mode,
+    {
+      requestId,
+      taskId: task.id,
+      scene: task.scene,
+      ownerTabId: task.ownerTabId,
+      lane: "background",
+    },
+  )
 }
 
 async function publishManagedTaskEvent(
@@ -489,6 +549,7 @@ export async function handleTranslateStream(request: Request, env: Env, session:
 }
 
 export async function handleTranslateTasksCreate(request: Request, env: Env, session: SessionContext) {
+  const startedAt = Date.now()
   const body = await readJson<ManagedTranslateTaskRequest>(request)
   const engine = resolveManagedTranslationEngine(env)
   assertTranslationEngineImplemented(engine)
@@ -507,6 +568,7 @@ export async function handleTranslateTasksCreate(request: Request, env: Env, ses
 
   let task = result.task
   if (result.created) {
+    const usageTaskStartedAt = Date.now()
     const usageTask = await createUsageTask(
       env,
       user.id,
@@ -521,11 +583,12 @@ export async function handleTranslateTasksCreate(request: Request, env: Env, ses
       },
     )
 
-    if (usageTask.status === "running") {
+    if (usageTask.status === "running" || usageTask.status === "dispatched") {
       task = await markTranslationTaskDispatched(env, task.id) ?? task
       logTranslationTaskInfo(buildTaskLogEntry(task, {
         requestId: usageTask.requestId,
         status: "dispatched",
+        queuePosition: usageTask.queuePosition,
         releaseReason: null,
       }))
     }
@@ -536,6 +599,18 @@ export async function handleTranslateTasksCreate(request: Request, env: Env, ses
         queuePosition: usageTask.queuePosition,
       }))
     }
+
+    logTranslationTaskPerf("task-create", {
+      taskId: task.id,
+      userId: user.id,
+      scene: task.scene,
+      lane: task.lane,
+      ownerTabId: task.ownerTabId,
+      usageTaskStatus: usageTask.status,
+      queuePosition: usageTask.queuePosition,
+      createUsageTaskMs: Date.now() - usageTaskStartedAt,
+      totalMs: Date.now() - startedAt,
+    })
   }
   else {
     logTranslationTaskWarn(buildTaskLogEntry(task, {
@@ -606,22 +681,31 @@ export async function handleTranslateTaskStream(
     status: task.status,
   })
 
-  if (task.lane === "background" && (task.status === "queued" || task.status === "dispatched")) {
+  if (task.lane === "background" && task.status === "queued") {
+    logTranslationTaskPerf("task-stream-kick-decision", {
+      taskId,
+      userId: user.id,
+      taskStatus: task.status,
+      action: "kick",
+      ownerTabId: task.ownerTabId,
+    })
     try {
       const kickResult = await kickUsageTask(env, user.id, {
         taskId: task.id,
         requestId: task.id,
       })
 
+      logTranslationTaskPerf("task-stream-kick-result", {
+        taskId,
+        userId: user.id,
+        taskStatus: task.status,
+        kickStatus: kickResult.status ?? null,
+        enqueued: kickResult.enqueued,
+        ownerTabId: task.ownerTabId,
+      })
+
       if (!kickResult.enqueued) {
-        const me = await buildMePayload(env, user)
-        const recovered = await createUsageTask(env, user.id, me.entitlements, task.mode, {
-          requestId: task.id,
-          taskId: task.id,
-          scene: task.scene,
-          ownerTabId: task.ownerTabId,
-          lane: "background",
-        })
+        const recovered = await recreateBackgroundUsageTask(env, task, task.id)
         console.warn({
           namespace: "translation-task-stream",
           event: "recreated-background-task",
@@ -634,13 +718,80 @@ export async function handleTranslateTaskStream(
       }
     }
     catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
       console.warn({
         namespace: "translation-task-stream",
         event: "kick-failed",
         taskId,
         userId: user.id,
         status: task.status,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
+      })
+
+      if (isMonthlyRequestLimitError(error)) {
+        await cancelUsageTask(env, user.id, task.id, {
+          cancelReason: "monthly-request-limit",
+          requestId: task.id,
+        }).catch(() => undefined)
+
+        const failedTask = await failTranslationTask(
+          env,
+          user.id,
+          task.id,
+          errorMessage,
+          "monthly_request_limit",
+        )
+
+        if (failedTask?.status === "failed") {
+          logTranslationTaskWarn(buildTaskLogEntry(failedTask, {
+            status: "failed",
+            errorCode: "monthly_request_limit",
+            errorMessage,
+            releaseReason: "failed",
+          }))
+          await publishManagedTaskEvent(env, failedTask, "failed")
+          return buildManagedTaskImmediateStream(failedTask, "failed")
+        }
+
+        if (failedTask?.status === "canceled") {
+          await publishManagedTaskEvent(env, failedTask, "canceled")
+          return buildManagedTaskImmediateStream(failedTask, "canceled")
+        }
+      }
+    }
+  }
+  else if (task.lane === "background" && task.status === "dispatched") {
+    logTranslationTaskPerf("task-stream-kick-decision", {
+      taskId,
+      userId: user.id,
+      taskStatus: task.status,
+      action: "verify-dispatch",
+      ownerTabId: task.ownerTabId,
+    })
+
+    const kickResult = await kickUsageTask(env, user.id, {
+      taskId: task.id,
+      requestId: task.id,
+    })
+    logTranslationTaskPerf("task-stream-kick-result", {
+      taskId,
+      userId: user.id,
+      taskStatus: task.status,
+      kickStatus: kickResult.status ?? null,
+      enqueued: kickResult.enqueued,
+      ownerTabId: task.ownerTabId,
+    })
+
+    if (!kickResult.enqueued && kickResult.status !== "dispatched" && kickResult.status !== "running") {
+      const recovered = await recreateBackgroundUsageTask(env, task, task.id)
+      console.warn({
+        namespace: "translation-task-stream",
+        event: "recreated-dispatched-background-task",
+        taskId,
+        userId: user.id,
+        previousStatus: task.status,
+        recoveredStatus: recovered.status,
+        ownerTabId: task.ownerTabId,
       })
     }
   }
@@ -696,8 +847,42 @@ export async function handleManagedTranslationQueueMessage(
   env: Env,
   message: ManagedTranslationQueueMessage,
 ): Promise<void> {
+  const startedAt = Date.now()
   const usageTask = await createOrAssignBackgroundUsageTask(env, message)
+  if (usageTask.skipReason) {
+    logTranslationTaskPerf("queue-message-skipped", {
+      taskId: message.taskId,
+      requestId: message.requestId,
+      userId: message.userId,
+      scene: message.scene,
+      lane: message.lane,
+      ownerTabId: message.ownerTabId,
+      reason: usageTask.skipReason,
+      taskStatus: usageTask.taskStatus ?? null,
+      recoveredStatus: usageTask.recoveredStatus ?? null,
+      recoveryAction: usageTask.recoveryAction ?? null,
+      queuePosition: usageTask.queuePosition,
+      totalMs: Date.now() - startedAt,
+    })
+    return
+  }
+
   if (!usageTask.leaseId) {
+    logTranslationTaskPerf("queue-message-skipped", {
+      taskId: message.taskId,
+      requestId: message.requestId,
+      userId: message.userId,
+      scene: message.scene,
+      lane: message.lane,
+      ownerTabId: message.ownerTabId,
+      reason: "no-lease",
+      usageTaskStatus: usageTask.status,
+      queuePosition: usageTask.queuePosition,
+      queueWaitMs: usageTask.queueWaitMs,
+      cancelReason: usageTask.cancelReason,
+      releaseReason: usageTask.releaseReason,
+      totalMs: Date.now() - startedAt,
+    })
     return
   }
 
@@ -706,6 +891,17 @@ export async function handleManagedTranslationQueueMessage(
     await releaseUsageTask(env, message.userId, usageTask.leaseId, {
       taskId: message.taskId,
       releaseReason: "task-missing",
+    })
+    logTranslationTaskPerf("queue-message-skipped", {
+      taskId: message.taskId,
+      requestId: usageTask.requestId,
+      userId: message.userId,
+      scene: message.scene,
+      lane: message.lane,
+      ownerTabId: message.ownerTabId,
+      reason: "task-missing",
+      usageTaskStatus: usageTask.status,
+      totalMs: Date.now() - startedAt,
     })
     return
   }
@@ -718,6 +914,18 @@ export async function handleManagedTranslationQueueMessage(
     if (task.status === "canceled") {
       await publishManagedTaskEvent(env, task, "canceled")
     }
+    logTranslationTaskPerf("queue-message-skipped", {
+      taskId: task.id,
+      requestId: usageTask.requestId,
+      userId: task.userId,
+      scene: task.scene,
+      lane: task.lane,
+      ownerTabId: task.ownerTabId,
+      reason: "terminal-task",
+      taskStatus: task.status,
+      usageTaskStatus: usageTask.status,
+      totalMs: Date.now() - startedAt,
+    })
     return
   }
 
@@ -728,6 +936,18 @@ export async function handleManagedTranslationQueueMessage(
       errorCode: "duplicate_queue_delivery",
       errorMessage: "Skipped duplicate queue delivery for running task",
     }))
+    logTranslationTaskPerf("queue-message-skipped", {
+      taskId: task.id,
+      requestId: usageTask.requestId,
+      userId: task.userId,
+      scene: task.scene,
+      lane: task.lane,
+      ownerTabId: task.ownerTabId,
+      reason: "duplicate-running-task",
+      taskStatus: task.status,
+      usageTaskStatus: usageTask.status,
+      totalMs: Date.now() - startedAt,
+    })
     return
   }
 
@@ -739,6 +959,7 @@ export async function handleManagedTranslationQueueMessage(
   }))
 
   const controller = beginManagedTaskExecution(task.id)
+  const upstreamStartedAt = Date.now()
 
   try {
     const upstream = await forwardChatCompletions(
@@ -748,6 +969,7 @@ export async function handleManagedTranslationQueueMessage(
       controller.signal,
     )
     const payloadText = await upstream.text()
+    const upstreamMs = Date.now() - upstreamStartedAt
 
     const latestTask = await getTranslationTaskForWorker(env, task.id)
     if (latestTask?.status === "canceled") {
@@ -759,18 +981,27 @@ export async function handleManagedTranslationQueueMessage(
       return
     }
 
+    const parseStartedAt = Date.now()
     const payload = extractTranslatedText(payloadText)
+    const parseMs = Date.now() - parseStartedAt
+    const completeStartedAt = Date.now()
     const completedTask = await completeTranslationTask(env, task.userId, task.id, payload.text)
     if (!completedTask) {
       throw new Error("Translation task disappeared before completion")
     }
+    const completeMs = Date.now() - completeStartedAt
 
+    const publishStartedAt = Date.now()
     await publishManagedTaskEvent(env, completedTask, "completed")
+    const publishMs = Date.now() - publishStartedAt
+    const releaseStartedAt = Date.now()
     await releaseUsageTask(env, task.userId, usageTask.leaseId, {
       taskId: task.id,
       releaseReason: "completed",
       upstreamStatus: upstream.status,
     })
+    const releaseMs = Date.now() - releaseStartedAt
+    const recordUsageStartedAt = Date.now()
     await recordUsage(
       env,
       task.userId,
@@ -780,12 +1011,29 @@ export async function handleManagedTranslationQueueMessage(
       payload.inputTokens,
       payload.outputTokens,
     )
+    const recordUsageMs = Date.now() - recordUsageStartedAt
     logTranslationTaskInfo(buildTaskLogEntry(completedTask, {
       requestId: usageTask.requestId,
       status: "completed",
       upstreamStatus: upstream.status,
       releaseReason: "completed",
     }))
+    logTranslationTaskPerf("queue-message-complete", {
+      taskId: task.id,
+      requestId: usageTask.requestId,
+      userId: task.userId,
+      scene: task.scene,
+      lane: task.lane,
+      ownerTabId: task.ownerTabId,
+      upstreamStatus: upstream.status,
+      upstreamMs,
+      parseMs,
+      completeMs,
+      publishMs,
+      releaseMs,
+      recordUsageMs,
+      totalMs: Date.now() - startedAt,
+    })
   }
   catch (error) {
     const latestTask = await getTranslationTaskForWorker(env, task.id)
@@ -807,6 +1055,15 @@ export async function handleManagedTranslationQueueMessage(
       await releaseUsageTask(env, task.userId, usageTask.leaseId, {
         taskId: task.id,
         releaseReason: "canceled",
+      })
+      logTranslationTaskPerf("queue-message-canceled", {
+        taskId: task.id,
+        requestId: usageTask.requestId,
+        userId: task.userId,
+        scene: task.scene,
+        lane: task.lane,
+        ownerTabId: task.ownerTabId,
+        totalMs: Date.now() - startedAt,
       })
       return
     }
@@ -835,6 +1092,17 @@ export async function handleManagedTranslationQueueMessage(
       releaseReason: "failed",
       upstreamStatus: error instanceof HttpError ? error.status : undefined,
     })
+    logTranslationTaskPerf("queue-message-failed", {
+      taskId: task.id,
+      requestId: usageTask.requestId,
+      userId: task.userId,
+      scene: task.scene,
+      lane: task.lane,
+      ownerTabId: task.ownerTabId,
+      errorCode,
+      errorMessage,
+      totalMs: Date.now() - startedAt,
+    })
   }
   finally {
     finishManagedTaskExecution(task.id)
@@ -844,34 +1112,64 @@ export async function handleManagedTranslationQueueMessage(
 async function createOrAssignBackgroundUsageTask(
   env: Env,
   message: ManagedTranslationQueueMessage,
-) {
-  const usageTask = await assignUsageTask(env, message.userId, {
-    taskId: message.taskId,
-    requestId: message.requestId,
-  })
+): Promise<BackgroundUsageTaskAssignment> {
+  try {
+    const usageTask = await assignUsageTask(env, message.userId, {
+      taskId: message.taskId,
+      requestId: message.requestId,
+    })
 
-  if (usageTask.status === "queued") {
     return {
       taskId: usageTask.taskId,
       requestId: usageTask.requestId,
-      leaseId: null,
+      leaseId: usageTask.leaseId,
       requestCount: usageTask.requestCount,
+      status: usageTask.status,
+      queuePosition: usageTask.queuePosition,
+      queueWaitMs: usageTask.queueWaitMs,
+      cancelReason: usageTask.cancelReason,
+      releaseReason: usageTask.releaseReason,
     }
   }
+  catch (error) {
+    if (!isUsageTaskMissingError(error)) {
+      throw error
+    }
 
-  if (usageTask.status === "canceled") {
+    const task = await getTranslationTaskForWorker(env, message.taskId)
+    if (task && (task.status === "queued" || task.status === "dispatched")) {
+      const recovered = await recreateBackgroundUsageTask(env, task, message.requestId)
+      return {
+        taskId: message.taskId,
+        requestId: message.requestId,
+        leaseId: null,
+        requestCount: 1,
+        status: recovered.status,
+        queuePosition: recovered.queuePosition,
+        queueWaitMs: recovered.queueWaitMs,
+        cancelReason: recovered.cancelReason,
+        releaseReason: recovered.releaseReason,
+        skipReason: "usage-task-missing",
+        taskStatus: task.status,
+        recoveredStatus: recovered.status,
+        recoveryAction: "recreated",
+      }
+    }
+
     return {
-      taskId: usageTask.taskId,
-      requestId: usageTask.requestId,
+      taskId: message.taskId,
+      requestId: message.requestId,
       leaseId: null,
-      requestCount: usageTask.requestCount,
+      requestCount: 1,
+      status: "released",
+      queuePosition: null,
+      queueWaitMs: null,
+      cancelReason: null,
+      releaseReason: null,
+      skipReason: "usage-task-missing",
+      taskStatus: task?.status ?? null,
+      recoveredStatus: null,
+      recoveryAction: "ignored",
     }
-  }
-
-  return {
-    taskId: usageTask.taskId,
-    requestId: usageTask.requestId,
-    leaseId: usageTask.leaseId,
-    requestCount: usageTask.requestCount,
   }
 }

@@ -30,7 +30,7 @@
     "consumers": [
       {
         "queue": "usage-gate-background",
-        "max_batch_size": 10,
+        "max_batch_size": 100,
         "max_batch_timeout": 1
       }
     ]
@@ -62,7 +62,7 @@
         "consumers": [
           {
             "queue": "usage-gate-background",
-            "max_batch_size": 10,
+            "max_batch_size": 100,
             "max_batch_timeout": 1
           }
         ]

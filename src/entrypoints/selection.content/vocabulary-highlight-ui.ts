@@ -20,6 +20,7 @@ export interface VocabularyHoverPreview {
 
 interface VocabularyHoverCardPositionOptions {
   anchorRect: VocabularyHighlightAnchorRect
+  avoidRect?: VocabularyHighlightAnchorRect | null
   cardHeight: number
   cardWidth: number
   gap?: number
@@ -127,6 +128,7 @@ export function toVocabularyHighlightAnchorRect(rect: DOMRect | DOMRectReadOnly)
 
 export function getVocabularyHoverCardPosition({
   anchorRect,
+  avoidRect = null,
   cardHeight,
   cardWidth,
   gap = DEFAULT_CARD_GAP,
@@ -138,14 +140,59 @@ export function getVocabularyHoverCardPosition({
   const maxTop = Math.max(minMargin, viewportHeight - cardHeight - minMargin)
 
   const centeredLeft = anchorRect.left + (anchorRect.width / 2) - (cardWidth / 2)
-  const left = Math.min(Math.max(minMargin, centeredLeft), maxLeft)
+  const middleTop = anchorRect.top + (anchorRect.height / 2) - (cardHeight / 2)
 
-  const preferredBottomTop = anchorRect.bottom + gap
-  const preferredTopTop = anchorRect.top - cardHeight - gap
-  const shouldPlaceAbove = preferredBottomTop > maxTop && preferredTopTop >= minMargin
-  const top = shouldPlaceAbove
-    ? Math.min(Math.max(minMargin, preferredTopTop), maxTop)
-    : Math.min(Math.max(minMargin, preferredBottomTop), maxTop)
+  const clampLeft = (left: number) => Math.min(Math.max(minMargin, left), maxLeft)
+  const clampTop = (top: number) => Math.min(Math.max(minMargin, top), maxTop)
 
-  return { left, top }
+  const createRect = (left: number, top: number) => ({
+    left,
+    top,
+    right: left + cardWidth,
+    bottom: top + cardHeight,
+  })
+
+  const intersects = (left: number, top: number) => {
+    if (!avoidRect) {
+      return false
+    }
+
+    const cardRect = createRect(left, top)
+    return (
+      cardRect.left < avoidRect.right
+      && cardRect.right > avoidRect.left
+      && cardRect.top < avoidRect.bottom
+      && cardRect.bottom > avoidRect.top
+    )
+  }
+
+  const candidates = [
+    {
+      left: clampLeft(centeredLeft),
+      top: clampTop(anchorRect.top - cardHeight - gap),
+    },
+    {
+      left: clampLeft(centeredLeft),
+      top: clampTop(anchorRect.bottom + gap),
+    },
+    {
+      left: clampLeft(anchorRect.right + gap),
+      top: clampTop(middleTop),
+    },
+    {
+      left: clampLeft(anchorRect.left - cardWidth - gap),
+      top: clampTop(middleTop),
+    },
+  ]
+
+  for (const candidate of candidates) {
+    if (!intersects(candidate.left, candidate.top)) {
+      return candidate
+    }
+  }
+
+  return candidates[0] ?? {
+    left: clampLeft(centeredLeft),
+    top: clampTop(anchorRect.top - cardHeight - gap),
+  }
 }

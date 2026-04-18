@@ -1,5 +1,6 @@
 import type { Env } from "../env"
 import { describe, expect, it, vi } from "vitest"
+import { UNLIMITED_ENTITLEMENT_VALUE } from "../env"
 
 function createEnv() {
   const prepareMock = vi.fn((sql: string) => ({
@@ -251,9 +252,9 @@ describe("ensureEntitlements", () => {
 
     expect(result).toMatchObject({
       plan: "free",
-      monthlyRequestLimit: 500,
-      monthlyTokenLimit: 500000,
-      concurrentRequestLimit: 10,
+      monthlyRequestLimit: UNLIMITED_ENTITLEMENT_VALUE,
+      monthlyTokenLimit: UNLIMITED_ENTITLEMENT_VALUE,
+      concurrentRequestLimit: UNLIMITED_ENTITLEMENT_VALUE,
     })
     expect(runMock).toHaveBeenCalledTimes(1)
   })

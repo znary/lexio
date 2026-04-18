@@ -51,6 +51,14 @@ const VOCABULARY_ITEM_PATH_REGEX = /^\/v1\/vocabulary\/([^/]+)$/
 const TRANSLATE_TASK_STREAM_PATH_REGEX = /^\/v1\/translate\/tasks\/([^/]+)\/stream$/
 const TRANSLATE_TASK_CANCEL_PATH_REGEX = /^\/v1\/translate\/tasks\/([^/]+)\/cancel$/
 
+function logUsageGateQueueBatch(event: string, details: Record<string, unknown>): void {
+  console.warn({
+    namespace: "usage-gate-queue-batch",
+    event,
+    ...details,
+  })
+}
+
 async function withRefreshedExtensionSession(response: Response, session: SessionContext | null, env: PlatformEnv): Promise<Response> {
   if (!session || session.tokenType !== "extension") {
     return response
@@ -69,9 +77,41 @@ async function withRefreshedExtensionSession(response: Response, session: Sessio
 }
 
 async function handleUsageGateQueue(batch: UsageGateQueueBatch, env: PlatformEnv): Promise<void> {
-  await Promise.all(batch.messages.map(async (message) => {
+  const startedAt = Date.now()
+  const taskIds = batch.messages.map(message => message.body.taskId)
+  const uniqueTaskIds = new Set(taskIds)
+  const duplicateTaskIds = [...new Set(taskIds.filter((taskId, index) => taskIds.indexOf(taskId) !== index))]
+  const results = await Promise.allSettled(batch.messages.map(async (message) => {
+    const messageStartedAt = Date.now()
     await handleManagedTranslationQueueMessage(env, message.body)
+    return {
+      taskId: message.body.taskId,
+      totalMs: Date.now() - messageStartedAt,
+    }
   }))
+  const failedResults = results.filter(result => result.status === "rejected")
+  const fulfilledResults = results.filter(result => result.status === "fulfilled")
+  const slowestMessageMs = fulfilledResults.length > 0
+    ? Math.max(...fulfilledResults.map(result => result.value.totalMs))
+    : null
+
+  logUsageGateQueueBatch("complete", {
+    messageCount: batch.messages.length,
+    uniqueTaskCount: uniqueTaskIds.size,
+    duplicateMessageCount: batch.messages.length - uniqueTaskIds.size,
+    duplicateTaskIds: duplicateTaskIds.slice(0, 10),
+    succeededCount: fulfilledResults.length,
+    failedCount: failedResults.length,
+    slowestMessageMs,
+    totalMs: Date.now() - startedAt,
+  })
+
+  if (failedResults.length > 0) {
+    const firstFailure = failedResults[0]
+    throw firstFailure.reason instanceof Error
+      ? firstFailure.reason
+      : new Error(String(firstFailure.reason))
+  }
 }
 
 const handler: ExportedHandler<PlatformEnv> = {

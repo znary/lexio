@@ -37,4 +37,32 @@ describe("vocabulary-highlight-ui", () => {
       top: 128,
     })
   })
+
+  it("keeps the hover card above the highlight and away from the selection toolbar", () => {
+    expect(getVocabularyHoverCardPosition({
+      anchorRect: {
+        top: 160,
+        right: 240,
+        bottom: 180,
+        left: 200,
+        width: 40,
+        height: 20,
+      },
+      cardWidth: 180,
+      cardHeight: 72,
+      viewportWidth: 480,
+      viewportHeight: 320,
+      avoidRect: {
+        top: 192,
+        right: 310,
+        bottom: 236,
+        left: 130,
+        width: 180,
+        height: 44,
+      },
+    })).toEqual({
+      left: 130,
+      top: 76,
+    })
+  })
 })

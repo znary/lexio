@@ -1,10 +1,10 @@
 import type { Entitlements } from "../lib/env"
 import type { UsageGateLane, UsageGateStatus } from "../lib/usage-gate-log"
+import { UNLIMITED_ENTITLEMENT_VALUE } from "../lib/env"
 import { logUsageGateEvent } from "../lib/usage-gate-log"
 
 const ACTIVE_LEASE_TTL_MS = 2 * 60 * 1000
-const INTERACTIVE_SLOTS = 2
-const BACKGROUND_QUEUE_LIMIT = 100
+const BACKGROUND_QUEUE_LIMIT = UNLIMITED_ENTITLEMENT_VALUE
 
 interface UsageGateEnv {
   USAGE_GATE_BACKGROUND_QUEUE?: {
@@ -33,6 +33,7 @@ interface UsageTask {
   concurrentRequestLimit: number
   createdAt: number
   queuedAt: number | null
+  dispatchedAt: number | null
   startedAt: number | null
   releasedAt: number | null
   canceledAt: number | null
@@ -133,9 +134,10 @@ function normalizeTask(task: Partial<UsageTask> & Pick<UsageTask, "taskId" | "re
     status: task.status ?? "queued",
     ownerTabId: task.ownerTabId ?? null,
     requestKind: task.requestKind,
-    concurrentRequestLimit: Number.isFinite(task.concurrentRequestLimit) ? Number(task.concurrentRequestLimit) : 10,
+    concurrentRequestLimit: Number.isFinite(task.concurrentRequestLimit) ? Number(task.concurrentRequestLimit) : UNLIMITED_ENTITLEMENT_VALUE,
     createdAt: Number.isFinite(task.createdAt) ? Number(task.createdAt) : Date.now(),
     queuedAt: Number.isFinite(task.queuedAt) ? Number(task.queuedAt) : null,
+    dispatchedAt: Number.isFinite(task.dispatchedAt) ? Number(task.dispatchedAt) : null,
     startedAt: Number.isFinite(task.startedAt) ? Number(task.startedAt) : null,
     releasedAt: Number.isFinite(task.releasedAt) ? Number(task.releasedAt) : null,
     canceledAt: Number.isFinite(task.canceledAt) ? Number(task.canceledAt) : null,
@@ -167,10 +169,11 @@ function normalizeState(stored: unknown): UsageState {
         requestId: taskId,
         userId: "legacy-user",
         requestKind: "generate",
-        concurrentRequestLimit: 10,
+        concurrentRequestLimit: UNLIMITED_ENTITLEMENT_VALUE,
         status: "running",
         lane: "interactive",
         createdAt: startedAt,
+        dispatchedAt: null,
         startedAt,
         leaseId,
       })
@@ -198,7 +201,7 @@ function normalizeState(stored: unknown): UsageState {
       requestId: task.requestId ?? taskId,
       userId: task.userId ?? "unknown",
       requestKind: task.requestKind ?? "generate",
-      concurrentRequestLimit: Number.isFinite(task.concurrentRequestLimit) ? Number(task.concurrentRequestLimit) : 10,
+      concurrentRequestLimit: Number.isFinite(task.concurrentRequestLimit) ? Number(task.concurrentRequestLimit) : UNLIMITED_ENTITLEMENT_VALUE,
     })
   }
 
@@ -258,14 +261,19 @@ function getTaskQueuePosition(state: UsageState, taskId: string): number | null 
   return index >= 0 ? index + 1 : null
 }
 
-function getBackgroundSlots(limit: number): number {
-  return Math.max(1, limit - INTERACTIVE_SLOTS)
+function getTaskResponseStatus(task: UsageTask): UsageGateStatus | "dispatched" {
+  if (task.status === "queued" && task.lane === "background" && task.dispatchedAt !== null) {
+    return "dispatched"
+  }
+
+  return task.status
 }
 
 function getLaneCapacity(state: UsageState, lane: UsageGateLane, entitlements: Entitlements): number {
-  return lane === "interactive"
-    ? INTERACTIVE_SLOTS
-    : getBackgroundSlots(entitlements.concurrentRequestLimit)
+  void state
+  void lane
+  void entitlements
+  return UNLIMITED_ENTITLEMENT_VALUE
 }
 
 function getRunningCount(state: UsageState, lane: UsageGateLane): number {
@@ -280,7 +288,7 @@ function chooseLane(state: UsageState, preferredLane: UsageGateLane, entitlement
   return hasRunningCapacity(state, preferredLane, entitlements) ? preferredLane : null
 }
 
-function buildTaskLog(task: UsageTask, overrides: Partial<{
+function buildTaskLog(task: UsageTask, state: UsageState, overrides: Partial<{
   status: string
   queuePosition: number | null
   queueWaitMs: number | null
@@ -303,10 +311,28 @@ function buildTaskLog(task: UsageTask, overrides: Partial<{
     upstreamStatus: overrides.upstreamStatus ?? task.upstreamStatus,
     cancelReason: overrides.cancelReason ?? task.cancelReason,
     releaseReason: overrides.releaseReason ?? task.releaseReason,
+    queueDepth: state.queueOrder.length,
+    queueLimit: BACKGROUND_QUEUE_LIMIT,
+    activeCount: state.activeCount,
+    interactiveActiveCount: state.interactiveActiveCount,
+    backgroundActiveCount: state.backgroundActiveCount,
+    laneCapacity: getLaneCapacity(state, task.lane, {
+      plan: "free",
+      monthlyRequestLimit: Number.POSITIVE_INFINITY,
+      monthlyTokenLimit: Number.POSITIVE_INFINITY,
+      concurrentRequestLimit: task.concurrentRequestLimit,
+    }),
+    concurrentRequestLimit: task.concurrentRequestLimit,
+    dispatchedAt: task.dispatchedAt,
+    queueMessageOutstanding: task.dispatchedAt !== null,
   }
 }
 
-function buildTaskResponse(task: UsageTask, state: UsageState): Record<string, unknown> {
+function buildTaskResponse(
+  task: UsageTask,
+  state: UsageState,
+  overrides: Partial<{ status: string }> = {},
+): Record<string, unknown> {
   const queuePosition = getTaskQueuePosition(state, task.taskId)
   const queueWaitMs = task.queuedAt !== null && task.startedAt !== null
     ? task.startedAt - task.queuedAt
@@ -325,7 +351,7 @@ function buildTaskResponse(task: UsageTask, state: UsageState): Record<string, u
     userId: task.userId,
     scene: task.scene,
     lane: task.lane,
-    status: task.status,
+    status: overrides.status ?? getTaskResponseStatus(task),
     ownerTabId: task.ownerTabId,
     queuePosition,
     queueWaitMs,
@@ -358,6 +384,7 @@ function releaseTask(task: UsageTask, now: number, releaseReason: string | null,
   task.releasedAt = now
   task.releaseReason = releaseReason
   task.upstreamStatus = upstreamStatus
+  task.dispatchedAt = null
   task.leaseId = null
 }
 
@@ -365,6 +392,7 @@ function cancelTask(task: UsageTask, now: number, cancelReason: string | null): 
   task.status = "canceled"
   task.canceledAt = now
   task.cancelReason = cancelReason
+  task.dispatchedAt = null
   task.leaseId = null
 }
 
@@ -372,6 +400,7 @@ function expireTask(task: UsageTask, now: number): void {
   task.status = "expired"
   task.releasedAt = now
   task.releaseReason = "lease-expired"
+  task.dispatchedAt = null
   task.leaseId = null
 }
 
@@ -430,10 +459,6 @@ export class UsageGate {
     const state = await this.loadState()
     const now = Date.now()
 
-    if (state.requestCount >= payload.entitlements.monthlyRequestLimit) {
-      return Response.json({ error: "Monthly request limit reached" }, { status: 402 })
-    }
-
     const taskId = payload.taskId ?? crypto.randomUUID()
     const existing = state.tasks[taskId]
     if (existing) {
@@ -452,6 +477,7 @@ export class UsageGate {
       concurrentRequestLimit: payload.entitlements.concurrentRequestLimit,
       createdAt: now,
       queuedAt: null,
+      dispatchedAt: null,
       startedAt: null,
       releasedAt: null,
       canceledAt: null,
@@ -461,11 +487,9 @@ export class UsageGate {
       upstreamStatus: null,
     }
 
-    const lane = chooseLane(state, task.lane, payload.entitlements)
-    if (!lane && state.queueOrder.length >= BACKGROUND_QUEUE_LIMIT) {
-      return Response.json({ error: "Background queue is full" }, { status: 429 })
-    }
-
+    const lane = task.lane === "background"
+      ? null
+      : chooseLane(state, task.lane, payload.entitlements)
     state.requestCount += 1
 
     if (lane) {
@@ -485,6 +509,7 @@ export class UsageGate {
         delete state.leases[task.leaseId]
         task.status = "queued"
         task.queuedAt = now
+        task.dispatchedAt = null
         task.startedAt = null
         task.leaseId = null
         state.tasks[task.taskId] = task
@@ -494,7 +519,7 @@ export class UsageGate {
       }
 
       const response = buildTaskResponse(task, state)
-      logUsageGateEvent(buildTaskLog(task, {
+      logUsageGateEvent(buildTaskLog(task, state, {
         status: enqueued ? "running" : "queued",
         queuePosition: enqueued ? null : getTaskQueuePosition(state, task.taskId),
         queueWaitMs: enqueued ? 0 : null,
@@ -509,16 +534,18 @@ export class UsageGate {
 
     task.status = "queued"
     task.queuedAt = now
+    task.dispatchedAt = null
     state.tasks[task.taskId] = task
     state.queueOrder.push(task.taskId)
     syncState(state)
     await this.persistState(state)
 
     const queuePosition = getTaskQueuePosition(state, task.taskId)
-    void this.enqueueTask(task)
+    const enqueued = task.lane === "background" ? await this.dispatchBackgroundTask(state, task) : false
+    const responseStatus = enqueued ? "dispatched" : "queued"
 
-    logUsageGateEvent(buildTaskLog(task, {
-      status: "queued",
+    logUsageGateEvent(buildTaskLog(task, state, {
+      status: responseStatus,
       queuePosition,
       queueWaitMs: null,
       runMs: null,
@@ -527,7 +554,7 @@ export class UsageGate {
       releaseReason: null,
     }))
 
-    return Response.json(buildTaskResponse(task, state))
+    return Response.json(buildTaskResponse(task, state, { status: responseStatus }))
   }
 
   private async handleAssign(request: Request): Promise<Response> {
@@ -552,6 +579,7 @@ export class UsageGate {
     task.lane = lane
     task.status = "running"
     task.startedAt = now
+    task.dispatchedAt = null
     task.leaseId = crypto.randomUUID()
     task.releaseReason = null
     task.cancelReason = null
@@ -560,7 +588,7 @@ export class UsageGate {
     await this.persistState(state)
 
     const response = buildTaskResponse(task, state)
-    logUsageGateEvent(buildTaskLog(task, {
+    logUsageGateEvent(buildTaskLog(task, state, {
       status: "running",
       queuePosition: null,
       queueWaitMs: task.queuedAt !== null ? now - task.queuedAt : 0,
@@ -593,7 +621,7 @@ export class UsageGate {
       syncState(state)
       await this.persistState(state)
 
-      logUsageGateEvent(buildTaskLog(task, {
+      logUsageGateEvent(buildTaskLog(task, state, {
         status: "released",
         queuePosition: null,
         queueWaitMs: null,
@@ -619,7 +647,7 @@ export class UsageGate {
     await this.persistState(state)
 
     const runMs = task.startedAt !== null ? now - task.startedAt : null
-    logUsageGateEvent(buildTaskLog(task, {
+    logUsageGateEvent(buildTaskLog(task, state, {
       status: "released",
       queuePosition: null,
       queueWaitMs: null,
@@ -655,7 +683,7 @@ export class UsageGate {
     syncState(state)
     await this.persistState(state)
 
-    logUsageGateEvent(buildTaskLog(task, {
+    logUsageGateEvent(buildTaskLog(task, state, {
       status: "canceled",
       queuePosition: null,
       queueWaitMs: null,
@@ -700,7 +728,7 @@ export class UsageGate {
     await this.persistState(state)
 
     const runMs = task.startedAt !== null ? now - task.startedAt : null
-    logUsageGateEvent(buildTaskLog(task, {
+    logUsageGateEvent(buildTaskLog(task, state, {
       status: "expired",
       queuePosition: null,
       queueWaitMs: null,
@@ -730,8 +758,21 @@ export class UsageGate {
       return Response.json({ ok: true, enqueued: false, status: task.status })
     }
 
-    const enqueued = await this.enqueueTask(task)
-    return Response.json({ ok: true, enqueued, status: task.status })
+    if (task.status === "queued" && task.dispatchedAt !== null) {
+      logUsageGateEvent(buildTaskLog(task, state, {
+        status: "dispatched",
+        queuePosition: getTaskQueuePosition(state, task.taskId),
+        queueWaitMs: null,
+        runMs: null,
+        upstreamStatus: null,
+        cancelReason: null,
+        releaseReason: null,
+      }))
+      return Response.json({ ok: true, enqueued: false, status: "dispatched" })
+    }
+
+    const enqueued = await this.dispatchBackgroundTask(state, task)
+    return Response.json({ ok: true, enqueued, status: enqueued ? "dispatched" : getTaskResponseStatus(task) })
   }
 
   private async handleTranslationTaskStream(request: Request): Promise<Response> {
@@ -873,7 +914,19 @@ export class UsageGate {
       return false
     }
 
-    return await this.enqueueTask(nextTask)
+    return await this.dispatchBackgroundTask(state, nextTask)
+  }
+
+  private async dispatchBackgroundTask(state: UsageState, task: UsageTask): Promise<boolean> {
+    const enqueued = await this.enqueueTask(task)
+    const nextDispatchedAt = enqueued ? Date.now() : null
+    if (task.dispatchedAt !== nextDispatchedAt) {
+      task.dispatchedAt = nextDispatchedAt
+      syncState(state)
+      await this.persistState(state)
+    }
+
+    return enqueued
   }
 
   private async enqueueTask(task: UsageTask): Promise<boolean> {

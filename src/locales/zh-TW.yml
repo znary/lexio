@@ -844,6 +844,9 @@ languageDetection:
 translation:
   sameLanguage: 源語言和目標語言必須不同
   autoModeSameLanguage: 檢測到的語言 '$1' 與目標語言相同
+  loadingStatus:
+    queued: 排隊中
+    translating: 翻譯中
 speak:
   fetchingAudio: 正在獲取音訊...
   playingAudio: 正在播放音訊...

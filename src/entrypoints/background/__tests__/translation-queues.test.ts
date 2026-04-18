@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
 
 const onMessageMock = vi.fn()
+const sendMessageMock = vi.fn()
 const ensureInitializedConfigMock = vi.fn()
 const translateWithManagedPlatformMock = vi.fn()
 const generateArticleSummaryMock = vi.fn()
@@ -17,6 +18,7 @@ const getSubtitlesTranslatePromptMock = vi.fn()
 
 vi.mock("@/utils/message", () => ({
   onMessage: onMessageMock,
+  sendMessage: sendMessageMock,
 }))
 
 vi.mock("../config", () => ({
@@ -237,13 +239,76 @@ describe("translation queue helpers", () => {
     )
   })
 
+  it("forwards managed task state changes back to the content script", async () => {
+    translateWithManagedPlatformMock.mockImplementationOnce(async (_payload: unknown, options?: {
+      onTaskCreated?: (taskId: string) => void
+      onStatusChange?: (update: { state: string, taskId?: string | null }) => void
+    }) => {
+      options?.onTaskCreated?.("task-123")
+      options?.onStatusChange?.({ state: "queued", taskId: "task-123" })
+      options?.onStatusChange?.({ state: "running", taskId: "task-123" })
+      options?.onStatusChange?.({ state: "completed", taskId: "task-123" })
+      return "translated subtitle"
+    })
+
+    const { setUpWebPageTranslationQueue } = await import("../translation-queues")
+    await setUpWebPageTranslationQueue()
+
+    const handler = getRegisteredMessageHandler("enqueueTranslateRequest")
+    await handler({
+      sender: {
+        tab: {
+          id: 12,
+        },
+      },
+      data: {
+        text: "hello",
+        langConfig: DEFAULT_CONFIG.language,
+        providerConfig: llmProvider,
+        scheduleAt: Date.now(),
+        hash: "webpage-hash",
+        webTitle: "Page title",
+        webContent: "Page body",
+        webSummary: "Ready summary",
+      },
+    } as any)
+
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      "notifyManagedTranslationTaskStatus",
+      {
+        statusKey: "webpage-hash",
+        state: "queued",
+        taskId: "task-123",
+      },
+      12,
+    )
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      "notifyManagedTranslationTaskStatus",
+      {
+        statusKey: "webpage-hash",
+        state: "running",
+        taskId: "task-123",
+      },
+      12,
+    )
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      "notifyManagedTranslationTaskStatus",
+      {
+        statusKey: "webpage-hash",
+        state: "completed",
+        taskId: "task-123",
+      },
+      12,
+    )
+  })
+
   it("keeps the managed translation queue cap at the free-tier limit", async () => {
     const {
       MANAGED_TRANSLATION_MAX_CONCURRENCY,
       MANAGED_TRANSLATION_QUEUE_TIMEOUT_MS,
     } = await import("../translation-queues")
 
-    expect(MANAGED_TRANSLATION_MAX_CONCURRENCY).toBe(10)
+    expect(MANAGED_TRANSLATION_MAX_CONCURRENCY).toBe(100)
     expect(MANAGED_TRANSLATION_QUEUE_TIMEOUT_MS).toBe(180_000)
   })
 

@@ -6,7 +6,7 @@ interface UsageGateTaskResponse {
   requestId: string
   leaseId: string | null
   requestCount: number
-  status: "queued" | "running" | "released" | "canceled" | "expired"
+  status: "queued" | "dispatched" | "running" | "released" | "canceled" | "expired"
   lane: "interactive" | "background"
   queuePosition: number | null
   queueWaitMs: number | null

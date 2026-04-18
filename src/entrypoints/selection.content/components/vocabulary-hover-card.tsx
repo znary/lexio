@@ -1,5 +1,7 @@
 import type { VocabularyHoverPreview } from "../vocabulary-highlight-ui"
+import { useAtomValue } from "jotai"
 import { useLayoutEffect, useRef, useState } from "react"
+import { selectionToolbarRectAtom } from "../selection-toolbar/atoms"
 import { getVocabularyHoverCardPosition } from "../vocabulary-highlight-ui"
 
 export function VocabularyHoverCard({
@@ -9,6 +11,7 @@ export function VocabularyHoverCard({
 }) {
   const cardRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState({ left: -9999, top: -9999 })
+  const selectionToolbarRect = useAtomValue(selectionToolbarRectAtom)
 
   useLayoutEffect(() => {
     if (!preview || !cardRef.current) {
@@ -24,13 +27,14 @@ export function VocabularyHoverCard({
         anchorRect: preview.anchorRect,
         cardWidth: cardRef.current.offsetWidth,
         cardHeight: cardRef.current.offsetHeight,
+        avoidRect: selectionToolbarRect,
       }))
     })
 
     return () => {
       window.cancelAnimationFrame(frameId)
     }
-  }, [preview])
+  }, [preview, selectionToolbarRect])
 
   if (!preview) {
     return null

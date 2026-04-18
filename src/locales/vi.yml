@@ -844,6 +844,9 @@ languageDetection:
 translation:
   sameLanguage: Ngôn ngữ nguồn và đích phải khác nhau
   autoModeSameLanguage: Ngôn ngữ phát hiện '$1' giống với ngôn ngữ đích
+  loadingStatus:
+    queued: Đang chờ dịch
+    translating: Đang dịch
 speak:
   fetchingAudio: Đang tạo âm thanh...
   playingAudio: Đang phát âm thanh...

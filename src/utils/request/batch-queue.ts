@@ -1,5 +1,6 @@
 import { batchQueueConfigSchema } from "@/types/config/translate"
 import { getRandomUUID } from "@/utils/crypto-polyfill"
+import { logger } from "@/utils/logger"
 
 export class BatchCountMismatchError extends Error {
   constructor(expected: number, got: number, results: unknown[]) {
@@ -25,6 +26,7 @@ interface PendingBatch<T, R> {
 }
 
 export interface BatchOptions<T, R> {
+  name?: string
   maxCharactersPerBatch: number
   maxItemsPerBatch: number
   batchDelay: number
@@ -41,6 +43,7 @@ export interface BatchOptions<T, R> {
 export class BatchQueue<T, R> {
   private pendingBatchMap = new Map<string, PendingBatch<T, R>>()
   private nextScheduleTimer: NodeJS.Timeout | null = null
+  private name: string
   private maxCharactersPerBatch: number
   private maxItemsPerBatch: number
   private batchDelay: number
@@ -54,6 +57,7 @@ export class BatchQueue<T, R> {
   private onError?: (error: Error, context: { batchKey: string, retryCount: number, isFallback: boolean }) => void
 
   constructor(config: BatchOptions<T, R>) {
+    this.name = config.name ?? "batch-queue"
     this.maxCharactersPerBatch = config.maxCharactersPerBatch
     this.maxItemsPerBatch = config.maxItemsPerBatch
     this.batchDelay = config.batchDelay
@@ -65,6 +69,26 @@ export class BatchQueue<T, R> {
     this.executeBatch = config.executeBatch
     this.executeIndividual = config.executeIndividual
     this.onError = config.onError
+  }
+
+  private log(level: "info" | "warn" | "error", event: string, details: Record<string, unknown>) {
+    const payload = {
+      queue: this.name,
+      event,
+      ...details,
+    }
+
+    if (level === "warn") {
+      logger.warn("[BatchQueue]", payload)
+      return
+    }
+
+    if (level === "error") {
+      logger.error("[BatchQueue]", payload)
+      return
+    }
+
+    logger.info("[BatchQueue]", payload)
   }
 
   enqueue(data: T): Promise<R> {
@@ -79,6 +103,11 @@ export class BatchQueue<T, R> {
     const task: BatchTask<T, R> = { data, resolve, reject }
 
     this.addTaskToBatch(task, batchKey)
+    this.log("info", "enqueue", {
+      batchKey,
+      characters: this.getCharacters(data),
+      pendingBatchCount: this.pendingBatchMap.size,
+    })
     this.schedule()
 
     return promise
@@ -151,6 +180,13 @@ export class BatchQueue<T, R> {
     }
 
     this.pendingBatchMap.set(batchKey, pendingBatch)
+    this.log("info", "create-batch", {
+      batchKey,
+      batchId,
+      taskCount: pendingBatch.tasks.length,
+      totalCharacters: pendingBatch.totalCharacters,
+      pendingBatchCount: this.pendingBatchMap.size,
+    })
   }
 
   private flushPendingBatchByKey(batchKey: string) {
@@ -161,11 +197,25 @@ export class BatchQueue<T, R> {
     this.pendingBatchMap.delete(batchKey)
 
     const { tasks } = pendingBatch
+    this.log("info", "flush", {
+      batchKey,
+      batchId: pendingBatch.id,
+      taskCount: tasks.length,
+      totalCharacters: pendingBatch.totalCharacters,
+      waitMs: Date.now() - pendingBatch.createdAt,
+      pendingBatchCount: this.pendingBatchMap.size,
+    })
 
     void this.executeBatchWithRetry(tasks, batchKey, 0)
   }
 
   private async executeBatchWithRetry(tasks: BatchTask<T, R>[], batchKey: string, retryCount: number): Promise<void> {
+    const startedAt = Date.now()
+    this.log("info", "execute", {
+      batchKey,
+      retryCount,
+      taskCount: tasks.length,
+    })
     try {
       const results = await this.executeBatch(tasks.map(task => task.data))
 
@@ -178,6 +228,12 @@ export class BatchQueue<T, R> {
       }
 
       tasks.forEach((task, index) => task.resolve(results[index]))
+      this.log("info", "complete", {
+        batchKey,
+        retryCount,
+        taskCount: tasks.length,
+        executeMs: Date.now() - startedAt,
+      })
     }
     catch (error) {
       const err = error as Error
@@ -187,6 +243,13 @@ export class BatchQueue<T, R> {
       // Only retry on count mismatch errors (LLM returned wrong number of results)
       if (retryCount < this.maxRetries && err instanceof BatchCountMismatchError) {
         const delay = this.calculateBackoffDelay(retryCount)
+        this.log("warn", "retry", {
+          batchKey,
+          retryCount,
+          taskCount: tasks.length,
+          delayMs: delay,
+          error: err.message,
+        })
         await this.sleep(delay)
         return this.executeBatchWithRetry(tasks, batchKey, retryCount + 1)
       }
@@ -196,9 +259,21 @@ export class BatchQueue<T, R> {
         && this.executeIndividual
         && this.shouldFallbackToIndividual(err)
       ) {
+        this.log("warn", "fallback", {
+          batchKey,
+          retryCount,
+          taskCount: tasks.length,
+          error: err.message,
+        })
         return this.executeFallbackIndividual(tasks, batchKey)
       }
 
+      this.log("error", "failed", {
+        batchKey,
+        retryCount,
+        taskCount: tasks.length,
+        error: err.message,
+      })
       tasks.forEach(task => task.reject(err))
     }
   }

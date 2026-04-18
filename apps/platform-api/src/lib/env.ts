@@ -30,6 +30,8 @@ export interface Entitlements {
   concurrentRequestLimit: number
 }
 
+export const UNLIMITED_ENTITLEMENT_VALUE = 2_147_483_647
+
 export function toList(value?: string): string[] {
   return (value ?? "")
     .split(",")
@@ -38,19 +40,10 @@ export function toList(value?: string): string[] {
 }
 
 export function buildEntitlements(plan: Plan): Entitlements {
-  if (plan === "pro") {
-    return {
-      plan,
-      monthlyRequestLimit: 5000,
-      monthlyTokenLimit: 5_000_000,
-      concurrentRequestLimit: 20,
-    }
-  }
-
   return {
-    plan: "free",
-    monthlyRequestLimit: 500,
-    monthlyTokenLimit: 500_000,
-    concurrentRequestLimit: 10,
+    plan,
+    monthlyRequestLimit: UNLIMITED_ENTITLEMENT_VALUE,
+    monthlyTokenLimit: UNLIMITED_ENTITLEMENT_VALUE,
+    concurrentRequestLimit: UNLIMITED_ENTITLEMENT_VALUE,
   }
 }

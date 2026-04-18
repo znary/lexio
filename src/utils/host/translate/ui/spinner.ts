@@ -7,6 +7,7 @@ import { createReactShadowHost } from "@/utils/react-shadow-host/create-shadow-h
 import { TRANSLATION_ERROR_CONTAINER_CLASS } from "../../../constants/dom-labels"
 import { getContainingShadowRoot, getOwnerDocument } from "../../dom/node"
 import { translateTextForPage } from "../translate-variants"
+import { bindSpinnerToManagedTranslationStatus } from "./managed-translation-status"
 import { ensurePresetStyles } from "./style-injector"
 
 /**
@@ -85,9 +86,15 @@ export async function getTranslatedTextAndRemoveSpinner(
   translatedWrapperNode: HTMLElement,
 ): Promise<string | undefined> {
   let translatedText: string | undefined
+  let cleanupManagedTranslationStatus: (() => void) | undefined
 
   try {
-    translatedText = await translateTextForPage(textContent)
+    translatedText = await translateTextForPage(textContent, {
+      onStatusKeyReady(statusKey) {
+        cleanupManagedTranslationStatus?.()
+        cleanupManagedTranslationStatus = bindSpinnerToManagedTranslationStatus(spinner, statusKey)
+      },
+    })
   }
   catch (error) {
     const errorComponent = React.createElement(TranslationError, {
@@ -111,6 +118,7 @@ export async function getTranslatedTextAndRemoveSpinner(
     translatedWrapperNode.appendChild(container)
   }
   finally {
+    cleanupManagedTranslationStatus?.()
     spinner.remove()
   }
 

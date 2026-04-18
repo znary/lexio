@@ -32,14 +32,34 @@ async function getWebPagePromptContext(
   enableAIContentAware: boolean,
   includeSummary: boolean,
 ): Promise<{ webTitle: string, webContent: string, webSummary?: string } | undefined> {
+  const startedAt = Date.now()
   const webPageContext = await getOrCreateWebPageContext()
   if (!webPageContext) {
+    logger.info("[TranslateVariants]", {
+      event: "webpage-context-skip",
+      providerId: providerConfig.id,
+      enableAIContentAware,
+      includeSummary,
+      reason: "no-context",
+    })
     return undefined
   }
 
+  const summaryStartedAt = Date.now()
   const webSummary = includeSummary
     ? await getOrGenerateWebPageSummary(webPageContext, providerConfig, enableAIContentAware)
     : undefined
+
+  logger.info("[TranslateVariants]", {
+    event: "webpage-context-ready",
+    providerId: providerConfig.id,
+    enableAIContentAware,
+    includeSummary,
+    contextMs: Date.now() - startedAt,
+    summaryMs: includeSummary ? Date.now() - summaryStartedAt : 0,
+    contentLength: webPageContext.webContent.length,
+    hasSummary: Boolean(webSummary),
+  })
 
   return {
     webTitle: webPageContext.webTitle,
@@ -55,8 +75,10 @@ async function translateTextUsingPageConfig(
     extraHashTags?: string[]
     webPageContext?: { webTitle?: string | null, webContent?: string | null, webSummary?: string | null }
     scene?: string
+    onStatusKeyReady?: (statusKey: string) => void
   } = {},
 ): Promise<string> {
+  const startedAt = Date.now()
   const preparedText = prepareTranslationText(text)
   if (preparedText === "") {
     return ""
@@ -64,14 +86,22 @@ async function translateTextUsingPageConfig(
 
   const providerConfig = resolveProviderConfig(config, "translate")
 
+  const targetDetectionStartedAt = Date.now()
   if (await isTextAlreadyInTargetLanguage(preparedText, config.language.targetCode)) {
     logger.info(`translateTextForPage: skipping translation because text is already in target language. text: ${preparedText}`)
+    logger.info("[TranslateVariants]", {
+      event: "precheck-skip-target-language",
+      providerId: providerConfig.id,
+      textLength: preparedText.length,
+      detectMs: Date.now() - targetDetectionStartedAt,
+    })
     return ""
   }
 
   // Skip translation if text is in skipLanguages list (page translation only)
   const { skipLanguages } = config.translate.page
   if (skipLanguages.length > 0 && preparedText.length >= MIN_LENGTH_FOR_SKIP_LLM_DETECTION) {
+    const skipDetectionStartedAt = Date.now()
     const shouldSkip = await shouldSkipByLanguage(
       preparedText,
       skipLanguages,
@@ -79,11 +109,17 @@ async function translateTextUsingPageConfig(
     )
     if (shouldSkip) {
       logger.info(`translateTextForPage: skipping translation because text is in skip language list. text: ${preparedText}`)
+      logger.info("[TranslateVariants]", {
+        event: "precheck-skip-language-list",
+        providerId: providerConfig.id,
+        textLength: preparedText.length,
+        detectMs: Date.now() - skipDetectionStartedAt,
+      })
       return ""
     }
   }
 
-  return translateTextCore({
+  const result = await translateTextCore({
     text: preparedText,
     langConfig: config.language,
     providerConfig,
@@ -91,14 +127,31 @@ async function translateTextUsingPageConfig(
     extraHashTags: options.extraHashTags,
     webPageContext: options.webPageContext,
     scene: options.scene,
+    onStatusKeyReady: options.onStatusKeyReady,
   })
+
+  logger.info("[TranslateVariants]", {
+    event: "translate-complete",
+    providerId: providerConfig.id,
+    scene: options.scene ?? null,
+    textLength: preparedText.length,
+    totalMs: Date.now() - startedAt,
+    resultLength: result.length,
+  })
+
+  return result
 }
 
 /**
  * Page translation — uses FEATURE_PROVIDER_DEFS['translate'].
  * Includes skip-language logic (page translation only).
  */
-export async function translateTextForPage(text: string): Promise<string> {
+export async function translateTextForPage(
+  text: string,
+  options: {
+    onStatusKeyReady?: (statusKey: string) => void
+  } = {},
+): Promise<string> {
   const config = await getConfigOrThrow()
   const providerConfig = resolveProviderConfig(config, "translate")
   const webPageContext = await getWebPagePromptContext(providerConfig, config.translate.enableAIContentAware, true)
@@ -107,6 +160,7 @@ export async function translateTextForPage(text: string): Promise<string> {
     extraHashTags: ["pageTranslation"],
     webPageContext,
     scene: "page",
+    onStatusKeyReady: options.onStatusKeyReady,
   })
 }
 

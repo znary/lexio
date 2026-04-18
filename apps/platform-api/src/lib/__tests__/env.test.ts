@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest"
-import { buildEntitlements } from "../env"
+import { buildEntitlements, UNLIMITED_ENTITLEMENT_VALUE } from "../env"
 
 describe("buildEntitlements", () => {
-  it("uses the updated free and pro concurrency limits", () => {
+  it("returns the same unlimited entitlements for every plan", () => {
     expect(buildEntitlements("free")).toMatchObject({
-      concurrentRequestLimit: 10,
+      monthlyRequestLimit: UNLIMITED_ENTITLEMENT_VALUE,
+      monthlyTokenLimit: UNLIMITED_ENTITLEMENT_VALUE,
+      concurrentRequestLimit: UNLIMITED_ENTITLEMENT_VALUE,
     })
 
     expect(buildEntitlements("pro")).toMatchObject({
-      concurrentRequestLimit: 20,
+      monthlyRequestLimit: UNLIMITED_ENTITLEMENT_VALUE,
+      monthlyTokenLimit: UNLIMITED_ENTITLEMENT_VALUE,
+      concurrentRequestLimit: UNLIMITED_ENTITLEMENT_VALUE,
     })
   })
 })

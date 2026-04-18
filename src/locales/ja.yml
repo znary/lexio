@@ -844,6 +844,9 @@ languageDetection:
 translation:
   sameLanguage: ソース言語とターゲット言語は異なる必要があります
   autoModeSameLanguage: 検出された言語 '$1' はターゲット言語と同じです
+  loadingStatus:
+    queued: 翻訳待ち
+    translating: 翻訳中
 speak:
   fetchingAudio: 音声を生成しています...
   playingAudio: 音声を再生しています...

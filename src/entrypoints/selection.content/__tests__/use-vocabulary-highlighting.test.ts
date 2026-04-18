@@ -31,7 +31,7 @@ vi.mock("@/utils/atoms/config", async (importOriginal) => {
 })
 
 vi.mock("@/utils/vocabulary/service", () => ({
-  getVocabularyItems: (...args: unknown[]) => getVocabularyItemsMock(...args),
+  getVocabularyItems: () => getVocabularyItemsMock(),
   VOCABULARY_CHANGED_EVENT: "lexio:vocabulary-changed",
 }))
 

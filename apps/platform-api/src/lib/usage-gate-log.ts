@@ -15,6 +15,15 @@ export interface UsageGateLogEntry {
   upstreamStatus: number | null
   cancelReason: string | null
   releaseReason: string | null
+  queueDepth?: number | null
+  queueLimit?: number | null
+  activeCount?: number | null
+  interactiveActiveCount?: number | null
+  backgroundActiveCount?: number | null
+  laneCapacity?: number | null
+  concurrentRequestLimit?: number | null
+  dispatchedAt?: number | null
+  queueMessageOutstanding?: boolean | null
 }
 
 export function logUsageGateEvent(entry: UsageGateLogEntry): void {

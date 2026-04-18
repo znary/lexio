@@ -68,10 +68,12 @@ describe("platform queue handler", () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
+    vi.spyOn(console, "warn").mockImplementation(() => undefined)
   })
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it("starts later queue messages without waiting for earlier messages to finish", async () => {
@@ -101,5 +103,27 @@ describe("platform queue handler", () => {
     resolveFirst()
     resolveSecond()
     await expect(queuePromise).resolves.toBeUndefined()
+  })
+
+  it("emits a queue batch summary with duplicate task counts", async () => {
+    handleManagedTranslationQueueMessageMock.mockResolvedValue(undefined)
+
+    const { default: handler } = await import("../index")
+    await handler.queue?.({
+      messages: [
+        { body: { taskId: "task-1" } },
+        { body: { taskId: "task-1" } },
+        { body: { taskId: "task-2" } },
+      ],
+    } as any, {} as any)
+
+    expect(console.warn).toHaveBeenCalledWith(expect.objectContaining({
+      namespace: "usage-gate-queue-batch",
+      event: "complete",
+      messageCount: 3,
+      uniqueTaskCount: 2,
+      duplicateMessageCount: 1,
+      failedCount: 0,
+    }))
   })
 })
