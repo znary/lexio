@@ -15,4 +15,4 @@ export function buildPlatformApiUrl(path: string): string {
   return `${trimTrailingSlash(PLATFORM_API_URL)}${normalizedPath}`
 }
 
-export const PLATFORM_OPENAI_BASE_URL = buildPlatformApiUrl("/v1/openai")
+export const PLATFORM_LLM_BASE_URL = buildPlatformApiUrl("/v1/llm")

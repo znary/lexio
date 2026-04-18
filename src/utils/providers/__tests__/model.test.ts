@@ -56,11 +56,11 @@ describe("managed cloud model routing", () => {
     vi.stubGlobal("fetch", fetchMock)
     const { fetchManagedCloudWithSessionGuard } = await import("../model")
 
-    const guardedResponse = await fetchManagedCloudWithSessionGuard("https://example.com/v1/openai/chat/completions", {
+    const guardedResponse = await fetchManagedCloudWithSessionGuard("https://example.com/v1/llm/chat/completions", {
       method: "POST",
     })
 
-    expect(fetchMock).toHaveBeenCalledWith("https://example.com/v1/openai/chat/completions", {
+    expect(fetchMock).toHaveBeenCalledWith("https://example.com/v1/llm/chat/completions", {
       method: "POST",
     })
     expect(clearPlatformAuthSessionMock).toHaveBeenCalledTimes(1)
@@ -85,7 +85,7 @@ describe("managed cloud model routing", () => {
     vi.stubGlobal("fetch", fetchMock)
     const { fetchManagedCloudWithSessionGuard } = await import("../model")
 
-    const guardedResponse = await fetchManagedCloudWithSessionGuard("https://example.com/v1/openai/chat/completions")
+    const guardedResponse = await fetchManagedCloudWithSessionGuard("https://example.com/v1/llm/chat/completions")
 
     expect(guardedResponse).toBe(response)
     expect(refreshPlatformSessionFromResponseMock).toHaveBeenCalledWith(response)

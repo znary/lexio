@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 const requireSessionMock = vi.fn()
 const noContentMock = vi.fn()
 const handleRouteErrorMock = vi.fn()
+const handleLlmChatCompletionsMock = vi.fn()
 const handleTranslateTextMock = vi.fn()
 
 vi.mock("../lib/auth", () => ({
@@ -15,10 +16,8 @@ vi.mock("../lib/http", () => ({
   noContent: (...args: unknown[]) => noContentMock(...args),
 }))
 
-vi.mock("../routes/ai", () => ({
-  handleAiGenerate: vi.fn(),
-  handleAiStream: vi.fn(),
-  handleOpenAiChatCompletions: vi.fn(),
+vi.mock("../routes/llm", () => ({
+  handleLlmChatCompletions: (...args: unknown[]) => handleLlmChatCompletionsMock(...args),
 }))
 
 vi.mock("../routes/auth", () => ({
@@ -102,6 +101,60 @@ describe("platform handler translation routing", () => {
     expect(handleTranslateTextMock).toHaveBeenCalledTimes(1)
   })
 
+  it("routes POST /v1/llm/chat/completions to the managed llm handler", async () => {
+    handleLlmChatCompletionsMock.mockResolvedValue(new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const { default: handler } = await import("../index")
+    const response = await handler.fetch(
+      new Request("https://example.com/v1/llm/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "hello" }],
+        }),
+      }),
+      {} as never,
+      {} as never,
+    )
+
+    expect(response.status).toBe(200)
+    expect(handleLlmChatCompletionsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps /v1/openai/chat/completions as a compatibility alias", async () => {
+    handleLlmChatCompletionsMock.mockResolvedValue(new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const { default: handler } = await import("../index")
+    const response = await handler.fetch(
+      new Request("https://example.com/v1/openai/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "hello" }],
+        }),
+      }),
+      {} as never,
+      {} as never,
+    )
+
+    expect(response.status).toBe(200)
+    expect(handleLlmChatCompletionsMock).toHaveBeenCalledTimes(1)
+  })
+
   it("does not expose the old /v1/translate/stream route", async () => {
     const { default: handler } = await import("../index")
     const response = await handler.fetch(
@@ -114,6 +167,27 @@ describe("platform handler translation routing", () => {
 
     expect(response.status).toBe(404)
     expect(handleTranslateTextMock).not.toHaveBeenCalled()
+  })
+
+  it("does not expose the old /v1/ai routes", async () => {
+    const { default: handler } = await import("../index")
+    const generateResponse = await handler.fetch(
+      new Request("https://example.com/v1/ai/generate", {
+        method: "POST",
+      }),
+      {} as never,
+      {} as never,
+    )
+    const streamResponse = await handler.fetch(
+      new Request("https://example.com/v1/ai/stream", {
+        method: "POST",
+      }),
+      {} as never,
+      {} as never,
+    )
+
+    expect(generateResponse.status).toBe(404)
+    expect(streamResponse.status).toBe(404)
   })
 
   it("does not expose the old task routes", async () => {

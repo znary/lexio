@@ -3,6 +3,7 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
 import { atom } from "jotai"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE } from "@/entrypoints/selection.content/overlay-layers"
+import { CONTENT_WRAPPER_CLASS, INLINE_CONTENT_CLASS, NOTRANSLATE_CLASS } from "@/utils/constants/dom-labels"
 import { SelectionToolbar } from "../index"
 
 const MOCK_SELECTED_TEXT = "Selected Text"
@@ -483,6 +484,43 @@ describe("selectionToolbar - isInputOrTextarea logic", () => {
 
     await triggerMouseUpWithSelection(clickTarget)
     await waitFor(expectToolbarVisible)
+  })
+
+  it("should show toolbar when selection contains translated content inside an interactive ancestor", async () => {
+    render(
+      <div>
+        <SelectionToolbar />
+        <a data-testid="translated-link" href="https://example.com">
+          <span>Original link text</span>
+          <span className={`${NOTRANSLATE_CLASS} ${CONTENT_WRAPPER_CLASS}`}>
+            <span className={`${NOTRANSLATE_CLASS} ${INLINE_CONTENT_CLASS}`} data-testid="translated-text">
+              Translated link text
+            </span>
+          </span>
+        </a>
+      </div>,
+    )
+
+    await clearToolbarState()
+
+    const translatedLink = screen.getByTestId("translated-link")
+    const translatedText = screen.getByTestId("translated-text")
+
+    window.getSelection = vi.fn(() => ({
+      toString: vi.fn(() => "Translated link text"),
+      getRangeAt: () => ({
+        startContainer: translatedText.firstChild ?? translatedText,
+        startOffset: 0,
+        endContainer: translatedText.firstChild ?? translatedText,
+        endOffset: "Translated link text".length,
+      }),
+      containsNode: vi.fn((node: Node) => node === translatedText),
+    })) as unknown as typeof window.getSelection
+
+    await triggerMouseUpWithSelection(translatedText)
+    await waitFor(expectToolbarVisible)
+
+    expect(translatedLink).toContainElement(translatedText)
   })
 
   it("should show toolbar in input even when selection does not contain click target", async () => {

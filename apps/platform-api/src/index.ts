@@ -3,9 +3,9 @@ import type { SessionContext } from "./lib/auth"
 import type { Env } from "./lib/env"
 import { mintExtensionToken, requireSession } from "./lib/auth"
 import { handleRouteError, noContent } from "./lib/http"
-import { handleAiGenerate, handleAiStream, handleOpenAiChatCompletions } from "./routes/ai"
 import { handleExchangeExtensionToken } from "./routes/auth"
 import { handleHealthCheck } from "./routes/health"
+import { handleLlmChatCompletions } from "./routes/llm"
 import { handleMe } from "./routes/me"
 import { handlePaddleWebhook } from "./routes/paddle"
 import { handleSyncPull, handleSyncPush } from "./routes/sync"
@@ -115,18 +115,13 @@ const handler: ExportedHandler<PlatformEnv> = {
         return withRefreshedExtensionSession(response, session, env)
       }
 
+      if (request.method === "POST" && url.pathname === "/v1/llm/chat/completions") {
+        response = await handleLlmChatCompletions(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
       if (request.method === "POST" && url.pathname === "/v1/openai/chat/completions") {
-        response = await handleOpenAiChatCompletions(request, env, session)
-        return withRefreshedExtensionSession(response, session, env)
-      }
-
-      if (request.method === "POST" && url.pathname === "/v1/ai/generate") {
-        response = await handleAiGenerate(request, env, session)
-        return withRefreshedExtensionSession(response, session, env)
-      }
-
-      if (request.method === "POST" && url.pathname === "/v1/ai/stream") {
-        response = await handleAiStream(request, env, session)
+        response = await handleLlmChatCompletions(request, env, session)
         return withRefreshedExtensionSession(response, session, env)
       }
 

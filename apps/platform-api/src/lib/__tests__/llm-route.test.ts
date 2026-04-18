@@ -53,7 +53,7 @@ function seedAuthenticatedUser(): void {
   recordUsageMock.mockResolvedValue(undefined)
 }
 
-describe("/v1/ai handlers", () => {
+describe("/v1/llm/chat/completions handler", () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
@@ -63,7 +63,7 @@ describe("/v1/ai handlers", () => {
     vi.unstubAllGlobals()
   })
 
-  it("returns JSON for generate requests without server-side leasing", async () => {
+  it("returns JSON for non-stream chat completion requests", async () => {
     seedAuthenticatedUser()
     forwardChatCompletionsMock.mockResolvedValue(new Response(JSON.stringify({
       ok: true,
@@ -77,8 +77,8 @@ describe("/v1/ai handlers", () => {
       },
     }))
 
-    const { handleAiGenerate } = await import("../../routes/ai")
-    const response = await handleAiGenerate(new Request("https://example.com/v1/ai/generate", {
+    const { handleLlmChatCompletions } = await import("../../routes/llm")
+    const response = await handleLlmChatCompletions(new Request("https://example.com/v1/llm/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -115,7 +115,7 @@ describe("/v1/ai handlers", () => {
     )
   })
 
-  it("passes through SSE for stream requests without server-side leasing", async () => {
+  it("passes through SSE for stream chat completion requests", async () => {
     seedAuthenticatedUser()
     forwardChatCompletionsMock.mockResolvedValue(new Response(
       "data: {\"choices\":[{\"delta\":{\"content\":\"你\"}}]}\n\ndata: [DONE]\n\n",
@@ -126,14 +126,15 @@ describe("/v1/ai handlers", () => {
       },
     ))
 
-    const { handleAiStream } = await import("../../routes/ai")
-    const response = await handleAiStream(new Request("https://example.com/v1/ai/stream", {
+    const { handleLlmChatCompletions } = await import("../../routes/llm")
+    const response = await handleLlmChatCompletions(new Request("https://example.com/v1/llm/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         messages: [{ role: "user", content: "hello" }],
+        stream: true,
       }),
     }), createEnv(), session)
 

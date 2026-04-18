@@ -39,7 +39,7 @@ jobs:
         run: pnpm test --exclude="**/free-api.test.ts"
 
       - name: Build and Zip Extension
-        run: pnpm zip
+        run: pnpm package:extension
         env:
           WXT_GOOGLE_CLIENT_ID: ${{ secrets.WXT_GOOGLE_CLIENT_ID || vars.WXT_GOOGLE_CLIENT_ID }}
           WXT_POSTHOG_API_KEY: ${{ secrets.WXT_POSTHOG_API_KEY || vars.WXT_POSTHOG_API_KEY }}

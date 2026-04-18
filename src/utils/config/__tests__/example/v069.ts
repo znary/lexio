@@ -8,7 +8,7 @@ const managedProviderConfig = {
   description: "Managed by your Lexio account.",
   enabled: true,
   provider: "openai-compatible" as const,
-  baseURL: "https://lexio.example.com/v1/openai",
+  baseURL: "https://lexio.example.com/v1/llm",
   model: {
     model: "use-custom-model" as const,
     isCustomModel: true,

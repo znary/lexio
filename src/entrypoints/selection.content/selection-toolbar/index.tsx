@@ -6,7 +6,7 @@ import {
 } from "@/entrypoints/selection.content/overlay-layers"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { isSelectionToolbarInternalAction } from "@/utils/constants/custom-action"
-import { NOTRANSLATE_CLASS } from "@/utils/constants/dom-labels"
+import { CONTENT_WRAPPER_CLASS, NOTRANSLATE_CLASS } from "@/utils/constants/dom-labels"
 import { MARGIN } from "@/utils/constants/selection"
 import { cn } from "@/utils/styles/utils"
 import { matchDomainPattern } from "@/utils/url"
@@ -68,6 +68,66 @@ function getInteractiveGuardTarget(event: MouseEvent) {
   }
 
   return event.target.closest(SELECTION_GUARD_INTERACTIVE_SELECTOR)
+}
+
+function getInteractiveGuardNodes(event: MouseEvent, interactiveTarget: Element | null) {
+  const guardNodes: Node[] = []
+
+  for (const node of event.composedPath()) {
+    if (node instanceof Node) {
+      guardNodes.push(node)
+    }
+
+    if (node === interactiveTarget) {
+      return guardNodes
+    }
+  }
+
+  if (event.target instanceof Node) {
+    guardNodes.push(event.target)
+  }
+
+  if (interactiveTarget instanceof Node && !guardNodes.includes(interactiveTarget)) {
+    guardNodes.push(interactiveTarget)
+  }
+
+  return guardNodes
+}
+
+function selectionContainsNode(selection: Selection | null, node: Node | null) {
+  if (!selection || !node) {
+    return false
+  }
+
+  try {
+    return selection.containsNode(node, true)
+  }
+  catch {
+    return false
+  }
+}
+
+function isNodeInsideTranslatedWrapper(node: Node) {
+  if (node instanceof Element) {
+    return !!node.closest(`.${CONTENT_WRAPPER_CLASS}`)
+  }
+
+  const parentElement = node.parentElement
+  return !!parentElement?.closest(`.${CONTENT_WRAPPER_CLASS}`)
+}
+
+function selectionContainsInteractiveGuardTarget(
+  selection: Selection | null,
+  interactiveTarget: Element | null,
+  guardNodes: Node[],
+) {
+  if (selectionContainsNode(selection, interactiveTarget)) {
+    return true
+  }
+
+  return guardNodes.some(node =>
+    isNodeInsideTranslatedWrapper(node) && selectionContainsNode(selection, node),
+  )
 }
 
 function getSelectionOverlayShadowRoot(overlayContainer: HTMLElement | null) {
@@ -291,6 +351,7 @@ export function SelectionToolbar() {
       }
 
       const interactiveTarget = getInteractiveGuardTarget(e)
+      const interactiveGuardNodes = getInteractiveGuardNodes(e, interactiveTarget)
 
       // Use requestAnimationFrame to delay selection check
       // This ensures selectionchange event fires first if text selection was cleared
@@ -314,7 +375,11 @@ export function SelectionToolbar() {
 
         // https://github.com/mengxi-ream/read-frog/issues/547
         // https://github.com/mengxi-ream/read-frog/pull/790
-        if (!isInputOrTextarea && interactiveTarget && !selection?.containsNode(interactiveTarget, true)) {
+        if (
+          !isInputOrTextarea
+          && interactiveTarget
+          && !selectionContainsInteractiveGuardTarget(selection, interactiveTarget, interactiveGuardNodes)
+        ) {
           return
         }
 

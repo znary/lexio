@@ -213,14 +213,6 @@ async function handleManagedChat(
   }
 }
 
-export async function handleOpenAiChatCompletions(request: Request, env: Env, session: SessionContext) {
+export async function handleLlmChatCompletions(request: Request, env: Env, session: SessionContext) {
   return await handleManagedChat(request, env, session)
-}
-
-export async function handleAiGenerate(request: Request, env: Env, session: SessionContext) {
-  return await handleManagedChat(request, env, session, false)
-}
-
-export async function handleAiStream(request: Request, env: Env, session: SessionContext) {
-  return await handleManagedChat(request, env, session, true)
 }

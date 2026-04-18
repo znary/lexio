@@ -3,7 +3,7 @@ import { storage } from "#imports"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { getLLMProvidersConfig, getProviderConfigById } from "../config/helpers"
 import { CONFIG_STORAGE_KEY } from "../constants/config"
-import { MANAGED_CLOUD_PROVIDER_ID, PLATFORM_OPENAI_BASE_URL } from "../constants/platform"
+import { MANAGED_CLOUD_PROVIDER_ID, PLATFORM_LLM_BASE_URL } from "../constants/platform"
 import { refreshPlatformSessionFromResponse } from "../platform/api"
 import { clearPlatformAuthSession, getPlatformAuthSession } from "../platform/storage"
 import { resolveModelId } from "./model-id"
@@ -51,7 +51,7 @@ async function getLanguageModelById(providerId: string) {
 
   return createOpenAICompatible({
     name: "openai-compatible",
-    baseURL: PLATFORM_OPENAI_BASE_URL,
+    baseURL: PLATFORM_LLM_BASE_URL,
     apiKey: session.token,
     fetch: fetchManagedCloudWithSessionGuard,
     supportsStructuredOutputs: false,

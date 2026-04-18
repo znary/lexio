@@ -52,6 +52,7 @@ docs/specs/*
 !docs/specs/2026-04-13-lexio-brand-redesign.md
 !docs/specs/2026-04-14-lexio-clerk-cloudflare-paddle-platform.md
 !docs/specs/2026-04-14-lexio-local-test-and-deploy.md
+!docs/release-commands.md
 
 /repos
 

@@ -120,7 +120,7 @@ jobs:
 
       - name: Build and Zip Extension
         if: steps.changesets.outputs.published == 'true' || github.event_name == 'workflow_dispatch'
-        run: pnpm zip:all
+        run: pnpm package:extension:all
         env:
           WXT_GOOGLE_CLIENT_ID: ${{ secrets.WXT_GOOGLE_CLIENT_ID || vars.WXT_GOOGLE_CLIENT_ID }}
           WXT_POSTHOG_API_KEY: ${{ secrets.WXT_POSTHOG_API_KEY || vars.WXT_POSTHOG_API_KEY }}
