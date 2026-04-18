@@ -671,6 +671,11 @@ export async function getVocabularyItems(): Promise<VocabularyItem[]> {
   return data.items
 }
 
+export async function getVocabularyMeta(): Promise<{ updatedAt: number | null, count: number }> {
+  const response = await platformFetch("/v1/vocabulary/meta")
+  return await response.json() as { updatedAt: number | null, count: number }
+}
+
 export async function createVocabularyItem(item: VocabularyItem): Promise<{ ok: true, id: string }> {
   const response = await platformFetch("/v1/vocabulary", {
     method: "POST",

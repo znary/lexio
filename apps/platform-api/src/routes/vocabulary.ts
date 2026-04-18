@@ -37,6 +37,22 @@ export async function handleVocabularyList(_request: Request, env: Env, session:
   return json({ items })
 }
 
+export async function handleVocabularyMeta(_request: Request, env: Env, session: SessionContext) {
+  const user = await syncUserFromClerk(env, session)
+  const row = await env.DB.prepare(`
+    SELECT
+      MAX(updated_at) AS updated_at,
+      COUNT(*) AS count
+    FROM vocabulary_items
+    WHERE user_id = ?1
+  `).bind(user.id).first<{ updated_at?: number | null, count?: number | null }>()
+
+  return json({
+    updatedAt: typeof row?.updated_at === "number" ? row.updated_at : null,
+    count: typeof row?.count === "number" ? row.count : 0,
+  })
+}
+
 export async function handleVocabularyCreate(request: Request, env: Env, session: SessionContext) {
   const user = await syncUserFromClerk(env, session)
   const item = await readJson<Record<string, unknown>>(request)

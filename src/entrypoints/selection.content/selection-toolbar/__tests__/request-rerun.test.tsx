@@ -226,6 +226,7 @@ vi.mock("../translate-button/translation-content", () => ({
       <span data-testid="translation-result">{translatedText ?? ""}</span>
       <span data-testid="translation-status">{String(isTranslating)}</span>
       <span data-testid="translation-detailed">{JSON.stringify(detailedExplanation?.result ?? null)}</span>
+      <span data-testid="translation-detailed-error"></span>
     </div>
   ),
 }))
@@ -907,6 +908,64 @@ describe("selection toolbar requests", () => {
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
+  it("does not show the dictionary precheck alert while translation is still running", async () => {
+    const translationRun = createDeferredPromise<string>()
+    translateTextCoreMock.mockReturnValue(translationRun.promise)
+    streamBackgroundStructuredObjectMock.mockResolvedValue(
+      createStructuredObjectSnapshot({ term: "demonstrate", definition: "演示" }),
+    )
+    getOrCreateWebPageContextMock.mockResolvedValue(null)
+
+    const store = createStore()
+    store.set(configAtom, createStandardTranslateConfig())
+    setSelectionState(store, { text: "demonstrate" })
+    renderWithProviders(<TranslateButton />, store)
+
+    fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId("translation-status").textContent).toBe("true")
+    })
+
+    expect(screen.queryByRole("alert")).toBeNull()
+    expect(streamBackgroundStructuredObjectMock).not.toHaveBeenCalled()
+    expect(screen.getByTestId("translation-detailed-error").textContent).toBe("")
+
+    await act(async () => {
+      translationRun.resolve("演示")
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId("translation-result").textContent).toBe("演示")
+    })
+  })
+
+  it("keeps dictionary detail failures out of the translation UI after the main translation succeeds", async () => {
+    translateTextCoreMock.mockResolvedValue("整合")
+    streamBackgroundStructuredObjectMock.mockRejectedValue(new Error("dictionary failed"))
+    getOrCreateWebPageContextMock.mockResolvedValue(null)
+
+    const store = createStore()
+    store.set(configAtom, createStandardTranslateConfig())
+    setSelectionState(store, { text: "integrate" })
+    renderWithProviders(<TranslateButton />, store)
+
+    fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId("translation-result").textContent).toBe("整合")
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId("translation-status").textContent).toBe("false")
+    })
+
+    expect(screen.getByTestId("translation-detailed-error").textContent).toBe("")
+    expect(screen.queryByRole("alert")).toBeNull()
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
   it("reuses a saved vocabulary item until the user regenerates it", async () => {
     findVocabularyItemForSelectionMock.mockResolvedValue({
       id: "voc_existing",
@@ -1352,7 +1411,7 @@ describe("selection toolbar requests", () => {
     expect(screen.getByRole("button", { name: action.name })).toBeInTheDocument()
   })
 
-  it("shows a toast when a custom action context menu request cannot recover a selection snapshot", async () => {
+  it("silently ignores a custom action context menu request when the selection snapshot is missing", async () => {
     const store = createStore()
     const { action, config } = createDefaultCustomActionConfig()
     store.set(configAtom, config)
@@ -1371,9 +1430,7 @@ describe("selection toolbar requests", () => {
       })
     })
 
-    expect(toastErrorMock).toHaveBeenCalledWith(
-      "options.floatingButtonAndToolbar.selectionToolbar.errors.missingSelection",
-    )
+    expect(toastErrorMock).not.toHaveBeenCalled()
     expect(streamBackgroundStructuredObjectMock).not.toHaveBeenCalled()
 
     const { sendMessage } = await import("@/utils/message")
@@ -1490,7 +1547,7 @@ describe("selection toolbar requests", () => {
     })
   })
 
-  it("shows a precheck alert when a custom action has no selected text", async () => {
+  it("does not show a precheck alert when a custom action has no selected text", async () => {
     const { action, config } = createDefaultCustomActionConfig()
 
     const store = createStore()
@@ -1503,9 +1560,9 @@ describe("selection toolbar requests", () => {
 
     fireEvent.click(screen.getByRole("button", { name: action.name }))
 
-    const alert = await screen.findByRole("alert")
-    expect(alert).toHaveTextContent("options.floatingButtonAndToolbar.selectionToolbar.errors.customActionFailed")
-    expect(alert).toHaveTextContent("options.floatingButtonAndToolbar.selectionToolbar.errors.missingSelection")
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).toBeNull()
+    })
     expect(streamBackgroundStructuredObjectMock).not.toHaveBeenCalled()
 
     const { sendMessage } = await import("@/utils/message")
@@ -1521,7 +1578,7 @@ describe("selection toolbar requests", () => {
     )
   })
 
-  it("renders custom action errors inline and clears them after a successful rerun", async () => {
+  it("keeps custom action failures silent and still allows a successful rerun", async () => {
     streamBackgroundStructuredObjectMock
       .mockRejectedValueOnce(new Error("Structured output failed"))
       .mockResolvedValueOnce(createStructuredObjectSnapshot({ summary: "fresh" }))
@@ -1537,9 +1594,11 @@ describe("selection toolbar requests", () => {
 
     fireEvent.click(screen.getByRole("button", { name: action.name }))
 
-    const alert = await screen.findByRole("alert")
-    expect(alert).toHaveTextContent("options.floatingButtonAndToolbar.selectionToolbar.errors.customActionFailed")
-    expect(alert).toHaveTextContent("Structured output failed")
+    await waitFor(() => {
+      expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(1)
+    })
+    expect(screen.queryByRole("alert")).toBeNull()
+    expect(toastErrorMock).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole("button", { name: "Regenerate" }))
 

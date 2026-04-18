@@ -15,6 +15,7 @@ import {
   handleVocabularyCreate,
   handleVocabularyDelete,
   handleVocabularyList,
+  handleVocabularyMeta,
   handleVocabularyUpdate,
 } from "./routes/vocabulary"
 
@@ -86,6 +87,11 @@ const handler: ExportedHandler<PlatformEnv> = {
       // Vocabulary API
       if (request.method === "GET" && url.pathname === "/v1/vocabulary") {
         response = await handleVocabularyList(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      if (request.method === "GET" && url.pathname === "/v1/vocabulary/meta") {
+        response = await handleVocabularyMeta(request, env, session)
         return withRefreshedExtensionSession(response, session, env)
       }
 

@@ -13,11 +13,6 @@ vi.mock("@/components/thinking", () => ({
   Thinking: ({ content }: { content: string }) => <div>{content}</div>,
 }))
 
-vi.mock("../../../components/selection-toolbar-error-alert", () => ({
-  SelectionToolbarErrorAlert: ({ error }: { error: { description: string } | null }) =>
-    error ? <div>{error.description}</div> : null,
-}))
-
 vi.mock("../../../components/selection-source-content", () => ({
   SelectionSourceContent: ({ text }: { text: string | null | undefined }) => <div>{text}</div>,
 }))
@@ -33,7 +28,6 @@ describe("translationContent", () => {
     render(
       <TranslationContent
         detailedExplanation={{
-          error: null,
           isLoading: false,
           outputSchema: [],
           result: { Definition: "插图" },
@@ -55,11 +49,10 @@ describe("translationContent", () => {
     expect(screen.queryByRole("button", { name: "action.hideDetailedExplanation" })).not.toBeInTheDocument()
   })
 
-  it("renders inline detailed explanation errors without a toggle shell", () => {
+  it("keeps detailed explanation errors out of the translation body", () => {
     render(
       <TranslationContent
         detailedExplanation={{
-          error: { title: "Error", description: "missing provider" },
           isLoading: false,
           outputSchema: [],
           result: { Definition: "插图" },
@@ -73,6 +66,6 @@ describe("translationContent", () => {
     )
 
     expect(screen.getByText("{\"Definition\":\"插图\"}")).toBeInTheDocument()
-    expect(screen.getByText("missing provider")).toBeInTheDocument()
+    expect(screen.queryByText("missing provider")).toBeNull()
   })
 })

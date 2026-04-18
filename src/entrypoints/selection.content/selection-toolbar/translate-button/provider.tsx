@@ -363,7 +363,6 @@ export function SelectionTranslationProvider({
     ],
   )
   const {
-    error: detailedExplanationRuntimeError,
     isRunning: isDetailedExplanationRunning,
     resetSessionState: resetDetailedExplanationState,
     result: detailedExplanationResult,
@@ -738,9 +737,6 @@ export function SelectionTranslationProvider({
     }
   }, [])
 
-  const detailedExplanationError = dictionaryAction
-    ? (reusedVocabularyItem ? null : (detailedExplanationRuntimeError ?? dictionaryExecutionPlan.error))
-    : null
   const detailedExplanationLoading = Boolean(dictionaryAction)
     && (
       shouldRunDictionaryAction
@@ -757,7 +753,7 @@ export function SelectionTranslationProvider({
     : (dictionaryExecutionPlan.executionContext ? detailedExplanationThinking : null)
   const headerStatus = useMemo(() => {
     const isLoading = isTranslating || detailedExplanationLoading
-    const isFailed = Boolean(error || detailedExplanationError)
+    const isFailed = Boolean(error)
     const isReady = !isLoading && !isFailed && Boolean(translatedText?.trim() || detailedExplanationValue)
 
     if (isLoading) {
@@ -788,7 +784,7 @@ export function SelectionTranslationProvider({
     }
 
     return null
-  }, [detailedExplanationError, detailedExplanationLoading, detailedExplanationValue, error, isTranslating, translatedText])
+  }, [detailedExplanationLoading, detailedExplanationValue, error, isTranslating, translatedText])
 
   useEffect(() => {
     if (!savedVocabularyItemId || !dictionaryAction || detailedExplanationLoading || reusedVocabularyItem) {
@@ -849,7 +845,6 @@ export function SelectionTranslationProvider({
             <TranslationContent
               detailedExplanation={dictionaryAction
                 ? {
-                    error: detailedExplanationError,
                     isLoading: detailedExplanationLoading,
                     outputSchema: dictionaryAction.outputSchema,
                     result: detailedExplanationValue,
@@ -857,7 +852,6 @@ export function SelectionTranslationProvider({
                   }
                 : detailedExplanationValue
                   ? {
-                      error: null,
                       isLoading: false,
                       outputSchema: builtInDictionaryOutputSchema,
                       result: detailedExplanationValue,

@@ -2,7 +2,6 @@ import type { ReactNode } from "react"
 import type { SelectionSession } from "../atoms"
 import { useAtomValue, useSetAtom } from "jotai"
 import { createContext, use, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { toast } from "sonner"
 import { SelectionPopover } from "@/components/ui/selection-popover"
 import { ANALYTICS_FEATURE, ANALYTICS_SURFACE } from "@/types/analytics"
 import { createFeatureUsageContext, trackFeatureUsed } from "@/utils/analytics"
@@ -10,7 +9,6 @@ import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { getProviderConfigById } from "@/utils/config/helpers"
 import { onMessage } from "@/utils/message"
 import { shadowWrapper } from "../.."
-import { SelectionToolbarErrorAlert } from "../../components/selection-toolbar-error-alert"
 import { SelectionToolbarFooterContent } from "../../components/selection-toolbar-footer-content"
 import { SelectionToolbarTitleContent } from "../../components/selection-toolbar-title-content"
 import { normalizeSelectedText } from "../../utils"
@@ -20,7 +18,6 @@ import {
   selectionAtom,
   selectionSessionAtom,
 } from "../atoms"
-import { createSelectionToolbarPrecheckError } from "../inline-error"
 import { useSelectionContextMenuRequestResolver } from "../use-selection-context-menu-request"
 import { CustomActionContent } from "./custom-action-content"
 import { SaveToNotebaseButton } from "./save-to-notebase-button"
@@ -115,7 +112,6 @@ export function SelectionCustomActionProvider({
     [cleanSelection, customActionRequest, paragraphsText, webPageContext],
   )
   const {
-    error,
     isRunning,
     resetSessionState,
     result,
@@ -129,7 +125,6 @@ export function SelectionCustomActionProvider({
     rerunNonce,
   })
   const displayedResult = executionPlan.executionContext ? result : null
-  const displayedError = error ?? executionPlan.error
   const displayedIsRunning = (isOpen && webPageContext === undefined) || (executionPlan.executionContext ? isRunning : false)
   const displayedThinking = executionPlan.executionContext ? thinking : null
 
@@ -223,7 +218,6 @@ export function SelectionCustomActionProvider({
       candidate.enabled !== false && candidate.id === actionId,
     )
     if (!action) {
-      const nextError = createSelectionToolbarPrecheckError("customAction", "actionUnavailable")
       void trackFeatureUsed({
         ...createFeatureUsageContext(
           ANALYTICS_FEATURE.CUSTOM_AI_ACTION,
@@ -235,13 +229,11 @@ export function SelectionCustomActionProvider({
         ),
         outcome: "failure",
       })
-      toast.error(nextError.description)
       return
     }
 
     const request = resolveContextMenuSelectionRequest()
     if (!request) {
-      const nextError = createSelectionToolbarPrecheckError("customAction", "missingSelection")
       void trackFeatureUsed({
         ...createFeatureUsageContext(
           ANALYTICS_FEATURE.CUSTOM_AI_ACTION,
@@ -254,7 +246,6 @@ export function SelectionCustomActionProvider({
         ),
         outcome: "failure",
       })
-      toast.error(nextError.description)
       return
     }
 
@@ -357,7 +348,6 @@ export function SelectionCustomActionProvider({
               value={displayedResult}
               thinking={displayedThinking}
             />
-            <SelectionToolbarErrorAlert error={displayedError} />
           </SelectionPopover.Body>
           <SelectionToolbarFooterContent
             paragraphsText={paragraphsText}

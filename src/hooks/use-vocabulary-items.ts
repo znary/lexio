@@ -22,7 +22,10 @@ export function useVocabularyItems() {
       const items = getCachedVocabularyItems()
       if (items != null) {
         queryClient.setQueryData<VocabularyItem[]>(VOCABULARY_ITEMS_QUERY_KEY, items)
+        return
       }
+
+      void queryClient.invalidateQueries({ queryKey: VOCABULARY_ITEMS_QUERY_KEY })
     }
 
     document.addEventListener(VOCABULARY_CHANGED_EVENT, handleVocabularyChanged)

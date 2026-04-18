@@ -1,15 +1,12 @@
-import type { SelectionToolbarInlineError } from "../inline-error"
 import type { BackgroundStructuredObjectStreamSnapshot, ThinkingSnapshot } from "@/types/background-stream"
 import type { SelectionToolbarCustomActionOutputField } from "@/types/config/selection-toolbar"
 import { i18n } from "#imports"
 import { IconLoader2 } from "@tabler/icons-react"
 import { Thinking } from "@/components/thinking"
 import { SelectionSourceContent } from "../../components/selection-source-content"
-import { SelectionToolbarErrorAlert } from "../../components/selection-toolbar-error-alert"
 import { StructuredObjectRenderer } from "../custom-action-button/structured-object-renderer"
 
 interface DetailedExplanationSection {
-  error: SelectionToolbarInlineError | null
   isLoading: boolean
   outputSchema: SelectionToolbarCustomActionOutputField[]
   result: BackgroundStructuredObjectStreamSnapshot["output"] | null
@@ -66,7 +63,6 @@ export function TranslationContent({
               showThinking={false}
               thinking={detailedExplanation.thinking}
             />
-            <SelectionToolbarErrorAlert error={detailedExplanation.error} className="px-0 pb-0" />
           </div>
         )}
       </div>

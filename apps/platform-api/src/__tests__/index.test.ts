@@ -50,6 +50,7 @@ vi.mock("../routes/vocabulary", () => ({
   handleVocabularyCreate: vi.fn(),
   handleVocabularyDelete: vi.fn(),
   handleVocabularyList: vi.fn(),
+  handleVocabularyMeta: vi.fn(),
   handleVocabularyUpdate: vi.fn(),
 }))
 
@@ -218,5 +219,30 @@ describe("platform handler translation routing", () => {
     expect(createResponse.status).toBe(404)
     expect(streamResponse.status).toBe(404)
     expect(cancelResponse.status).toBe(404)
+  })
+
+  it("routes GET /v1/vocabulary/meta to the lightweight vocabulary meta handler", async () => {
+    const { handleVocabularyMeta } = await import("../routes/vocabulary")
+    vi.mocked(handleVocabularyMeta).mockResolvedValue(new Response(JSON.stringify({
+      updatedAt: 123,
+      count: 7,
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const { default: handler } = await import("../index")
+    const response = await handler.fetch(
+      new Request("https://example.com/v1/vocabulary/meta", {
+        method: "GET",
+      }),
+      {} as never,
+      {} as never,
+    )
+
+    expect(response.status).toBe(200)
+    expect(handleVocabularyMeta).toHaveBeenCalledTimes(1)
   })
 })

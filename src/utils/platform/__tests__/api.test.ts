@@ -153,6 +153,38 @@ describe("platform api helpers", () => {
     expect((error as { statusCode: number }).statusCode).toBe(429)
   })
 
+  it("fetches lightweight vocabulary metadata without downloading the full list", async () => {
+    const { getVocabularyMeta } = await import("../api")
+    getPlatformAuthSessionMock.mockResolvedValue({
+      token: "platform-token",
+      user: {
+        email: "user@example.com",
+      },
+      updatedAt: Date.now(),
+    })
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      updatedAt: 123,
+      count: 7,
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await getVocabularyMeta()
+
+    expect(fetchMock).toHaveBeenCalledWith("https://platform.example.com/v1/vocabulary/meta", {
+      headers: expect.any(Headers),
+    })
+    expect(result).toEqual({
+      updatedAt: 123,
+      count: 7,
+    })
+  })
+
   it("posts a direct managed translation request and resolves the final text", async () => {
     const { translateWithManagedPlatform } = await import("../api")
     getPlatformAuthSessionMock.mockResolvedValue({
