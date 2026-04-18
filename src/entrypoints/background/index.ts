@@ -15,7 +15,6 @@ import { cleanupAllAiSegmentationCache, cleanupAllSummaryCache, cleanupAllTransl
 import { setupEdgeTTSMessageHandlers } from "./edge-tts"
 import { setupIframeInjection } from "./iframe-injection"
 import { setupLLMGenerateTextMessageHandlers } from "./llm-generate-text"
-import { setupManagedTranslationTaskCleanup } from "./managed-translation-tasks"
 import { initMockData } from "./mock-data"
 import { newUserGuide } from "./new-user-guide"
 import { handlePlatformAuthExternalMessage } from "./platform-auth"
@@ -117,7 +116,6 @@ export default defineBackground({
     newUserGuide()
     setupAnalyticsMessageHandlers()
     translationMessage()
-    setupManagedTranslationTaskCleanup()
 
     // Register context menu listeners synchronously
     // This ensures listeners are registered before Chrome completes initialization

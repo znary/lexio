@@ -1,19 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const handleManagedTranslationQueueMessageMock = vi.fn()
-
-vi.mock("../durable-objects/usage-gate", () => ({
-  UsageGate: class {},
-}))
+const requireSessionMock = vi.fn()
+const noContentMock = vi.fn()
+const handleRouteErrorMock = vi.fn()
+const handleTranslateTextMock = vi.fn()
 
 vi.mock("../lib/auth", () => ({
   mintExtensionToken: vi.fn(),
-  requireSession: vi.fn(),
+  requireSession: (...args: unknown[]) => requireSessionMock(...args),
 }))
 
 vi.mock("../lib/http", () => ({
-  handleRouteError: vi.fn(),
-  noContent: vi.fn(),
+  handleRouteError: (...args: unknown[]) => handleRouteErrorMock(...args),
+  noContent: (...args: unknown[]) => noContentMock(...args),
 }))
 
 vi.mock("../routes/ai", () => ({
@@ -44,12 +43,7 @@ vi.mock("../routes/sync", () => ({
 }))
 
 vi.mock("../routes/translate", () => ({
-  handleManagedTranslationQueueMessage: handleManagedTranslationQueueMessageMock,
-  handleTranslateStream: vi.fn(),
-  handleTranslateTaskCancel: vi.fn(),
-  handleTranslateTasksCreate: vi.fn(),
-  handleTranslateTaskStream: vi.fn(),
-  handleTranslateText: vi.fn(),
+  handleTranslateText: (...args: unknown[]) => handleTranslateTextMock(...args),
 }))
 
 vi.mock("../routes/vocabulary", () => ({
@@ -60,70 +54,95 @@ vi.mock("../routes/vocabulary", () => ({
   handleVocabularyUpdate: vi.fn(),
 }))
 
-function flushMicrotasks() {
-  return new Promise(resolve => setTimeout(resolve, 0))
-}
-
-describe("platform queue handler", () => {
+describe("platform handler translation routing", () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
-    vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    requireSessionMock.mockResolvedValue({
+      clerkUserId: "clerk_user_1",
+      sessionId: "session_1",
+      tokenType: "clerk",
+    })
+    noContentMock.mockReturnValue(new Response(null, { status: 204 }))
+    handleRouteErrorMock.mockImplementation((error) => {
+      throw error
+    })
   })
 
   afterEach(() => {
-    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
-  it("starts later queue messages without waiting for earlier messages to finish", async () => {
-    let resolveFirst!: () => void
-    let resolveSecond!: () => void
-
-    handleManagedTranslationQueueMessageMock
-      .mockImplementationOnce(() => new Promise<void>((resolve) => {
-        resolveFirst = resolve
-      }))
-      .mockImplementationOnce(() => new Promise<void>((resolve) => {
-        resolveSecond = resolve
-      }))
+  it("routes POST /v1/translate to the unified translate handler", async () => {
+    handleTranslateTextMock.mockResolvedValue(new Response(JSON.stringify({ text: "translated" }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
 
     const { default: handler } = await import("../index")
-    const queuePromise = handler.queue?.({
-      messages: [
-        { body: { taskId: "task-1" } },
-        { body: { taskId: "task-2" } },
-      ],
-    } as any, {} as any)
+    const response = await handler.fetch(
+      new Request("https://example.com/v1/translate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: "hello",
+          systemPrompt: "system",
+          prompt: "prompt",
+        }),
+      }),
+      {} as never,
+      {} as never,
+    )
 
-    await flushMicrotasks()
-
-    expect(handleManagedTranslationQueueMessageMock).toHaveBeenCalledTimes(2)
-
-    resolveFirst()
-    resolveSecond()
-    await expect(queuePromise).resolves.toBeUndefined()
+    expect(response.status).toBe(200)
+    expect(handleTranslateTextMock).toHaveBeenCalledTimes(1)
   })
 
-  it("emits a queue batch summary with duplicate task counts", async () => {
-    handleManagedTranslationQueueMessageMock.mockResolvedValue(undefined)
-
+  it("does not expose the old /v1/translate/stream route", async () => {
     const { default: handler } = await import("../index")
-    await handler.queue?.({
-      messages: [
-        { body: { taskId: "task-1" } },
-        { body: { taskId: "task-1" } },
-        { body: { taskId: "task-2" } },
-      ],
-    } as any, {} as any)
+    const response = await handler.fetch(
+      new Request("https://example.com/v1/translate/stream", {
+        method: "POST",
+      }),
+      {} as never,
+      {} as never,
+    )
 
-    expect(console.warn).toHaveBeenCalledWith(expect.objectContaining({
-      namespace: "usage-gate-queue-batch",
-      event: "complete",
-      messageCount: 3,
-      uniqueTaskCount: 2,
-      duplicateMessageCount: 1,
-      failedCount: 0,
-    }))
+    expect(response.status).toBe(404)
+    expect(handleTranslateTextMock).not.toHaveBeenCalled()
+  })
+
+  it("does not expose the old task routes", async () => {
+    const { default: handler } = await import("../index")
+
+    const createResponse = await handler.fetch(
+      new Request("https://example.com/v1/translate/tasks", {
+        method: "POST",
+      }),
+      {} as never,
+      {} as never,
+    )
+    const streamResponse = await handler.fetch(
+      new Request("https://example.com/v1/translate/tasks/task_1/stream", {
+        method: "GET",
+      }),
+      {} as never,
+      {} as never,
+    )
+    const cancelResponse = await handler.fetch(
+      new Request("https://example.com/v1/translate/tasks/task_1/cancel", {
+        method: "POST",
+      }),
+      {} as never,
+      {} as never,
+    )
+
+    expect(createResponse.status).toBe(404)
+    expect(streamResponse.status).toBe(404)
+    expect(cancelResponse.status).toBe(404)
   })
 })

@@ -5,9 +5,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "deploy:dev": "wrangler deploy --env dev",
     "d1:migrate:local": "wrangler d1 migrations apply lexio-platform --local",
-    "d1:migrate:dev": "wrangler d1 migrations apply lexio-platform-dev --remote --env dev",
+    "d1:migrate:remote": "wrangler d1 migrations apply lexio-platform --remote",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

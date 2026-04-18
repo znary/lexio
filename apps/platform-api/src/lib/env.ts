@@ -1,6 +1,5 @@
 export interface Env {
   DB: D1Database
-  USAGE_GATE: DurableObjectNamespace
   CLERK_SECRET_KEY: string
   CLERK_PUBLISHABLE_KEY: string
   CLERK_JWT_KEY?: string

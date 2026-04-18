@@ -35,10 +35,9 @@ interface ProtocolMap {
   tryToSetEnablePageTranslationOnContentScript: (data: { enabled: boolean, analyticsContext?: FeatureUsageContext }) => void
   setAndNotifyPageTranslationStateChangedByManager: (data: { enabled: boolean }) => void
   notifyTranslationStateChanged: (data: { enabled: boolean }) => void
-  notifyManagedTranslationTaskStatus: (data: {
+  notifyManagedTranslationStatus: (data: {
     statusKey: string
     state: "queued" | "running" | "completed" | "failed" | "canceled"
-    taskId?: string | null
   }) => void
   // for auto start page translation
   checkAndAskAutoPageTranslation: (data: { url: string, detectedCodeOrUnd: LangCodeISO6393 | "und" }) => void

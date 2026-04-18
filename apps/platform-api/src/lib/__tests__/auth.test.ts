@@ -12,7 +12,6 @@ vi.mock("@clerk/backend", () => ({
 function createEnv(overrides: Partial<Env> = {}): Env {
   return {
     DB: {} as D1Database,
-    USAGE_GATE: {} as DurableObjectNamespace,
     CLERK_SECRET_KEY: "sk_test_123",
     CLERK_PUBLISHABLE_KEY: "pk_test_123",
     CLERK_JWT_KEY: "jwt-public-key",

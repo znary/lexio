@@ -21,15 +21,20 @@ import { getTranslatePrompt } from "@/utils/prompts/translate"
 import { BatchCountMismatchError, BatchQueue } from "@/utils/request/batch-queue"
 import { RequestQueue } from "@/utils/request/request-queue"
 import { ensureInitializedConfig } from "./config"
-import { getManagedTranslationTaskScope } from "./managed-translation-tasks"
 
 export const MANAGED_TRANSLATION_MAX_CONCURRENCY = 100
 export const MANAGED_TRANSLATION_QUEUE_TIMEOUT_MS = 3 * 60_000
 
-interface ManagedTranslationTaskStatusNotification {
+interface ManagedTranslationStatusNotification {
   state: "queued" | "running" | "completed" | "failed" | "canceled"
-  taskId?: string | null
 }
+
+interface LocalManagedTranslationStatusState {
+  activeRequestCount: number
+  phase: "queued" | "running"
+}
+
+const localManagedTranslationStatusByTabId = new Map<number, Map<string, LocalManagedTranslationStatusState>>()
 
 function logTranslationPerf(level: "info" | "warn" | "error", event: string, details: Record<string, unknown>) {
   const payload = {
@@ -270,10 +275,10 @@ export interface TranslateBatchData<TContext = unknown> {
   tabId?: number
 }
 
-function notifyManagedTranslationTaskStatus(
+function notifyManagedTranslationStatus(
   tabId: number | undefined,
   statusKeys: string[] | undefined,
-  update: ManagedTranslationTaskStatusNotification,
+  update: ManagedTranslationStatusNotification,
 ) {
   if (typeof tabId !== "number" || !statusKeys?.length) {
     return
@@ -281,11 +286,119 @@ function notifyManagedTranslationTaskStatus(
 
   const uniqueStatusKeys = [...new Set(statusKeys.map(key => key.trim()).filter(Boolean))]
   for (const statusKey of uniqueStatusKeys) {
-    void sendMessage("notifyManagedTranslationTaskStatus", {
+    void sendMessage("notifyManagedTranslationStatus", {
       statusKey,
       state: update.state,
-      taskId: update.taskId ?? null,
     }, tabId)
+  }
+}
+
+function getLocalManagedTranslationStatusMap(tabId: number) {
+  const currentMap = localManagedTranslationStatusByTabId.get(tabId)
+  if (currentMap) {
+    return currentMap
+  }
+
+  const nextMap = new Map<string, LocalManagedTranslationStatusState>()
+  localManagedTranslationStatusByTabId.set(tabId, nextMap)
+  return nextMap
+}
+
+function beginManagedTranslationStatus(
+  tabId: number | undefined,
+  statusKeys: string[] | undefined,
+) {
+  if (typeof tabId !== "number" || !statusKeys?.length) {
+    return
+  }
+
+  const statusMap = getLocalManagedTranslationStatusMap(tabId)
+  const uniqueStatusKeys = [...new Set(statusKeys.map(key => key.trim()).filter(Boolean))]
+  for (const statusKey of uniqueStatusKeys) {
+    const currentState = statusMap.get(statusKey)
+    if (currentState) {
+      currentState.activeRequestCount += 1
+      notifyManagedTranslationStatus(tabId, [statusKey], {
+        state: currentState.phase,
+      })
+      continue
+    }
+
+    statusMap.set(statusKey, {
+      activeRequestCount: 1,
+      phase: "queued",
+    })
+    notifyManagedTranslationStatus(tabId, [statusKey], {
+      state: "queued",
+    })
+  }
+}
+
+function markManagedTranslationStatusRunning(
+  tabId: number | undefined,
+  statusKeys: string[] | undefined,
+) {
+  if (typeof tabId !== "number" || !statusKeys?.length) {
+    return
+  }
+
+  const statusMap = getLocalManagedTranslationStatusMap(tabId)
+  const uniqueStatusKeys = [...new Set(statusKeys.map(key => key.trim()).filter(Boolean))]
+  for (const statusKey of uniqueStatusKeys) {
+    const currentState = statusMap.get(statusKey)
+    if (currentState) {
+      currentState.phase = "running"
+    }
+    else {
+      statusMap.set(statusKey, {
+        activeRequestCount: 1,
+        phase: "running",
+      })
+    }
+
+    notifyManagedTranslationStatus(tabId, [statusKey], {
+      state: "running",
+    })
+  }
+}
+
+function finishManagedTranslationStatus(
+  tabId: number | undefined,
+  statusKeys: string[] | undefined,
+  terminalState: Exclude<ManagedTranslationStatusNotification["state"], "queued" | "running">,
+) {
+  if (typeof tabId !== "number" || !statusKeys?.length) {
+    return
+  }
+
+  const statusMap = localManagedTranslationStatusByTabId.get(tabId)
+  if (!statusMap) {
+    return
+  }
+
+  const uniqueStatusKeys = [...new Set(statusKeys.map(key => key.trim()).filter(Boolean))]
+  for (const statusKey of uniqueStatusKeys) {
+    const currentState = statusMap.get(statusKey)
+    if (!currentState) {
+      continue
+    }
+
+    currentState.activeRequestCount = Math.max(0, currentState.activeRequestCount - 1)
+    if (currentState.activeRequestCount === 0) {
+      statusMap.delete(statusKey)
+      notifyManagedTranslationStatus(tabId, [statusKey], {
+        state: terminalState,
+      })
+      continue
+    }
+
+    notifyManagedTranslationStatus(tabId, [statusKey], {
+      state: currentState.phase,
+    })
+  }
+
+  if (statusMap.size === 0) {
+    localManagedTranslationStatusByTabId.delete(tabId)
   }
 }
 
@@ -326,50 +439,6 @@ function resolveAbortError(signal: AbortSignal | undefined, error: unknown): unk
   return error
 }
 
-function combineAbortSignals(...signals: Array<AbortSignal | undefined>): {
-  signal: AbortSignal | undefined
-  cleanup: () => void
-} {
-  const activeSignals = signals.filter((signal): signal is AbortSignal => Boolean(signal))
-  if (activeSignals.length === 0) {
-    return {
-      signal: undefined,
-      cleanup: () => {},
-    }
-  }
-
-  if (activeSignals.length === 1) {
-    return {
-      signal: activeSignals[0],
-      cleanup: () => {},
-    }
-  }
-
-  const controller = new AbortController()
-  const cleanupList: Array<() => void> = []
-
-  for (const signal of activeSignals) {
-    if (signal.aborted) {
-      controller.abort(signal.reason)
-      continue
-    }
-
-    const onAbort = () => {
-      if (!controller.signal.aborted) {
-        controller.abort(signal.reason)
-      }
-    }
-
-    signal.addEventListener("abort", onAbort, { once: true })
-    cleanupList.push(() => signal.removeEventListener("abort", onAbort))
-  }
-
-  return {
-    signal: controller.signal,
-    cleanup: () => cleanupList.forEach(cleanup => cleanup()),
-  }
-}
-
 async function executeManagedTranslation<TContext>(
   text: string,
   langConfig: Config["language"],
@@ -408,12 +477,6 @@ async function executeManagedTranslation<TContext>(
     context: options?.context,
   })
   const promptMs = Date.now() - promptStartedAt
-  const tabScope = typeof options?.tabId === "number"
-    ? getManagedTranslationTaskScope(options.tabId)
-    : null
-  const managedSignal = combineAbortSignals(tabScope?.signal, options?.signal)
-
-  let taskId: string | null = null
 
   logTranslationPerf("info", "managed-translation-start", {
     providerId: providerConfig.id,
@@ -426,6 +489,8 @@ async function executeManagedTranslation<TContext>(
     systemPromptLength: systemPrompt.length,
   })
 
+  markManagedTranslationStatusRunning(options?.tabId, options?.statusKeys)
+
   try {
     const translatedText = await translateWithManagedPlatform({
       scene: options?.scene,
@@ -437,41 +502,13 @@ async function executeManagedTranslation<TContext>(
       temperature: isLLMProviderConfig(providerConfig) ? providerConfig.temperature : undefined,
       isBatch: options?.isBatch,
     }, {
-      signal: managedSignal.signal,
-      clientRequestKey: buildManagedTranslationQueueHash(
-        Sha256Hex(
-          options?.scene ?? "translate",
-          preparedText,
-          sourceLang,
-          targetLang,
-          systemPrompt,
-          prompt,
-          String(Boolean(options?.isBatch)),
-        ),
-        options?.tabId,
-      ),
-      ownerTabId: options?.tabId,
-      onTaskCreated(createdTaskId) {
-        taskId = createdTaskId
-        tabScope?.registerTaskId(createdTaskId)
-        logger.info("[ManagedTranslationTask]", {
-          taskId: createdTaskId,
-          tabId: options?.tabId ?? null,
-          scene: options?.scene ?? null,
-          action: "create",
-          event: "created",
-        })
-      },
-      onStatusChange(update) {
-        notifyManagedTranslationTaskStatus(options?.tabId, options?.statusKeys, update)
-      },
+      signal: options?.signal,
     })
 
     logTranslationPerf("info", "managed-translation-complete", {
       providerId: providerConfig.id,
       scene: options?.scene ?? null,
       tabId: options?.tabId ?? null,
-      taskId,
       isBatch: Boolean(options?.isBatch),
       totalMs: Date.now() - startedAt,
       resultLength: translatedText.length,
@@ -481,15 +518,14 @@ async function executeManagedTranslation<TContext>(
   }
   catch (error) {
     if (isAbortError(error)) {
-      logger.info("[ManagedTranslationTask]", {
-        taskId,
+      logger.info("[ManagedTranslationStatus]", {
         tabId: options?.tabId ?? null,
         scene: options?.scene ?? null,
         action: "execute",
         event: "aborted",
       })
-      if (isManagedTranslationQueueTimeout(managedSignal.signal)) {
-        throw resolveAbortError(managedSignal.signal, error)
+      if (isManagedTranslationQueueTimeout(options?.signal)) {
+        throw resolveAbortError(options?.signal, error)
       }
       return ""
     }
@@ -497,21 +533,11 @@ async function executeManagedTranslation<TContext>(
       providerId: providerConfig.id,
       scene: options?.scene ?? null,
       tabId: options?.tabId ?? null,
-      taskId,
       isBatch: Boolean(options?.isBatch),
       totalMs: Date.now() - startedAt,
       error: error instanceof Error ? error.message : String(error),
     })
     throw error
-  }
-  finally {
-    managedSignal.cleanup()
-    if (taskId) {
-      tabScope?.completeTask(taskId)
-    }
-    else if (tabScope) {
-      tabScope.completeTask("__cleanup__")
-    }
   }
 }
 
@@ -655,19 +681,31 @@ export async function setUpWebPageTranslationQueue() {
       webContent: normalizePromptContextValue(webContent),
       webSummary: normalizePromptContextValue(webSummary),
     }
+    const statusKeys = [cacheHash || queueHash]
+    beginManagedTranslationStatus(tabId, statusKeys)
+    let terminalState: Exclude<ManagedTranslationStatusNotification["state"], "queued" | "running"> = "completed"
 
-    if (shouldUseBatchQueue(providerConfig)) {
-      const data = { text, langConfig, providerConfig, hash: queueHash, statusKey: cacheHash || queueHash, scheduleAt, scene, context, tabId }
-      result = await batchQueue.enqueue(data)
+    try {
+      if (shouldUseBatchQueue(providerConfig)) {
+        const data = { text, langConfig, providerConfig, hash: queueHash, statusKey: cacheHash || queueHash, scheduleAt, scene, context, tabId }
+        result = await batchQueue.enqueue(data)
+      }
+      else {
+        const thunk = (signal: AbortSignal) => executeManagedTranslation(text, langConfig, providerConfig, getTranslatePrompt, {
+          scene: scene ?? "page",
+          signal,
+          tabId,
+          statusKeys,
+        })
+        result = await requestQueue.enqueue(thunk, scheduleAt, queueHash)
+      }
     }
-    else {
-      const thunk = (signal: AbortSignal) => executeManagedTranslation(text, langConfig, providerConfig, getTranslatePrompt, {
-        scene: scene ?? "page",
-        signal,
-        tabId,
-        statusKeys: [cacheHash || queueHash],
-      })
-      result = await requestQueue.enqueue(thunk, scheduleAt, queueHash)
+    catch (error) {
+      terminalState = isAbortError(error) ? "canceled" : "failed"
+      throw error
+    }
+    finally {
+      finishManagedTranslationStatus(tabId, statusKeys, terminalState)
     }
 
     // Cache the translation result if successful
@@ -762,19 +800,31 @@ export async function setUpSubtitlesTranslationQueue() {
       videoTitle: normalizePromptContextValue(videoTitle),
       videoSummary: normalizePromptContextValue(summary),
     }
+    const statusKeys = [cacheHash || queueHash]
+    beginManagedTranslationStatus(tabId, statusKeys)
+    let terminalState: Exclude<ManagedTranslationStatusNotification["state"], "queued" | "running"> = "completed"
 
-    if (shouldUseBatchQueue(providerConfig)) {
-      const data = { text, langConfig, providerConfig, hash: queueHash, statusKey: cacheHash || queueHash, scheduleAt, context, tabId }
-      result = await batchQueue.enqueue(data)
+    try {
+      if (shouldUseBatchQueue(providerConfig)) {
+        const data = { text, langConfig, providerConfig, hash: queueHash, statusKey: cacheHash || queueHash, scheduleAt, context, tabId }
+        result = await batchQueue.enqueue(data)
+      }
+      else {
+        const thunk = (signal: AbortSignal) => executeManagedTranslation(text, langConfig, providerConfig, getSubtitlesTranslatePrompt, {
+          scene: "subtitles",
+          signal,
+          tabId,
+          statusKeys,
+        })
+        result = await requestQueue.enqueue(thunk, scheduleAt, queueHash)
+      }
     }
-    else {
-      const thunk = (signal: AbortSignal) => executeManagedTranslation(text, langConfig, providerConfig, getSubtitlesTranslatePrompt, {
-        scene: "subtitles",
-        signal,
-        tabId,
-        statusKeys: [cacheHash || queueHash],
-      })
-      result = await requestQueue.enqueue(thunk, scheduleAt, queueHash)
+    catch (error) {
+      terminalState = isAbortError(error) ? "canceled" : "failed"
+      throw error
+    }
+    finally {
+      finishManagedTranslationStatus(tabId, statusKeys, terminalState)
     }
 
     if (result && cacheHash) {

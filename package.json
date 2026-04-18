@@ -19,8 +19,6 @@
     "dev:firefox": "DOTENV_CONFIG_QUIET=false wxt -b firefox --mv3",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
-    "observe:platform-api": "bash scripts/observe-translation-task.sh",
-    "observe:translation-task": "bash scripts/observe-translation-task.sh",
     "postinstall": "wxt prepare",
     "test": "vitest run",
     "test:cov": "vitest run --coverage",

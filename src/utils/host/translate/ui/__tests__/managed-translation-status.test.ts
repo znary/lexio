@@ -28,7 +28,7 @@ describe("managedTranslationStatus", () => {
     document.body.innerHTML = ""
   })
 
-  it("updates spinner hover text when the managed task state changes", async () => {
+  it("updates spinner hover text when the managed translation state changes", async () => {
     const spinner = document.createElement("span")
     document.body.appendChild(spinner)
 

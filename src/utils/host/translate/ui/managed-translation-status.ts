@@ -66,7 +66,7 @@ function ensureManagedTranslationStatusListener(): void {
   }
 
   managedTranslationStatusListenerRegistered = true
-  onMessage("notifyManagedTranslationTaskStatus", (message) => {
+  onMessage("notifyManagedTranslationStatus", (message) => {
     const { statusKey, state } = message.data
     updateManagedTranslationHoverState(statusKey, normalizeManagedTranslationHoverState(state))
   })

@@ -12,7 +12,6 @@ const articleSummaryCacheGetMock = vi.fn()
 const articleSummaryCachePutMock = vi.fn()
 const translationCacheGetMock = vi.fn()
 const translationCachePutMock = vi.fn()
-const getManagedTranslationTaskScopeMock = vi.fn()
 const getTranslatePromptMock = vi.fn()
 const getSubtitlesTranslatePromptMock = vi.fn()
 
@@ -56,10 +55,6 @@ vi.mock("@/utils/db/dexie/db", () => ({
       put: translationCachePutMock,
     },
   },
-}))
-
-vi.mock("../managed-translation-tasks", () => ({
-  getManagedTranslationTaskScope: getManagedTranslationTaskScopeMock,
 }))
 
 function getRegisteredMessageHandler(name: string) {
@@ -112,25 +107,13 @@ describe("translation queue helpers", () => {
       systemPrompt: "system prompt",
       prompt: "subtitle prompt",
     })
-    translateWithManagedPlatformMock.mockImplementation(async (_payload: unknown, options?: { onTaskCreated?: (taskId: string) => void }) => {
-      options?.onTaskCreated?.("task-123")
-      return "translated subtitle"
-    })
+    translateWithManagedPlatformMock.mockResolvedValue("translated subtitle")
     generateArticleSummaryMock.mockResolvedValue("Generated summary")
     putBatchRequestRecordMock.mockResolvedValue(undefined)
     articleSummaryCacheGetMock.mockResolvedValue(undefined)
     articleSummaryCachePutMock.mockResolvedValue(undefined)
     translationCacheGetMock.mockResolvedValue(undefined)
     translationCachePutMock.mockResolvedValue(undefined)
-    getManagedTranslationTaskScopeMock.mockImplementation((tabId: number) => {
-      const controller = new AbortController()
-      return {
-        signal: controller.signal,
-        registerTaskId: vi.fn(),
-        completeTask: vi.fn(),
-        tabId,
-      }
-    })
   })
 
   afterEach(() => {
@@ -196,7 +179,6 @@ describe("translation queue helpers", () => {
       }),
       expect.objectContaining({
         signal: expect.any(Object),
-        onTaskCreated: expect.any(Function),
       }),
     )
   })
@@ -234,22 +216,12 @@ describe("translation queue helpers", () => {
       }),
       expect.objectContaining({
         signal: expect.any(Object),
-        onTaskCreated: expect.any(Function),
       }),
     )
   })
 
-  it("forwards managed task state changes back to the content script", async () => {
-    translateWithManagedPlatformMock.mockImplementationOnce(async (_payload: unknown, options?: {
-      onTaskCreated?: (taskId: string) => void
-      onStatusChange?: (update: { state: string, taskId?: string | null }) => void
-    }) => {
-      options?.onTaskCreated?.("task-123")
-      options?.onStatusChange?.({ state: "queued", taskId: "task-123" })
-      options?.onStatusChange?.({ state: "running", taskId: "task-123" })
-      options?.onStatusChange?.({ state: "completed", taskId: "task-123" })
-      return "translated subtitle"
-    })
+  it("reports local queue lifecycle back to the content script", async () => {
+    translateWithManagedPlatformMock.mockResolvedValueOnce("translated subtitle")
 
     const { setUpWebPageTranslationQueue } = await import("../translation-queues")
     await setUpWebPageTranslationQueue()
@@ -274,29 +246,26 @@ describe("translation queue helpers", () => {
     } as any)
 
     expect(sendMessageMock).toHaveBeenCalledWith(
-      "notifyManagedTranslationTaskStatus",
+      "notifyManagedTranslationStatus",
       {
         statusKey: "webpage-hash",
         state: "queued",
-        taskId: "task-123",
       },
       12,
     )
     expect(sendMessageMock).toHaveBeenCalledWith(
-      "notifyManagedTranslationTaskStatus",
+      "notifyManagedTranslationStatus",
       {
         statusKey: "webpage-hash",
         state: "running",
-        taskId: "task-123",
       },
       12,
     )
     expect(sendMessageMock).toHaveBeenCalledWith(
-      "notifyManagedTranslationTaskStatus",
+      "notifyManagedTranslationStatus",
       {
         statusKey: "webpage-hash",
         state: "completed",
-        taskId: "task-123",
       },
       12,
     )
@@ -323,7 +292,7 @@ describe("translation queue helpers", () => {
     expect(isManagedTranslationQueueTimeout(timeoutController.signal)).toBe(true)
 
     const manualController = new AbortController()
-    manualController.abort(new Error("user canceled task"))
+    manualController.abort(new Error("user canceled translation"))
     expect(isManagedTranslationQueueTimeout(manualController.signal)).toBe(false)
   })
 
@@ -400,6 +369,93 @@ describe("translation queue helpers", () => {
       "translated subtitle",
     ])
     expect(translateWithManagedPlatformMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("keeps local hover status at running when a duplicate request joins an active translation", async () => {
+    const deeplProvider: ProviderConfig = {
+      id: "deepl",
+      name: "DeepL",
+      provider: "deepl",
+      enabled: true,
+      apiKey: "key",
+    }
+
+    let resolveTranslation!: (value: string) => void
+    translateWithManagedPlatformMock.mockImplementationOnce(
+      () => new Promise((resolve: (value: string) => void) => {
+        resolveTranslation = resolve
+      }),
+    )
+
+    const { setUpWebPageTranslationQueue } = await import("../translation-queues")
+    await setUpWebPageTranslationQueue()
+
+    const handler = getRegisteredMessageHandler("enqueueTranslateRequest")
+    const firstRequest = handler({
+      sender: {
+        tab: {
+          id: 12,
+        },
+      },
+      data: {
+        text: "hello",
+        langConfig: DEFAULT_CONFIG.language,
+        providerConfig: deeplProvider,
+        scheduleAt: Date.now(),
+        hash: "shared-hash",
+        webTitle: "Page title",
+        webContent: "Page body",
+        webSummary: "Ready summary",
+      },
+    } as any)
+
+    await vi.waitFor(() => {
+      expect(sendMessageMock).toHaveBeenCalledWith(
+        "notifyManagedTranslationStatus",
+        {
+          statusKey: "shared-hash",
+          state: "running",
+        },
+        12,
+      )
+    })
+    sendMessageMock.mockClear()
+
+    const secondRequest = handler({
+      sender: {
+        tab: {
+          id: 12,
+        },
+      },
+      data: {
+        text: "hello",
+        langConfig: DEFAULT_CONFIG.language,
+        providerConfig: deeplProvider,
+        scheduleAt: Date.now(),
+        hash: "shared-hash",
+        webTitle: "Page title",
+        webContent: "Page body",
+        webSummary: "Ready summary",
+      },
+    } as any)
+
+    await vi.waitFor(() => {
+      expect(sendMessageMock).toHaveBeenCalledWith(
+        "notifyManagedTranslationStatus",
+        {
+          statusKey: "shared-hash",
+          state: "running",
+        },
+        12,
+      )
+    })
+
+    resolveTranslation("translated subtitle")
+
+    await expect(Promise.all([firstRequest, secondRequest])).resolves.toEqual([
+      "translated subtitle",
+      "translated subtitle",
+    ])
   })
 
   it("exposes webpage summary generation as a separate background handler", async () => {
