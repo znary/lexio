@@ -9,14 +9,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/base-ui/dropdown-menu"
-import { ANALYTICS_FEATURE, ANALYTICS_SURFACE } from "@/types/analytics"
-import { createFeatureUsageContext } from "@/utils/analytics"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { APP_NAME } from "@/utils/constants/app"
 import { sendMessage } from "@/utils/message"
 import { cn } from "@/utils/styles/utils"
 import { matchDomainPattern } from "@/utils/url"
-import { enablePageTranslationAtom, isDraggingButtonAtom, isSideOpenAtom } from "../../atoms"
+import { isDraggingButtonAtom, isSideOpenAtom } from "../../atoms"
 import { shadowWrapper } from "../../index"
 import HiddenButton from "./components/hidden-button"
 import TranslateButton from "./translate-button"
@@ -28,7 +26,6 @@ export default function FloatingButton() {
     configFieldsAtomMap.floatingButton,
   )
   const sideContent = useAtomValue(configFieldsAtomMap.sideContent)
-  const translationState = useAtomValue(enablePageTranslationAtom)
   const [isSideOpen, setIsSideOpen] = useAtom(isSideOpenAtom)
   const [isDraggingButton, setIsDraggingButton] = useAtom(isDraggingButtonAtom)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
@@ -104,18 +101,7 @@ export default function FloatingButton() {
 
       // 只有未移动过才触发点击
       if (!hasMoved) {
-        if (floatingButton.clickAction === "translate") {
-          const nextEnabled = !translationState.enabled
-          void sendMessage("tryToSetEnablePageTranslationOnContentScript", {
-            enabled: nextEnabled,
-            analyticsContext: nextEnabled
-              ? createFeatureUsageContext(ANALYTICS_FEATURE.PAGE_TRANSLATION, ANALYTICS_SURFACE.FLOATING_BUTTON)
-              : undefined,
-          })
-        }
-        else {
-          setIsSideOpen(o => !o)
-        }
+        setIsSideOpen(o => !o)
       }
     }
 

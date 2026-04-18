@@ -34,4 +34,10 @@ describe("dEFAULT_CONFIG", () => {
     expect(defaultDictionaryAction?.outputSchema.every(field => typeof field.id === "string" && field.id.length > 0)).toBe(true)
     expect(getRandomValues).toHaveBeenCalled()
   })
+
+  it("uses the panel as the default floating button click action", async () => {
+    const { DEFAULT_CONFIG } = await import("../config")
+
+    expect(DEFAULT_CONFIG.floatingButton.clickAction).toBe("panel")
+  })
 })

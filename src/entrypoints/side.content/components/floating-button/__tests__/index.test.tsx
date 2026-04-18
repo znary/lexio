@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/react"
 import { atom } from "jotai"
-import { beforeAll, describe, expect, it, vi } from "vitest"
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import FloatingButton from ".."
+
+const { sendMessageMock } = vi.hoisted(() => ({
+  sendMessageMock: vi.fn(),
+}))
 
 vi.mock("#imports", () => ({
   browser: {
@@ -20,7 +24,7 @@ vi.mock("@/utils/atoms/config", () => ({
     floatingButton: atom({
       enabled: true,
       position: 0.66,
-      clickAction: "panel",
+      clickAction: "translate",
       disabledFloatingButtonPatterns: [],
     }),
     sideContent: atom({ width: 360 }),
@@ -37,12 +41,6 @@ vi.mock("../../../index", () => ({
   shadowWrapper: document.body,
 }))
 
-vi.mock("../translate-button", () => ({
-  default: ({ className }: { className?: string }) => (
-    <div data-testid="translate-button" className={className} />
-  ),
-}))
-
 vi.mock("../components/hidden-button", () => ({
   default: ({ className, onClick }: { className?: string, onClick: () => void }) => (
     <button type="button" data-testid="hidden-button" className={className} onClick={onClick} />
@@ -50,7 +48,7 @@ vi.mock("../components/hidden-button", () => ({
 }))
 
 vi.mock("@/utils/message", () => ({
-  sendMessage: vi.fn(),
+  sendMessage: (...args: unknown[]) => sendMessageMock(...args),
 }))
 
 beforeAll(() => {
@@ -61,6 +59,10 @@ beforeAll(() => {
   }
 
   vi.stubGlobal("ResizeObserver", ResizeObserverMock)
+})
+
+beforeEach(() => {
+  sendMessageMock.mockReset()
 })
 
 describe("floatingButton close trigger", () => {
@@ -93,5 +95,39 @@ describe("floatingButton close trigger", () => {
 
     expect(closeTrigger).toHaveClass("visible")
     expect(screen.getByText("options.floatingButtonAndToolbar.floatingButton.closeMenu.disableForSite")).toBeInTheDocument()
+  })
+
+  it("starts page translation only from the secondary translate button", () => {
+    render(<FloatingButton />)
+
+    const [translateButton] = screen.getAllByTestId("hidden-button")
+    fireEvent.click(translateButton)
+
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      "tryToSetEnablePageTranslationOnContentScript",
+      { enabled: true },
+    )
+  })
+
+  it("does not start page translation when the main floating trigger is clicked", () => {
+    render(<FloatingButton />)
+
+    const mainTrigger = screen.getByRole("img").closest("div")
+
+    expect(mainTrigger).not.toBeNull()
+    expect(mainTrigger?.parentElement).toHaveStyle({
+      right: "var(--removed-body-scroll-bar-size, 0px)",
+    })
+
+    fireEvent.mouseDown(mainTrigger!, { clientY: 100 })
+    fireEvent.mouseUp(document, { clientY: 100 })
+
+    expect(sendMessageMock).not.toHaveBeenCalledWith(
+      "tryToSetEnablePageTranslationOnContentScript",
+      expect.anything(),
+    )
+    expect(mainTrigger?.parentElement).toHaveStyle({
+      right: "calc(360px + var(--removed-body-scroll-bar-size, 0px))",
+    })
   })
 })
