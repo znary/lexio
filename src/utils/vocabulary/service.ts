@@ -1,14 +1,16 @@
 import type { VocabularyItem, VocabularySettings } from "@/types/vocabulary"
+import { vocabularyItemsSchema } from "@/types/vocabulary"
+import { storageAdapter } from "../atoms/storage-adapter"
 import {
   clearVocabularyItems as apiClearVocabularyItems,
   createVocabularyItem as apiCreateVocabularyItem,
   deleteVocabularyItem as apiDeleteVocabularyItem,
-  getVocabularyItems as apiGetVocabularyItems,
   updateVocabularyItem as apiUpdateVocabularyItem,
 } from "../platform/api"
 import { buildVocabularyTermMetadata, countVocabularyWords, isEnglishVocabularyCandidate, normalizeVocabularyText } from "./normalization"
 
 export const VOCABULARY_CHANGED_EVENT = "lexio:vocabulary-changed"
+const VOCABULARY_STORAGE_KEY = "vocabularyItems"
 let vocabularyItemsCache: VocabularyItem[] | null = null
 
 function notifyVocabularyChanged(): void {
@@ -41,12 +43,27 @@ function hydrateVocabularyItem(item: VocabularyItem): VocabularyItem {
   }
 }
 
-function replaceVocabularyItemsCache(items: VocabularyItem[], notify = true): VocabularyItem[] {
+function setVocabularyItemsCache(items: VocabularyItem[]): VocabularyItem[] {
   vocabularyItemsCache = sortVocabularyItems(items.map(hydrateVocabularyItem))
+  return vocabularyItemsCache
+}
+
+async function loadVocabularyItemsFromStorage(): Promise<VocabularyItem[]> {
+  const items = await storageAdapter.get<VocabularyItem[]>(VOCABULARY_STORAGE_KEY, [], vocabularyItemsSchema)
+  return setVocabularyItemsCache(items)
+}
+
+function persistVocabularyItems(items: VocabularyItem[]): Promise<void> {
+  return storageAdapter.set(VOCABULARY_STORAGE_KEY, items, vocabularyItemsSchema)
+}
+
+function replaceVocabularyItemsCache(items: VocabularyItem[], notify = true): VocabularyItem[] {
+  const nextItems = setVocabularyItemsCache(items)
+  void persistVocabularyItems(nextItems).catch(() => {})
   if (notify) {
     notifyVocabularyChanged()
   }
-  return vocabularyItemsCache
+  return nextItems
 }
 
 function upsertVocabularyItem(items: VocabularyItem[], nextItem: VocabularyItem): VocabularyItem[] {
@@ -192,9 +209,7 @@ export async function getVocabularyItems(options?: { forceRefresh?: boolean }): 
     return [...vocabularyItemsCache]
   }
 
-  const items = sortVocabularyItems((await apiGetVocabularyItems()).map(hydrateVocabularyItem))
-  vocabularyItemsCache = items
-  return [...items]
+  return [...await loadVocabularyItemsFromStorage()]
 }
 
 export async function findVocabularyItemForSelection({

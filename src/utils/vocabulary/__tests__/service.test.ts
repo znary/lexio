@@ -7,12 +7,16 @@ const {
   apiDeleteVocabularyItemMock,
   apiGetVocabularyItemsMock,
   apiUpdateVocabularyItemMock,
+  storageAdapterGetMock,
+  storageAdapterSetMock,
 } = vi.hoisted(() => ({
   apiClearVocabularyItemsMock: vi.fn(),
   apiCreateVocabularyItemMock: vi.fn(),
   apiDeleteVocabularyItemMock: vi.fn(),
   apiGetVocabularyItemsMock: vi.fn(),
   apiUpdateVocabularyItemMock: vi.fn(),
+  storageAdapterGetMock: vi.fn(),
+  storageAdapterSetMock: vi.fn(),
 }))
 
 vi.mock("@/utils/platform/api", () => ({
@@ -21,6 +25,15 @@ vi.mock("@/utils/platform/api", () => ({
   deleteVocabularyItem: (...args: unknown[]) => apiDeleteVocabularyItemMock(...args),
   getVocabularyItems: (...args: unknown[]) => apiGetVocabularyItemsMock(...args),
   updateVocabularyItem: (...args: unknown[]) => apiUpdateVocabularyItemMock(...args),
+}))
+
+vi.mock("@/utils/atoms/storage-adapter", () => ({
+  storageAdapter: {
+    get: (...args: unknown[]) => storageAdapterGetMock(...args),
+    set: (...args: unknown[]) => storageAdapterSetMock(...args),
+    setMeta: vi.fn(),
+    watch: vi.fn(),
+  },
 }))
 
 describe("vocabulary service", () => {
@@ -32,6 +45,8 @@ describe("vocabulary service", () => {
     apiUpdateVocabularyItemMock.mockResolvedValue({ ok: true })
     apiDeleteVocabularyItemMock.mockResolvedValue({ ok: true })
     apiClearVocabularyItemsMock.mockResolvedValue({ ok: true })
+    storageAdapterGetMock.mockResolvedValue([])
+    storageAdapterSetMock.mockResolvedValue(undefined)
   })
 
   afterEach(() => {
@@ -61,17 +76,16 @@ describe("vocabulary service", () => {
       },
     })
 
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(getCachedVocabularyItems()).toEqual([
-      expect.objectContaining({
-        sourceText: "hello",
-        translatedText: "你好",
-        normalizedText: "hello",
-      }),
-    ])
-    expect(changedListener).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => {
+      expect(getCachedVocabularyItems()).toEqual([
+        expect.objectContaining({
+          sourceText: "hello",
+          translatedText: "你好",
+          normalizedText: "hello",
+        }),
+      ])
+      expect(changedListener).toHaveBeenCalledTimes(1)
+    })
 
     if (!resolveCreate) {
       throw new Error("create promise resolver was not captured")
@@ -88,7 +102,7 @@ describe("vocabulary service", () => {
   })
 
   it("updates an existing item instead of inserting it again", async () => {
-    apiGetVocabularyItemsMock.mockResolvedValue([
+    storageAdapterGetMock.mockResolvedValue([
       {
         id: "voc_existing",
         sourceText: "hello",
@@ -161,7 +175,7 @@ describe("vocabulary service", () => {
   })
 
   it("reuses a legacy inflected item when saving its lemma later", async () => {
-    apiGetVocabularyItemsMock.mockResolvedValue([
+    storageAdapterGetMock.mockResolvedValue([
       {
         id: "voc_existing",
         sourceText: "thinking",
@@ -207,7 +221,7 @@ describe("vocabulary service", () => {
   })
 
   it("stores dictionary details on an existing vocabulary item", async () => {
-    apiGetVocabularyItemsMock.mockResolvedValue([
+    storageAdapterGetMock.mockResolvedValue([
       {
         id: "voc_existing",
         sourceText: "thinking",
@@ -254,7 +268,7 @@ describe("vocabulary service", () => {
   })
 
   it("finds a saved item by its lemma for the same language pair", async () => {
-    apiGetVocabularyItemsMock.mockResolvedValue([
+    storageAdapterGetMock.mockResolvedValue([
       {
         id: "voc_existing",
         sourceText: "think",
@@ -292,10 +306,11 @@ describe("vocabulary service", () => {
       definition: "思考；认为",
       translatedText: "思考",
     }))
+    expect(apiGetVocabularyItemsMock).not.toHaveBeenCalled()
   })
 
   it("does not reuse a saved item from a different target language", async () => {
-    apiGetVocabularyItemsMock.mockResolvedValue([
+    storageAdapterGetMock.mockResolvedValue([
       {
         id: "voc_existing",
         sourceText: "think",
@@ -327,7 +342,7 @@ describe("vocabulary service", () => {
   })
 
   it("removes an item from the local cache before the delete request finishes", async () => {
-    apiGetVocabularyItemsMock.mockResolvedValue([
+    storageAdapterGetMock.mockResolvedValue([
       {
         id: "voc_delete",
         sourceText: "hello",
@@ -356,11 +371,10 @@ describe("vocabulary service", () => {
 
     const deletePromise = removeVocabularyItem("voc_delete")
 
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(getCachedVocabularyItems()).toEqual([])
-    expect(changedListener).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => {
+      expect(getCachedVocabularyItems()).toEqual([])
+      expect(changedListener).toHaveBeenCalledTimes(1)
+    })
 
     if (!resolveDelete) {
       throw new Error("delete promise resolver was not captured")
@@ -374,7 +388,7 @@ describe("vocabulary service", () => {
   })
 
   it("restores the cache when delete fails", async () => {
-    apiGetVocabularyItemsMock.mockResolvedValue([
+    storageAdapterGetMock.mockResolvedValue([
       {
         id: "voc_delete",
         sourceText: "hello",
