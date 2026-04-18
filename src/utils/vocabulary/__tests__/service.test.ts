@@ -133,6 +133,126 @@ describe("vocabulary service", () => {
     }))
   })
 
+  it("stores english word variants under the same canonical entry", async () => {
+    const { saveTranslatedSelectionToVocabulary } = await import("../service")
+    const savedItem = await saveTranslatedSelectionToVocabulary({
+      sourceText: "thinking",
+      translatedText: "思考",
+      sourceLang: "en",
+      targetLang: "zh-CN",
+      settings: {
+        autoSave: true,
+        highlightEnabled: true,
+        maxPhraseWords: 3,
+        highlightColor: "#fde68a",
+      },
+    })
+
+    expect(apiCreateVocabularyItemMock).toHaveBeenCalledWith(expect.objectContaining({
+      sourceText: "thinking",
+      normalizedText: "think",
+      matchTerms: expect.arrayContaining(["think", "thinking", "thinks", "thought"]),
+    }))
+    expect(savedItem).toEqual(expect.objectContaining({
+      sourceText: "thinking",
+      normalizedText: "think",
+      matchTerms: expect.arrayContaining(["think", "thinking", "thinks", "thought"]),
+    }))
+  })
+
+  it("reuses a legacy inflected item when saving its lemma later", async () => {
+    apiGetVocabularyItemsMock.mockResolvedValue([
+      {
+        id: "voc_existing",
+        sourceText: "thinking",
+        normalizedText: "thinking",
+        translatedText: "思考",
+        sourceLang: "en",
+        targetLang: "zh-CN",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 1,
+        lastSeenAt: 2,
+        hitCount: 3,
+        updatedAt: 4,
+        deletedAt: null,
+      },
+    ])
+
+    const { saveTranslatedSelectionToVocabulary } = await import("../service")
+    const savedItem = await saveTranslatedSelectionToVocabulary({
+      sourceText: "think",
+      translatedText: "思考",
+      sourceLang: "en",
+      targetLang: "zh-CN",
+      settings: {
+        autoSave: true,
+        highlightEnabled: true,
+        maxPhraseWords: 3,
+        highlightColor: "#fde68a",
+      },
+    })
+
+    expect(apiUpdateVocabularyItemMock).toHaveBeenCalledWith(expect.objectContaining({
+      id: "voc_existing",
+      normalizedText: "think",
+      matchTerms: expect.arrayContaining(["think", "thinking", "thinks", "thought"]),
+    }))
+    expect(apiCreateVocabularyItemMock).not.toHaveBeenCalled()
+    expect(savedItem).toEqual(expect.objectContaining({
+      id: "voc_existing",
+      normalizedText: "think",
+      matchTerms: expect.arrayContaining(["think", "thinking", "thinks", "thought"]),
+    }))
+  })
+
+  it("stores dictionary details on an existing vocabulary item", async () => {
+    apiGetVocabularyItemsMock.mockResolvedValue([
+      {
+        id: "voc_existing",
+        sourceText: "thinking",
+        normalizedText: "thinking",
+        translatedText: "思考",
+        sourceLang: "en",
+        targetLang: "zh-CN",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 1,
+        lastSeenAt: 2,
+        hitCount: 3,
+        updatedAt: 4,
+        deletedAt: null,
+      },
+    ])
+
+    const { updateVocabularyItemDetails } = await import("../service")
+    const updatedItem = await updateVocabularyItemDetails("voc_existing", {
+      definition: "思考；认为",
+      lemma: "think",
+      partOfSpeech: "verb",
+      phonetic: "/theta-ng-k/",
+    })
+
+    expect(apiUpdateVocabularyItemMock).toHaveBeenCalledWith(expect.objectContaining({
+      id: "voc_existing",
+      normalizedText: "think",
+      lemma: "think",
+      partOfSpeech: "verb",
+      definition: "思考；认为",
+      phonetic: "/theta-ng-k/",
+      matchTerms: expect.arrayContaining(["think", "thinking", "thinks", "thought"]),
+    }))
+    expect(updatedItem).toEqual(expect.objectContaining({
+      id: "voc_existing",
+      normalizedText: "think",
+      lemma: "think",
+      partOfSpeech: "verb",
+      definition: "思考；认为",
+      phonetic: "/theta-ng-k/",
+      matchTerms: expect.arrayContaining(["think", "thinking", "thinks", "thought"]),
+    }))
+  })
+
   it("removes an item from the local cache before the delete request finishes", async () => {
     apiGetVocabularyItemsMock.mockResolvedValue([
       {

@@ -43,6 +43,9 @@ export function VocabularyLibraryCard() {
 
     return items.filter(item =>
       item.sourceText.toLowerCase().includes(normalizedQuery)
+      || item.lemma?.toLowerCase().includes(normalizedQuery)
+      || item.partOfSpeech?.toLowerCase().includes(normalizedQuery)
+      || item.definition?.toLowerCase().includes(normalizedQuery)
       || item.translatedText.toLowerCase().includes(normalizedQuery),
     )
   }, [items, search])
@@ -132,7 +135,16 @@ export function VocabularyLibraryCard() {
 
                     return (
                       <TableRow key={item.id}>
-                        <TableCell className="max-w-56 whitespace-normal break-words">{item.sourceText}</TableCell>
+                        <TableCell className="max-w-56 whitespace-normal break-words">
+                          <div className="space-y-0.5">
+                            <div>{item.sourceText}</div>
+                            {(item.lemma || item.partOfSpeech) && (
+                              <div className="text-xs text-muted-foreground">
+                                {[item.lemma && item.lemma !== item.sourceText ? item.lemma : null, item.partOfSpeech].filter(Boolean).join(" · ")}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="max-w-56 whitespace-normal break-words">{item.translatedText}</TableCell>
                         <TableCell>{item.kind}</TableCell>
                         <TableCell>{item.hitCount}</TableCell>

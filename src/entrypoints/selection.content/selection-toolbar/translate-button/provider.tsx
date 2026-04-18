@@ -1,8 +1,9 @@
 import type { ReactNode } from "react"
 import type { SelectionSession, SelectionToolbarTranslateRequestSlice } from "../atoms"
 import type { SelectionToolbarInlineError } from "../inline-error"
-import type { BackgroundTextStreamSnapshot, ThinkingSnapshot } from "@/types/background-stream"
+import type { BackgroundStructuredObjectStreamSnapshot, BackgroundTextStreamSnapshot, ThinkingSnapshot } from "@/types/background-stream"
 import type { LLMProviderConfig, ProviderConfig } from "@/types/config/provider"
+import type { SelectionToolbarCustomActionOutputField } from "@/types/config/selection-toolbar"
 import { i18n } from "#imports"
 import { ISO6393_TO_6391, LANG_CODE_TO_EN_NAME } from "@read-frog/definitions"
 import { useAtomValue, useSetAtom } from "jotai"
@@ -24,7 +25,7 @@ import { getOrGenerateWebPageSummary } from "@/utils/host/translate/webpage-summ
 import { onMessage } from "@/utils/message"
 import { streamManagedTranslation } from "@/utils/platform/api"
 import { getTranslatePromptFromConfig } from "@/utils/prompts/translate"
-import { saveTranslatedSelectionToVocabulary } from "@/utils/vocabulary/service"
+import { saveTranslatedSelectionToVocabulary, updateVocabularyItemDetails } from "@/utils/vocabulary/service"
 import { shadowWrapper } from "../.."
 import { SelectionToolbarErrorAlert } from "../../components/selection-toolbar-error-alert"
 import { SelectionToolbarFooterContent } from "../../components/selection-toolbar-footer-content"
@@ -156,6 +157,47 @@ async function translateWithStandardProvider({
   return translatedText
 }
 
+function getDictionaryFieldValue(
+  result: BackgroundStructuredObjectStreamSnapshot["output"] | null,
+  outputSchema: SelectionToolbarCustomActionOutputField[],
+  fieldIdSuffix: string,
+) {
+  if (!result) {
+    return ""
+  }
+
+  const field = outputSchema.find(item => item.id.endsWith(fieldIdSuffix))
+  if (!field) {
+    return ""
+  }
+
+  const value = result[field.name]
+  return typeof value === "string" ? value.trim() : ""
+}
+
+function extractVocabularyDetailsFromDictionaryResult(
+  result: BackgroundStructuredObjectStreamSnapshot["output"] | null,
+  outputSchema: SelectionToolbarCustomActionOutputField[],
+) {
+  const definition = getDictionaryFieldValue(result, outputSchema, "dictionary-definition")
+  const difficulty = getDictionaryFieldValue(result, outputSchema, "dictionary-difficulty")
+  const lemma = getDictionaryFieldValue(result, outputSchema, "dictionary-term")
+  const partOfSpeech = getDictionaryFieldValue(result, outputSchema, "dictionary-part-of-speech")
+  const phonetic = getDictionaryFieldValue(result, outputSchema, "dictionary-phonetic")
+
+  if (!definition && !difficulty && !lemma && !partOfSpeech && !phonetic) {
+    return null
+  }
+
+  return {
+    ...(definition ? { definition } : {}),
+    ...(difficulty ? { difficulty } : {}),
+    ...(lemma ? { lemma } : {}),
+    ...(partOfSpeech ? { partOfSpeech } : {}),
+    ...(phonetic ? { phonetic } : {}),
+  }
+}
+
 interface SelectionTranslationContextValue {
   prepareToolbarOpen: () => void
 }
@@ -185,6 +227,7 @@ export function SelectionTranslationProvider({
   const [anchor, setAnchor] = useState<{ x: number, y: number } | null>(null)
   const [popoverSessionKey, setPopoverSessionKey] = useState(0)
   const [translatedText, setTranslatedText] = useState<string | undefined>(undefined)
+  const [savedVocabularyItemId, setSavedVocabularyItemId] = useState<string | null>(null)
   const [savedVocabularyText, setSavedVocabularyText] = useState<string | null>(null)
   const [isDetailedExplanationVisible, setIsDetailedExplanationVisible] = useState(false)
   const [hasRequestedDetailedExplanation, setHasRequestedDetailedExplanation] = useState(false)
@@ -206,6 +249,7 @@ export function SelectionTranslationProvider({
   const pendingOpenRequestRef = useRef<SelectionTranslatePendingOpenRequest | null>(null)
   const reopenFrameRef = useRef<number | null>(null)
   const lastTranslationRunKeyRef = useRef<string | null>(null)
+  const lastVocabularyDetailsSyncKeyRef = useRef<string | null>(null)
   const runIdRef = useRef(0)
   const { resolveContextMenuSelectionRequest } = useSelectionContextMenuRequestResolver(selectionSession)
   const selectionText = activeSession?.selectionSnapshot.text ?? null
@@ -300,10 +344,12 @@ export function SelectionTranslationProvider({
 
   const resetTranslationState = useCallback(() => {
     setIsTranslating(false)
+    setSavedVocabularyItemId(null)
     setTranslatedText(undefined)
     setSavedVocabularyText(null)
     setThinking(null)
     setError(null)
+    lastVocabularyDetailsSyncKeyRef.current = null
     resetDetailedExplanation()
   }, [resetDetailedExplanation])
 
@@ -437,11 +483,13 @@ export function SelectionTranslationProvider({
           })
 
           if (runIdRef.current === runId) {
+            setSavedVocabularyItemId(savedItem?.id ?? null)
             setSavedVocabularyText(savedItem?.sourceText ?? null)
           }
         }
         catch {
           if (runIdRef.current === runId) {
+            setSavedVocabularyItemId(null)
             setSavedVocabularyText(null)
           }
         }
@@ -606,6 +654,32 @@ export function SelectionTranslationProvider({
     )
   const detailedExplanationValue = dictionaryExecutionPlan.executionContext ? detailedExplanationResult : null
   const detailedExplanationThinkingValue = dictionaryExecutionPlan.executionContext ? detailedExplanationThinking : null
+
+  useEffect(() => {
+    if (!savedVocabularyItemId || !dictionaryAction || detailedExplanationLoading) {
+      return
+    }
+
+    const details = extractVocabularyDetailsFromDictionaryResult(
+      detailedExplanationValue,
+      dictionaryAction.outputSchema,
+    )
+    if (!details) {
+      return
+    }
+
+    const syncKey = JSON.stringify({
+      itemId: savedVocabularyItemId,
+      ...details,
+    })
+    if (lastVocabularyDetailsSyncKeyRef.current === syncKey) {
+      return
+    }
+    lastVocabularyDetailsSyncKeyRef.current = syncKey
+
+    void updateVocabularyItemDetails(savedVocabularyItemId, details).catch(() => {})
+  }, [dictionaryAction, detailedExplanationLoading, detailedExplanationValue, savedVocabularyItemId])
+
   const contextValue = useMemo<SelectionTranslationContextValue>(() => ({
     prepareToolbarOpen,
   }), [prepareToolbarOpen])

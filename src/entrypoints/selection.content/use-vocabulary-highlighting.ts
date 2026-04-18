@@ -10,6 +10,7 @@ import {
   VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE,
   VOCABULARY_HIGHLIGHT_STYLE_ID,
 } from "@/utils/constants/vocabulary"
+import { normalizeVocabularyText } from "@/utils/vocabulary/normalization"
 import { getVocabularyItems, VOCABULARY_CHANGED_EVENT } from "@/utils/vocabulary/service"
 import { SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE } from "./overlay-layers"
 import {
@@ -64,12 +65,21 @@ function unmark(markInstance: import("mark.js").default): Promise<void> {
   })
 }
 
-function markVocabularyItem(
+function getVocabularyHighlightTerms(item: VocabularyItem): string[] {
+  const normalizedTerms = (item.matchTerms?.length ? item.matchTerms : [item.sourceText])
+    .map(term => normalizeVocabularyText(term))
+    .filter(Boolean)
+
+  return [...new Set(normalizedTerms)].sort((left, right) => right.length - left.length)
+}
+
+function markVocabularyTerm(
   markInstance: import("mark.js").default,
   item: VocabularyItem,
+  term: string,
 ): Promise<void> {
   return new Promise((resolve) => {
-    markInstance.mark(item.sourceText.trim(), {
+    markInstance.mark(term, {
       acrossElements: shouldHighlightAcrossElements(item),
       accuracy: {
         value: "exactly",
@@ -94,7 +104,9 @@ async function markTerms(
   items: VocabularyItem[],
 ) {
   for (const item of items) {
-    await markVocabularyItem(markInstance, item)
+    for (const term of getVocabularyHighlightTerms(item)) {
+      await markVocabularyTerm(markInstance, item, term)
+    }
   }
 }
 
@@ -225,7 +237,11 @@ export function useVocabularyHighlighting() {
 
         const activeItems = items
           .filter(item => item.deletedAt == null && item.sourceText.trim())
-          .sort((left, right) => right.sourceText.length - left.sourceText.length)
+          .sort((left, right) => {
+            const leftLongestTerm = getVocabularyHighlightTerms(left)[0]?.length ?? left.sourceText.length
+            const rightLongestTerm = getVocabularyHighlightTerms(right)[0]?.length ?? right.sourceText.length
+            return rightLongestTerm - leftLongestTerm
+          })
 
         itemsByIdRef.current = new Map(activeItems.map(item => [item.id, item]))
 

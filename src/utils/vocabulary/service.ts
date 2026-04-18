@@ -6,7 +6,7 @@ import {
   getVocabularyItems as apiGetVocabularyItems,
   updateVocabularyItem as apiUpdateVocabularyItem,
 } from "../platform/api"
-import { countVocabularyWords, isEnglishVocabularyCandidate, normalizeVocabularyText } from "./normalization"
+import { buildVocabularyTermMetadata, countVocabularyWords, isEnglishVocabularyCandidate, normalizeVocabularyText } from "./normalization"
 
 export const VOCABULARY_CHANGED_EVENT = "lexio:vocabulary-changed"
 let vocabularyItemsCache: VocabularyItem[] | null = null
@@ -21,8 +21,28 @@ function sortVocabularyItems(items: VocabularyItem[]): VocabularyItem[] {
   return [...items].sort((left, right) => right.updatedAt - left.updatedAt)
 }
 
+function hydrateVocabularyItem(item: VocabularyItem): VocabularyItem {
+  const normalizedSourceText = normalizeVocabularyText(item.sourceText)
+  const preferredLemma = item.lemma
+    ?? (item.normalizedText && item.normalizedText !== normalizedSourceText ? item.normalizedText : null)
+  const metadata = buildVocabularyTermMetadata(item.sourceText, {
+    preferredLemma,
+  })
+  const matchTerms = new Set([
+    ...metadata.matchTerms,
+    ...(item.matchTerms ?? []).map(term => normalizeVocabularyText(term)).filter(Boolean),
+  ])
+
+  return {
+    ...item,
+    ...(metadata.lemma ? { lemma: item.lemma ?? metadata.lemma } : {}),
+    ...(matchTerms.size > 0 ? { matchTerms: [...matchTerms] } : {}),
+    normalizedText: metadata.normalizedText || item.normalizedText,
+  }
+}
+
 function replaceVocabularyItemsCache(items: VocabularyItem[], notify = true): VocabularyItem[] {
-  vocabularyItemsCache = sortVocabularyItems(items)
+  vocabularyItemsCache = sortVocabularyItems(items.map(hydrateVocabularyItem))
   if (notify) {
     notifyVocabularyChanged()
   }
@@ -50,9 +70,15 @@ function restoreOrUpdateExistingItem(
   wordCount: number,
   now: number,
 ): VocabularyItem {
+  const metadata = buildVocabularyTermMetadata(sourceText, {
+    preferredLemma: item.lemma,
+  })
+
   return {
     ...item,
     sourceText: sourceText.trim(),
+    ...(metadata.lemma ? { lemma: metadata.lemma } : {}),
+    ...(metadata.matchTerms.length > 0 ? { matchTerms: metadata.matchTerms } : {}),
     translatedText: translatedText.trim(),
     sourceLang,
     targetLang,
@@ -60,6 +86,7 @@ function restoreOrUpdateExistingItem(
     wordCount,
     lastSeenAt: now,
     hitCount: item.deletedAt == null ? item.hitCount + 1 : 1,
+    normalizedText: metadata.normalizedText,
     updatedAt: now,
     deletedAt: null,
   }
@@ -77,10 +104,14 @@ function buildVocabularyItem(
   wordCount: number,
   now: number,
 ): VocabularyItem {
+  const metadata = buildVocabularyTermMetadata(sourceText)
+
   return {
     id: globalThis.crypto.randomUUID(),
     sourceText: sourceText.trim(),
-    normalizedText: normalizeVocabularyText(sourceText),
+    ...(metadata.lemma ? { lemma: metadata.lemma } : {}),
+    ...(metadata.matchTerms.length > 0 ? { matchTerms: metadata.matchTerms } : {}),
+    normalizedText: metadata.normalizedText,
     translatedText: translatedText.trim(),
     sourceLang,
     targetLang,
@@ -120,7 +151,7 @@ export async function getVocabularyItems(options?: { forceRefresh?: boolean }): 
     return [...vocabularyItemsCache]
   }
 
-  const items = sortVocabularyItems(await apiGetVocabularyItems())
+  const items = sortVocabularyItems((await apiGetVocabularyItems()).map(hydrateVocabularyItem))
   vocabularyItemsCache = items
   return [...items]
 }
@@ -144,7 +175,7 @@ export async function saveTranslatedSelectionToVocabulary({
 
   const now = Date.now()
   const wordCount = countVocabularyWords(sourceText)
-  const normalizedText = normalizeVocabularyText(sourceText)
+  const normalizedText = buildVocabularyTermMetadata(sourceText).normalizedText
   const items = await getVocabularyItems()
   const existingItem = items.find(item => item.normalizedText === normalizedText)
   const previousItems = getCachedVocabularyItems() ?? items
@@ -185,6 +216,50 @@ export async function saveTranslatedSelectionToVocabulary({
   }
 
   return newItem
+}
+
+export async function updateVocabularyItemDetails(
+  itemId: string,
+  details: Partial<Pick<VocabularyItem, "definition" | "difficulty" | "lemma" | "partOfSpeech" | "phonetic">>,
+): Promise<VocabularyItem | null> {
+  const previousItems = await getVocabularyItems()
+  const existingItem = previousItems.find(item => item.id === itemId)
+  if (!existingItem) {
+    return null
+  }
+
+  const nextDetails = Object.fromEntries(
+    Object.entries(details).filter(([, value]) => typeof value === "string" && value.trim()),
+  ) as Partial<Pick<VocabularyItem, "definition" | "difficulty" | "lemma" | "partOfSpeech" | "phonetic">>
+
+  if (Object.keys(nextDetails).length === 0) {
+    return existingItem
+  }
+
+  const metadata = buildVocabularyTermMetadata(existingItem.sourceText, {
+    preferredLemma: nextDetails.lemma ?? existingItem.lemma,
+  })
+  const updatedItem = hydrateVocabularyItem({
+    ...existingItem,
+    ...nextDetails,
+    ...(metadata.lemma ? { lemma: metadata.lemma } : {}),
+    ...(metadata.matchTerms.length > 0 ? { matchTerms: metadata.matchTerms } : {}),
+    normalizedText: metadata.normalizedText,
+    updatedAt: Date.now(),
+  })
+
+  const previousCache = getCachedVocabularyItems() ?? previousItems
+  replaceVocabularyItemsCache(upsertVocabularyItem(previousCache, updatedItem))
+
+  try {
+    await apiUpdateVocabularyItem(updatedItem)
+  }
+  catch (error) {
+    replaceVocabularyItemsCache(previousCache)
+    throw error
+  }
+
+  return updatedItem
 }
 
 export async function removeVocabularyItem(itemId: string): Promise<void> {

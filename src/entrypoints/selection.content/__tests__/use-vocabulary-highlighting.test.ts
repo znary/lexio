@@ -40,6 +40,7 @@ function createVocabularyItem(overrides: Partial<VocabularyItem>): VocabularyIte
     id: "item-1",
     sourceText: "integration",
     normalizedText: "integration",
+    matchTerms: ["integration"],
     translatedText: "集成",
     sourceLang: "en",
     targetLang: "zh-CN",
@@ -164,6 +165,33 @@ describe("shouldHighlightAcrossElements", () => {
     await waitFor(() => {
       const highlight = document.querySelector("p mark")
       expect(highlight?.textContent).toBe("Integration")
+      expect(highlight).toHaveClass(NOTRANSLATE_CLASS)
+    })
+  })
+
+  it("highlights inflected word-family matches even when the saved source text differs", async () => {
+    const item = createVocabularyItem({
+      sourceText: "thinking",
+      normalizedText: "think",
+      matchTerms: ["thinking", "think", "thinks", "thought"],
+      kind: "word",
+      wordCount: 1,
+    })
+
+    getVocabularyItemsMock.mockResolvedValue([item])
+    document.body.innerHTML = `
+      <main>
+        <p data-read-frog-paragraph="">I think this vocabulary highlight should work.</p>
+      </main>
+    `
+
+    const container = document.createElement("div")
+    document.body.append(container)
+    render(createElement(VocabularyHighlightingHarness), { container })
+
+    await waitFor(() => {
+      const highlight = document.querySelector("p mark")
+      expect(highlight?.textContent).toBe("think")
       expect(highlight).toHaveClass(NOTRANSLATE_CLASS)
     })
   })
