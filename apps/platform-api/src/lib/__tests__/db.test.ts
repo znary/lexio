@@ -42,7 +42,21 @@ describe("pushSyncData", () => {
       vocabularyItems: [
         {
           id: "voc_1",
+          sourceText: "thinking",
           normalizedText: "hello",
+          lemma: "think",
+          matchTerms: ["think", "thinking"],
+          translatedText: "思考",
+          definition: "思考；认为",
+          sourceLang: "en",
+          targetLang: "zh-CN",
+          kind: "word",
+          wordCount: 1,
+          createdAt: 1,
+          lastSeenAt: 2,
+          hitCount: 3,
+          updatedAt: 4,
+          deletedAt: null,
         },
       ],
     })
@@ -50,7 +64,12 @@ describe("pushSyncData", () => {
     const statements = batchMock.mock.calls[0][0] as Array<{ sql: string }>
     expect(statements).toHaveLength(4)
     expect(statements.some(statement => statement.sql.includes("DELETE FROM vocabulary_items"))).toBe(true)
-    expect(statements.some(statement => statement.sql.includes("INSERT INTO vocabulary_items"))).toBe(true)
+    const insertStatement = statements.find(statement => statement.sql.includes("INSERT INTO vocabulary_items"))
+    expect(insertStatement?.sql).toContain("source_text")
+    expect(insertStatement?.sql).toContain("lemma")
+    expect(insertStatement?.sql).toContain("target_lang")
+    expect(insertStatement?.sql).toContain("definition")
+    expect(insertStatement?.sql).not.toContain("item_json")
   })
 })
 

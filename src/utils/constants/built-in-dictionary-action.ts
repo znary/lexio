@@ -73,40 +73,44 @@ export function createBuiltInDictionaryAction(providerId: string): SelectionTool
     providerId,
     systemPrompt: BUILT_IN_DICTIONARY_SYSTEM_PROMPT,
     prompt: BUILT_IN_DICTIONARY_PROMPT,
-    outputSchema: [
-      createOutputSchemaField(
-        BUILT_IN_DICTIONARY_FIELD_NAMES.term,
-        "string",
-        `${i18n.t(`${T_PREFIX}.fieldTermDescription`)} Keep this field in the source language of the selected text.`,
-        "dictionary-term",
-        true,
-      ),
-      createOutputSchemaField(
-        BUILT_IN_DICTIONARY_FIELD_NAMES.phonetic,
-        "string",
-        `${i18n.t(`${T_PREFIX}.fieldPhoneticDescription`)} This is for the source-language lemma.`,
-        "dictionary-phonetic",
-      ),
-      createOutputSchemaField(
-        BUILT_IN_DICTIONARY_FIELD_NAMES.partOfSpeech,
-        "string",
-        `${i18n.t(`${T_PREFIX}.fieldPartOfSpeechDescription`)} Keep this field in English.`,
-        "dictionary-part-of-speech",
-      ),
-      createOutputSchemaField(
-        BUILT_IN_DICTIONARY_FIELD_NAMES.definition,
-        "string",
-        `${i18n.t(`${T_PREFIX}.fieldDefinitionDescription`)} Answer this field in {{targetLanguage}}.`,
-        "dictionary-definition",
-      ),
-      createOutputSchemaField(
-        BUILT_IN_DICTIONARY_FIELD_NAMES.difficulty,
-        "string",
-        `${i18n.t(`${T_PREFIX}.fieldDifficultyDescription`)} This difficulty is for the source-language lemma.`,
-        "dictionary-difficulty",
-      ),
-    ],
+    outputSchema: createBuiltInDictionaryOutputSchema(),
   }
+}
+
+export function createBuiltInDictionaryOutputSchema() {
+  return [
+    createOutputSchemaField(
+      BUILT_IN_DICTIONARY_FIELD_NAMES.term,
+      "string",
+      `${i18n.t(`${T_PREFIX}.fieldTermDescription`)} Keep this field in the source language of the selected text.`,
+      "dictionary-term",
+      true,
+    ),
+    createOutputSchemaField(
+      BUILT_IN_DICTIONARY_FIELD_NAMES.phonetic,
+      "string",
+      `${i18n.t(`${T_PREFIX}.fieldPhoneticDescription`)} This is for the source-language lemma.`,
+      "dictionary-phonetic",
+    ),
+    createOutputSchemaField(
+      BUILT_IN_DICTIONARY_FIELD_NAMES.partOfSpeech,
+      "string",
+      `${i18n.t(`${T_PREFIX}.fieldPartOfSpeechDescription`)} Keep this field in English.`,
+      "dictionary-part-of-speech",
+    ),
+    createOutputSchemaField(
+      BUILT_IN_DICTIONARY_FIELD_NAMES.definition,
+      "string",
+      `${i18n.t(`${T_PREFIX}.fieldDefinitionDescription`)} Answer this field in {{targetLanguage}}.`,
+      "dictionary-definition",
+    ),
+    createOutputSchemaField(
+      BUILT_IN_DICTIONARY_FIELD_NAMES.difficulty,
+      "string",
+      `${i18n.t(`${T_PREFIX}.fieldDifficultyDescription`)} This difficulty is for the source-language lemma.`,
+      "dictionary-difficulty",
+    ),
+  ]
 }
 
 export function getBuiltInDictionaryFieldLabel(fieldId: string, fallback: string) {

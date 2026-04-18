@@ -4,6 +4,7 @@ import type { SelectionToolbarInlineError } from "../inline-error"
 import type { BackgroundStructuredObjectStreamSnapshot, BackgroundTextStreamSnapshot, ThinkingSnapshot } from "@/types/background-stream"
 import type { LLMProviderConfig, ProviderConfig } from "@/types/config/provider"
 import type { SelectionToolbarCustomActionOutputField } from "@/types/config/selection-toolbar"
+import type { VocabularyItem } from "@/types/vocabulary"
 import { i18n } from "#imports"
 import { ISO6393_TO_6391, LANG_CODE_TO_EN_NAME } from "@read-frog/definitions"
 import { IconAlertCircle, IconCheck, IconLoader2 } from "@tabler/icons-react"
@@ -17,7 +18,11 @@ import { isLLMProviderConfig, isTranslateProviderConfig } from "@/types/config/p
 import { createFeatureUsageContext, trackFeatureUsed } from "@/utils/analytics"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { filterEnabledProvidersConfig, getProviderConfigById } from "@/utils/config/helpers"
-import { createBuiltInDictionaryAction, shouldUseBuiltInDictionary } from "@/utils/constants/built-in-dictionary-action"
+import {
+  createBuiltInDictionaryAction,
+  createBuiltInDictionaryOutputSchema,
+  shouldUseBuiltInDictionary,
+} from "@/utils/constants/built-in-dictionary-action"
 import { DEFAULT_DICTIONARY_ACTION_ID } from "@/utils/constants/custom-action"
 import { prepareTranslationText } from "@/utils/host/translate/text-preparation"
 import { translateTextCore } from "@/utils/host/translate/translate-text"
@@ -26,7 +31,11 @@ import { getOrGenerateWebPageSummary } from "@/utils/host/translate/webpage-summ
 import { onMessage } from "@/utils/message"
 import { streamManagedTranslation } from "@/utils/platform/api"
 import { getTranslatePromptFromConfig } from "@/utils/prompts/translate"
-import { saveTranslatedSelectionToVocabulary, updateVocabularyItemDetails } from "@/utils/vocabulary/service"
+import {
+  findVocabularyItemForSelection,
+  saveTranslatedSelectionToVocabulary,
+  updateVocabularyItemDetails,
+} from "@/utils/vocabulary/service"
 import { shadowWrapper } from "../.."
 import { SelectionToolbarErrorAlert } from "../../components/selection-toolbar-error-alert"
 import { SelectionToolbarFooterContent } from "../../components/selection-toolbar-footer-content"
@@ -198,6 +207,18 @@ function extractVocabularyDetailsFromDictionaryResult(
   }
 }
 
+function buildStoredDetailedExplanationValue(item: VocabularyItem): Record<string, string> | null {
+  const value = {
+    ...(item.lemma?.trim() ? { term: item.lemma.trim() } : item.sourceText.trim() ? { term: item.sourceText.trim() } : {}),
+    ...(item.phonetic?.trim() ? { phonetic: item.phonetic.trim() } : {}),
+    ...(item.partOfSpeech?.trim() ? { partOfSpeech: item.partOfSpeech.trim() } : {}),
+    ...(item.definition?.trim() ? { definition: item.definition.trim() } : {}),
+    ...(item.difficulty?.trim() ? { difficulty: item.difficulty.trim() } : {}),
+  }
+
+  return Object.keys(value).length > 0 ? value : null
+}
+
 interface SelectionTranslationContextValue {
   prepareToolbarOpen: () => void
 }
@@ -227,11 +248,14 @@ export function SelectionTranslationProvider({
   const [anchor, setAnchor] = useState<{ x: number, y: number } | null>(null)
   const [popoverSessionKey, setPopoverSessionKey] = useState(0)
   const [translatedText, setTranslatedText] = useState<string | undefined>(undefined)
+  const [reusedVocabularyItem, setReusedVocabularyItem] = useState<VocabularyItem | null>(null)
   const [savedVocabularyItemId, setSavedVocabularyItemId] = useState<string | null>(null)
   const [savedVocabularyText, setSavedVocabularyText] = useState<string | null>(null)
   const [thinking, setThinking] = useState<ThinkingSnapshot | null>(null)
   const [error, setError] = useState<SelectionToolbarInlineError | null>(null)
   const [isTranslating, setIsTranslating] = useState(false)
+  const [translationSettledKey, setTranslationSettledKey] = useState<string | null>(null)
+  const [vocabularyReuseState, setVocabularyReuseState] = useState<"idle" | "checking" | "hit" | "miss">("idle")
   const [rerunNonce, setRerunNonce] = useState(0)
   const [sourceSurface, setSourceSurface] = useState<
     typeof ANALYTICS_SURFACE.SELECTION_TOOLBAR | typeof ANALYTICS_SURFACE.CONTEXT_MENU
@@ -248,6 +272,7 @@ export function SelectionTranslationProvider({
   const reopenFrameRef = useRef<number | null>(null)
   const lastTranslationRunKeyRef = useRef<string | null>(null)
   const lastVocabularyDetailsSyncKeyRef = useRef<string | null>(null)
+  const forceRefreshNextRunRef = useRef(false)
   const runIdRef = useRef(0)
   const { resolveContextMenuSelectionRequest } = useSelectionContextMenuRequestResolver(selectionSession)
   const selectionText = activeSession?.selectionSnapshot.text ?? null
@@ -269,6 +294,18 @@ export function SelectionTranslationProvider({
     () => JSON.stringify(translateRequest),
     [translateRequest],
   )
+  const activeTranslationRunKey = useMemo(() => {
+    if (!isOpen) {
+      return null
+    }
+
+    return JSON.stringify({
+      popoverSessionKey,
+      rerunNonce,
+      sessionId: activeSession?.id ?? null,
+      translateRequestKey,
+    })
+  }, [activeSession?.id, isOpen, popoverSessionKey, rerunNonce, translateRequestKey])
   const dictionaryProviderId = useMemo(() => {
     const configuredProviderId = selectionToolbarConfig.customActions
       .find(action => action.id === DEFAULT_DICTIONARY_ACTION_ID)
@@ -283,25 +320,33 @@ export function SelectionTranslationProvider({
 
     return llmProviders[0]?.id ?? null
   }, [llmProviders, providersConfig, selectionToolbarConfig.customActions])
+  const builtInDictionaryOutputSchema = useMemo(
+    () => createBuiltInDictionaryOutputSchema(),
+    [],
+  )
   const dictionaryAction = useMemo(
     () => shouldRenderDictionaryResult && dictionaryProviderId
       ? createBuiltInDictionaryAction(dictionaryProviderId)
       : null,
     [dictionaryProviderId, shouldRenderDictionaryResult],
   )
+  const shouldRunDictionaryAction = vocabularyReuseState === "miss"
+    && activeTranslationRunKey != null
+    && translationSettledKey === activeTranslationRunKey
+  const dictionaryActionExecution = shouldRunDictionaryAction ? dictionaryAction : null
   const dictionaryProviderConfig = useMemo(
     () => dictionaryProviderId ? getProviderConfigById(providersConfig, dictionaryProviderId) ?? null : null,
     [dictionaryProviderId, providersConfig],
   )
   const dictionaryWebPageContext = useCustomActionWebPageContext(
-    isOpen && Boolean(dictionaryAction),
+    isOpen && Boolean(dictionaryActionExecution),
     popoverSessionKey,
   )
   const dictionaryExecutionPlan = useMemo(
     () => buildCustomActionExecutionPlan(
       {
         language: translateRequest.language,
-        action: dictionaryAction,
+        action: dictionaryActionExecution,
         providerConfig: dictionaryProviderConfig,
       },
       cleanedSelectionText,
@@ -310,7 +355,7 @@ export function SelectionTranslationProvider({
     ),
     [
       cleanedSelectionText,
-      dictionaryAction,
+      dictionaryActionExecution,
       dictionaryProviderConfig,
       dictionaryWebPageContext,
       paragraphsText,
@@ -327,7 +372,7 @@ export function SelectionTranslationProvider({
     analyticsSurface: sourceSurface,
     bodyRef,
     executionContext: dictionaryExecutionPlan.executionContext,
-    open: isOpen && Boolean(dictionaryAction),
+    open: isOpen && Boolean(dictionaryActionExecution),
     popoverSessionKey,
     rerunNonce,
   })
@@ -345,11 +390,14 @@ export function SelectionTranslationProvider({
 
   const resetTranslationState = useCallback(() => {
     setIsTranslating(false)
+    setReusedVocabularyItem(null)
     setSavedVocabularyItemId(null)
     setTranslatedText(undefined)
     setSavedVocabularyText(null)
     setThinking(null)
     setError(null)
+    setTranslationSettledKey(null)
+    setVocabularyReuseState("idle")
     lastVocabularyDetailsSyncKeyRef.current = null
     resetDetailedExplanation()
   }, [resetDetailedExplanation])
@@ -372,13 +420,18 @@ export function SelectionTranslationProvider({
   }, [])
 
   const handleRegenerate = useCallback(() => {
+    forceRefreshNextRunRef.current = true
     cancelCurrentTranslation()
     resetDetailedExplanation()
+    setReusedVocabularyItem(null)
+    setVocabularyReuseState("miss")
     setRerunNonce(prev => prev + 1)
   }, [cancelCurrentTranslation, resetDetailedExplanation])
 
-  const runTranslation = useCallback(async (runId: number) => {
+  const runTranslation = useCallback(async (runId: number, options?: { forceRefresh?: boolean, translationRunKey: string }) => {
     const preparedText = prepareTranslationText(selectionText)
+    const forceRefresh = options?.forceRefresh === true
+    const currentTranslationRunKey = options?.translationRunKey ?? null
 
     if (preparedText === "") {
       if (runIdRef.current === runId) {
@@ -393,15 +446,60 @@ export function SelectionTranslationProvider({
     )
 
     setIsTranslating(true)
+    setReusedVocabularyItem(null)
     setTranslatedText(undefined)
     setThinking(null)
     setError(null)
+    setTranslationSettledKey(null)
+    setVocabularyReuseState(forceRefresh ? "miss" : "checking")
+
+    if (!forceRefresh && selectionText) {
+      try {
+        const reusableItem = await findVocabularyItemForSelection({
+          sourceText: selectionText,
+          sourceLang: translateRequest.language.sourceCode,
+          targetLang: translateRequest.language.targetCode,
+        })
+
+        if (runIdRef.current !== runId) {
+          return
+        }
+
+        if (reusableItem) {
+          setReusedVocabularyItem(reusableItem)
+          setSavedVocabularyItemId(reusableItem.id)
+          setSavedVocabularyText(reusableItem.sourceText)
+          setTranslatedText(reusableItem.translatedText)
+          setThinking(null)
+          setError(null)
+          setVocabularyReuseState("hit")
+          setIsTranslating(false)
+          setTranslationSettledKey(currentTranslationRunKey)
+
+          void trackFeatureUsed({
+            ...analyticsContext,
+            outcome: "success",
+          })
+          return
+        }
+      }
+      catch {
+        if (runIdRef.current !== runId) {
+          return
+        }
+      }
+    }
+
+    if (runIdRef.current === runId) {
+      setVocabularyReuseState("miss")
+    }
 
     const providerConfig = translateRequest.providerConfig
     if (!providerConfig || !isTranslateProviderConfig(providerConfig)) {
       if (runIdRef.current === runId) {
         setIsTranslating(false)
         setError(createSelectionToolbarPrecheckError("translate", "providerUnavailable"))
+        setTranslationSettledKey(currentTranslationRunKey)
       }
       void trackFeatureUsed({
         ...analyticsContext,
@@ -414,6 +512,7 @@ export function SelectionTranslationProvider({
       if (runIdRef.current === runId) {
         setIsTranslating(false)
         setError(createSelectionToolbarPrecheckError("translate", "providerDisabled"))
+        setTranslationSettledKey(currentTranslationRunKey)
       }
       void trackFeatureUsed({
         ...analyticsContext,
@@ -508,12 +607,13 @@ export function SelectionTranslationProvider({
       if (runIdRef.current === runId) {
         abortControllerRef.current = null
         setIsTranslating(false)
+        setTranslationSettledKey(currentTranslationRunKey)
       }
     }
   }, [resetTranslationState, selectionText, sourceSurface, translateRequest, vocabularySettings])
 
-  const startTranslation = useEffectEvent((runId: number) => {
-    void runTranslation(runId)
+  const startTranslation = useEffectEvent((runId: number, options?: { forceRefresh?: boolean, translationRunKey: string }) => {
+    void runTranslation(runId, options)
   })
 
   useEffect(() => {
@@ -521,12 +621,10 @@ export function SelectionTranslationProvider({
       return
     }
 
-    const nextRunKey = JSON.stringify({
-      popoverSessionKey,
-      rerunNonce,
-      sessionId: activeSession?.id ?? null,
-      translateRequestKey,
-    })
+    const nextRunKey = activeTranslationRunKey
+    if (!nextRunKey) {
+      return
+    }
     if (lastTranslationRunKeyRef.current === nextRunKey) {
       return
     }
@@ -534,14 +632,19 @@ export function SelectionTranslationProvider({
 
     const runId = runIdRef.current + 1
     runIdRef.current = runId
+    const forceRefresh = forceRefreshNextRunRef.current
+    forceRefreshNextRunRef.current = false
 
     resetDetailedExplanation()
-    startTranslation(runId)
+    startTranslation(runId, {
+      forceRefresh,
+      translationRunKey: nextRunKey,
+    })
 
     return () => {
       cancelCurrentTranslation(runId)
     }
-  }, [activeSession?.id, cancelCurrentTranslation, isOpen, popoverSessionKey, rerunNonce, resetDetailedExplanation, translateRequestKey])
+  }, [activeTranslationRunKey, cancelCurrentTranslation, isOpen, resetDetailedExplanation])
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     cancelCurrentTranslation()
@@ -636,15 +739,22 @@ export function SelectionTranslationProvider({
   }, [])
 
   const detailedExplanationError = dictionaryAction
-    ? (detailedExplanationRuntimeError ?? dictionaryExecutionPlan.error)
+    ? (reusedVocabularyItem ? null : (detailedExplanationRuntimeError ?? dictionaryExecutionPlan.error))
     : null
   const detailedExplanationLoading = Boolean(dictionaryAction)
     && (
-      (dictionaryExecutionPlan.executionContext ? isDetailedExplanationRunning : false)
-      || dictionaryWebPageContext === undefined
+      shouldRunDictionaryAction
+      && (
+        (dictionaryExecutionPlan.executionContext ? isDetailedExplanationRunning : false)
+        || dictionaryWebPageContext === undefined
+      )
     )
-  const detailedExplanationValue = dictionaryExecutionPlan.executionContext ? detailedExplanationResult : null
-  const detailedExplanationThinkingValue = dictionaryExecutionPlan.executionContext ? detailedExplanationThinking : null
+  const detailedExplanationValue = reusedVocabularyItem
+    ? buildStoredDetailedExplanationValue(reusedVocabularyItem)
+    : (dictionaryExecutionPlan.executionContext ? detailedExplanationResult : null)
+  const detailedExplanationThinkingValue = reusedVocabularyItem
+    ? null
+    : (dictionaryExecutionPlan.executionContext ? detailedExplanationThinking : null)
   const headerStatus = useMemo(() => {
     const isLoading = isTranslating || detailedExplanationLoading
     const isFailed = Boolean(error || detailedExplanationError)
@@ -681,7 +791,7 @@ export function SelectionTranslationProvider({
   }, [detailedExplanationError, detailedExplanationLoading, detailedExplanationValue, error, isTranslating, translatedText])
 
   useEffect(() => {
-    if (!savedVocabularyItemId || !dictionaryAction || detailedExplanationLoading) {
+    if (!savedVocabularyItemId || !dictionaryAction || detailedExplanationLoading || reusedVocabularyItem) {
       return
     }
 
@@ -703,7 +813,7 @@ export function SelectionTranslationProvider({
     lastVocabularyDetailsSyncKeyRef.current = syncKey
 
     void updateVocabularyItemDetails(savedVocabularyItemId, details).catch(() => {})
-  }, [dictionaryAction, detailedExplanationLoading, detailedExplanationValue, savedVocabularyItemId])
+  }, [dictionaryAction, detailedExplanationLoading, detailedExplanationValue, reusedVocabularyItem, savedVocabularyItemId])
 
   const contextValue = useMemo<SelectionTranslationContextValue>(() => ({
     prepareToolbarOpen,
@@ -745,7 +855,15 @@ export function SelectionTranslationProvider({
                     result: detailedExplanationValue,
                     thinking: detailedExplanationThinkingValue,
                   }
-                : null}
+                : detailedExplanationValue
+                  ? {
+                      error: null,
+                      isLoading: false,
+                      outputSchema: builtInDictionaryOutputSchema,
+                      result: detailedExplanationValue,
+                      thinking: null,
+                    }
+                  : null}
               selectionContent={selectionText}
               translatedText={translatedText}
               isTranslating={isTranslating}

@@ -2,17 +2,37 @@ import type { SessionContext } from "../lib/auth"
 import type { Env } from "../lib/env"
 import { syncUserFromClerk } from "../lib/db"
 import { json, readJson } from "../lib/http"
+import { deserializeVocabularyItem, serializeVocabularyItem } from "../lib/vocabulary"
 
 export async function handleVocabularyList(_request: Request, env: Env, session: SessionContext) {
   const user = await syncUserFromClerk(env, session)
   const rows = await env.DB.prepare(`
-    SELECT item_json
+    SELECT
+      id,
+      source_text,
+      normalized_text,
+      lemma,
+      match_terms_json,
+      translated_text,
+      phonetic,
+      part_of_speech,
+      definition,
+      difficulty,
+      source_lang,
+      target_lang,
+      kind,
+      word_count,
+      created_at,
+      last_seen_at,
+      hit_count,
+      updated_at,
+      deleted_at
     FROM vocabulary_items
     WHERE user_id = ?1
     ORDER BY updated_at DESC
-  `).bind(user.id).all<{ item_json: string }>()
+  `).bind(user.id).all()
 
-  const items = (rows.results ?? []).map(row => JSON.parse(row.item_json) as Record<string, unknown>)
+  const items = (rows.results ?? []).map(row => deserializeVocabularyItem(row as Parameters<typeof deserializeVocabularyItem>[0]))
 
   return json({ items })
 }
@@ -20,18 +40,39 @@ export async function handleVocabularyList(_request: Request, env: Env, session:
 export async function handleVocabularyCreate(request: Request, env: Env, session: SessionContext) {
   const user = await syncUserFromClerk(env, session)
   const item = await readJson<Record<string, unknown>>(request)
-
-  const id = typeof item.id === "string" ? item.id : crypto.randomUUID()
-  const nextItem = { ...item, id }
-  const normalizedText = typeof item.normalizedText === "string" ? item.normalizedText : ""
-  const timestamp = new Date().toISOString()
+  const row = serializeVocabularyItem(item)
 
   await env.DB.prepare(`
-    INSERT INTO vocabulary_items (id, user_id, item_json, normalized_text, updated_at)
-    VALUES (?1, ?2, ?3, ?4, ?5)
-  `).bind(id, user.id, JSON.stringify(nextItem), normalizedText, timestamp).run()
+    INSERT INTO vocabulary_items (
+      id, user_id, source_text, normalized_text, lemma, match_terms_json, translated_text,
+      phonetic, part_of_speech, definition, difficulty, source_lang, target_lang, kind,
+      word_count, created_at, last_seen_at, hit_count, updated_at, deleted_at
+    )
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
+  `).bind(
+    row.id,
+    user.id,
+    row.source_text,
+    row.normalized_text,
+    row.lemma,
+    row.match_terms_json,
+    row.translated_text,
+    row.phonetic,
+    row.part_of_speech,
+    row.definition,
+    row.difficulty,
+    row.source_lang,
+    row.target_lang,
+    row.kind,
+    row.word_count,
+    row.created_at,
+    row.last_seen_at,
+    row.hit_count,
+    row.updated_at,
+    row.deleted_at,
+  ).run()
 
-  return json({ ok: true, id })
+  return json({ ok: true, id: row.id })
 }
 
 export async function handleVocabularyUpdate(request: Request, env: Env, session: SessionContext) {
@@ -42,15 +83,51 @@ export async function handleVocabularyUpdate(request: Request, env: Env, session
   if (!id) {
     return json({ error: "id is required" }, { status: 400 })
   }
-
-  const normalizedText = typeof item.normalizedText === "string" ? item.normalizedText : ""
-  const timestamp = new Date().toISOString()
+  const row = serializeVocabularyItem(item)
 
   const result = await env.DB.prepare(`
     UPDATE vocabulary_items
-    SET item_json = ?1, normalized_text = ?2, updated_at = ?3
-    WHERE id = ?4 AND user_id = ?5
-  `).bind(JSON.stringify(item), normalizedText, timestamp, id, user.id).run()
+    SET source_text = ?1,
+        normalized_text = ?2,
+        lemma = ?3,
+        match_terms_json = ?4,
+        translated_text = ?5,
+        phonetic = ?6,
+        part_of_speech = ?7,
+        definition = ?8,
+        difficulty = ?9,
+        source_lang = ?10,
+        target_lang = ?11,
+        kind = ?12,
+        word_count = ?13,
+        created_at = ?14,
+        last_seen_at = ?15,
+        hit_count = ?16,
+        updated_at = ?17,
+        deleted_at = ?18
+    WHERE id = ?19 AND user_id = ?20
+  `).bind(
+    row.source_text,
+    row.normalized_text,
+    row.lemma,
+    row.match_terms_json,
+    row.translated_text,
+    row.phonetic,
+    row.part_of_speech,
+    row.definition,
+    row.difficulty,
+    row.source_lang,
+    row.target_lang,
+    row.kind,
+    row.word_count,
+    row.created_at,
+    row.last_seen_at,
+    row.hit_count,
+    row.updated_at,
+    row.deleted_at,
+    id,
+    user.id,
+  ).run()
 
   if (result.meta.changes === 0) {
     return json({ error: "not found" }, { status: 404 })

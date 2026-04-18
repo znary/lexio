@@ -61,6 +61,47 @@ function upsertVocabularyItem(items: VocabularyItem[], nextItem: VocabularyItem)
   return [...items, nextItem]
 }
 
+function isVocabularyLanguagePairMatch(
+  item: Pick<VocabularyItem, "sourceLang" | "targetLang">,
+  sourceLang: string,
+  targetLang: string,
+): boolean {
+  return item.sourceLang === sourceLang && item.targetLang === targetLang
+}
+
+function buildVocabularySelectionLookup(sourceText: string) {
+  const metadata = buildVocabularyTermMetadata(sourceText)
+  const normalizedSourceText = normalizeVocabularyText(sourceText)
+  const matchTerms = new Set([
+    normalizedSourceText,
+    metadata.normalizedText,
+    ...metadata.matchTerms,
+  ])
+
+  return {
+    matchTerms: [...matchTerms].filter(Boolean),
+    normalizedText: metadata.normalizedText || normalizedSourceText,
+  }
+}
+
+function isVocabularyItemSelectionMatch(
+  item: VocabularyItem,
+  lookup: ReturnType<typeof buildVocabularySelectionLookup>,
+  sourceLang: string,
+  targetLang: string,
+): boolean {
+  if (item.deletedAt != null || !isVocabularyLanguagePairMatch(item, sourceLang, targetLang)) {
+    return false
+  }
+
+  const itemTerms = new Set([
+    item.normalizedText,
+    ...(item.matchTerms ?? []),
+  ].map(term => normalizeVocabularyText(term)).filter(Boolean))
+
+  return lookup.matchTerms.some(term => itemTerms.has(term))
+}
+
 function restoreOrUpdateExistingItem(
   item: VocabularyItem,
   sourceText: string,
@@ -156,6 +197,24 @@ export async function getVocabularyItems(options?: { forceRefresh?: boolean }): 
   return [...items]
 }
 
+export async function findVocabularyItemForSelection({
+  sourceText,
+  sourceLang,
+  targetLang,
+}: {
+  sourceText: string
+  sourceLang: string
+  targetLang: string
+}): Promise<VocabularyItem | null> {
+  const lookup = buildVocabularySelectionLookup(sourceText)
+  if (!lookup.normalizedText) {
+    return null
+  }
+
+  const items = await getVocabularyItems()
+  return items.find(item => isVocabularyItemSelectionMatch(item, lookup, sourceLang, targetLang)) ?? null
+}
+
 export async function saveTranslatedSelectionToVocabulary({
   sourceText,
   translatedText,
@@ -175,9 +234,9 @@ export async function saveTranslatedSelectionToVocabulary({
 
   const now = Date.now()
   const wordCount = countVocabularyWords(sourceText)
-  const normalizedText = buildVocabularyTermMetadata(sourceText).normalizedText
+  const lookup = buildVocabularySelectionLookup(sourceText)
   const items = await getVocabularyItems()
-  const existingItem = items.find(item => item.normalizedText === normalizedText)
+  const existingItem = items.find(item => isVocabularyItemSelectionMatch(item, lookup, sourceLang, targetLang))
   const previousItems = getCachedVocabularyItems() ?? items
 
   if (existingItem) {

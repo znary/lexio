@@ -38,7 +38,9 @@ const streamBackgroundStructuredObjectMock = vi.fn()
 const translateTextCoreMock = vi.fn()
 const getOrCreateWebPageContextMock = vi.fn().mockResolvedValue(null)
 const getOrGenerateWebPageSummaryMock = vi.fn()
+const findVocabularyItemForSelectionMock = vi.fn()
 const saveTranslatedSelectionToVocabularyMock = vi.fn().mockResolvedValue(null)
+const updateVocabularyItemDetailsMock = vi.fn().mockResolvedValue(null)
 const toastErrorMock = vi.fn()
 const onMessageMock = vi.fn()
 const storageAdapterGetMock = vi.fn()
@@ -207,10 +209,14 @@ vi.mock("../../components/selection-toolbar-footer-content", () => ({
 
 vi.mock("../translate-button/translation-content", () => ({
   TranslationContent: ({
+    detailedExplanation,
     selectionContent,
     translatedText,
     isTranslating,
   }: {
+    detailedExplanation?: {
+      result: Record<string, unknown> | null
+    } | null
     selectionContent: string | null | undefined
     translatedText: string | undefined
     isTranslating: boolean
@@ -219,6 +225,7 @@ vi.mock("../translate-button/translation-content", () => ({
       <span data-testid="translation-selection">{selectionContent}</span>
       <span data-testid="translation-result">{translatedText ?? ""}</span>
       <span data-testid="translation-status">{String(isTranslating)}</span>
+      <span data-testid="translation-detailed">{JSON.stringify(detailedExplanation?.result ?? null)}</span>
     </div>
   ),
 }))
@@ -275,7 +282,9 @@ vi.mock("@/utils/message", () => ({
 }))
 
 vi.mock("@/utils/vocabulary/service", () => ({
+  findVocabularyItemForSelection: (...args: unknown[]) => findVocabularyItemForSelectionMock(...args),
   saveTranslatedSelectionToVocabulary: (...args: unknown[]) => saveTranslatedSelectionToVocabularyMock(...args),
+  updateVocabularyItemDetails: (...args: unknown[]) => updateVocabularyItemDetailsMock(...args),
 }))
 
 vi.mock("@/utils/atoms/storage-adapter", () => ({
@@ -896,6 +905,69 @@ describe("selection toolbar requests", () => {
     expect(saveTranslatedSelectionToVocabularyMock).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole("alert")).toBeNull()
     expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it("reuses a saved vocabulary item until the user regenerates it", async () => {
+    findVocabularyItemForSelectionMock.mockResolvedValue({
+      id: "voc_existing",
+      sourceText: "think",
+      normalizedText: "think",
+      lemma: "think",
+      matchTerms: ["think", "thinking", "thinks", "thought"],
+      translatedText: "思考",
+      phonetic: "/theta-ng-k/",
+      partOfSpeech: "verb",
+      definition: "思考；认为",
+      difficulty: "B1",
+      sourceLang: "en",
+      targetLang: "zh-CN",
+      kind: "word",
+      wordCount: 1,
+      createdAt: 1,
+      lastSeenAt: 2,
+      hitCount: 3,
+      updatedAt: 4,
+      deletedAt: null,
+    })
+    translateTextCoreMock.mockResolvedValue("重新生成结果")
+    streamBackgroundStructuredObjectMock.mockResolvedValue(
+      createStructuredObjectSnapshot({ term: "think", definition: "重新生成释义" }),
+    )
+    getOrCreateWebPageContextMock.mockResolvedValue(null)
+
+    const store = createStore()
+    store.set(configAtom, createStandardTranslateConfig())
+    setSelectionState(store, { text: "thinking" })
+    renderWithProviders(<TranslateButton />, store)
+
+    fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
+
+    await waitFor(() => {
+      expect(findVocabularyItemForSelectionMock).toHaveBeenCalledWith({
+        sourceText: "thinking",
+        sourceLang: "auto",
+        targetLang: "cmn",
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId("translation-result").textContent).toBe("思考")
+    })
+
+    expect(screen.getByTestId("translation-detailed").textContent).toContain("\"definition\":\"思考；认为\"")
+    expect(translateTextCoreMock).not.toHaveBeenCalled()
+    expect(streamManagedTranslationMock).not.toHaveBeenCalled()
+    expect(streamBackgroundStructuredObjectMock).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }))
+
+    await waitFor(() => {
+      expect(translateTextCoreMock).toHaveBeenCalledTimes(1)
+    })
+
+    await waitFor(() => {
+      expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(1)
+    })
   })
 
   it("shows a precheck alert when the translate provider is unavailable", async () => {

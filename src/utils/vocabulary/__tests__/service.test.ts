@@ -253,6 +253,79 @@ describe("vocabulary service", () => {
     }))
   })
 
+  it("finds a saved item by its lemma for the same language pair", async () => {
+    apiGetVocabularyItemsMock.mockResolvedValue([
+      {
+        id: "voc_existing",
+        sourceText: "think",
+        normalizedText: "think",
+        lemma: "think",
+        matchTerms: ["think", "thinking", "thinks", "thought"],
+        translatedText: "思考",
+        phonetic: "/theta-ng-k/",
+        partOfSpeech: "verb",
+        definition: "思考；认为",
+        difficulty: "B1",
+        sourceLang: "en",
+        targetLang: "zh-CN",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 1,
+        lastSeenAt: 2,
+        hitCount: 3,
+        updatedAt: 4,
+        deletedAt: null,
+      },
+    ])
+
+    const { findVocabularyItemForSelection } = await import("../service")
+    const matchedItem = await findVocabularyItemForSelection({
+      sourceText: "thinking",
+      sourceLang: "en",
+      targetLang: "zh-CN",
+    })
+
+    expect(matchedItem).toEqual(expect.objectContaining({
+      id: "voc_existing",
+      normalizedText: "think",
+      lemma: "think",
+      definition: "思考；认为",
+      translatedText: "思考",
+    }))
+  })
+
+  it("does not reuse a saved item from a different target language", async () => {
+    apiGetVocabularyItemsMock.mockResolvedValue([
+      {
+        id: "voc_existing",
+        sourceText: "think",
+        normalizedText: "think",
+        lemma: "think",
+        matchTerms: ["think", "thinking", "thinks", "thought"],
+        translatedText: "思考",
+        definition: "思考；认为",
+        sourceLang: "en",
+        targetLang: "zh-CN",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 1,
+        lastSeenAt: 2,
+        hitCount: 3,
+        updatedAt: 4,
+        deletedAt: null,
+      },
+    ])
+
+    const { findVocabularyItemForSelection } = await import("../service")
+    const matchedItem = await findVocabularyItemForSelection({
+      sourceText: "thinking",
+      sourceLang: "en",
+      targetLang: "ja",
+    })
+
+    expect(matchedItem).toBeNull()
+  })
+
   it("removes an item from the local cache before the delete request finishes", async () => {
     apiGetVocabularyItemsMock.mockResolvedValue([
       {

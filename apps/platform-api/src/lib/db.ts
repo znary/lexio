@@ -2,6 +2,7 @@ import type { SessionContext } from "./auth"
 import type { Entitlements, Env, Plan } from "./env"
 import { getClerkClient } from "./auth"
 import { buildEntitlements } from "./env"
+import { deserializeVocabularyItem, serializeVocabularyItem } from "./vocabulary"
 
 export interface UserRecord {
   id: string
@@ -171,11 +172,30 @@ export async function pullSyncData(env: Env, userId: string): Promise<SyncPayloa
   `).bind(userId).first<{ settings_json: string }>()
 
   const vocabularyRows = await env.DB.prepare(`
-    SELECT item_json
+    SELECT
+      id,
+      source_text,
+      normalized_text,
+      lemma,
+      match_terms_json,
+      translated_text,
+      phonetic,
+      part_of_speech,
+      definition,
+      difficulty,
+      source_lang,
+      target_lang,
+      kind,
+      word_count,
+      created_at,
+      last_seen_at,
+      hit_count,
+      updated_at,
+      deleted_at
     FROM vocabulary_items
     WHERE user_id = ?1
     ORDER BY updated_at DESC
-  `).bind(userId).all<{ item_json: string }>()
+  `).bind(userId).all()
 
   const now = nowIso()
   await env.DB.prepare(`
@@ -189,7 +209,7 @@ export async function pullSyncData(env: Env, userId: string): Promise<SyncPayloa
 
   return {
     settings: settingsRow?.settings_json ? JSON.parse(settingsRow.settings_json) as Record<string, unknown> : null,
-    vocabularyItems: (vocabularyRows.results ?? []).map((row: { item_json: string }) => JSON.parse(row.item_json) as Record<string, unknown>),
+    vocabularyItems: (vocabularyRows.results ?? []).map(row => deserializeVocabularyItem(row as Parameters<typeof deserializeVocabularyItem>[0])),
   }
 }
 
@@ -208,12 +228,36 @@ export async function pushSyncData(env: Env, userId: string, payload: SyncPayloa
       ? [
           env.DB.prepare("DELETE FROM vocabulary_items WHERE user_id = ?1").bind(userId),
           ...payload.vocabularyItems.map((item) => {
-            const normalizedText = typeof item.normalizedText === "string" ? item.normalizedText : ""
-            const id = typeof item.id === "string" ? item.id : createId("voc")
+            const row = serializeVocabularyItem(item)
             return env.DB.prepare(`
-              INSERT INTO vocabulary_items (id, user_id, item_json, normalized_text, updated_at)
-              VALUES (?1, ?2, ?3, ?4, ?5)
-            `).bind(id, userId, JSON.stringify(item), normalizedText, timestamp)
+              INSERT INTO vocabulary_items (
+                id, user_id, source_text, normalized_text, lemma, match_terms_json, translated_text,
+                phonetic, part_of_speech, definition, difficulty, source_lang, target_lang, kind,
+                word_count, created_at, last_seen_at, hit_count, updated_at, deleted_at
+              )
+              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
+            `).bind(
+              typeof item.id === "string" ? item.id : createId("voc"),
+              userId,
+              row.source_text,
+              row.normalized_text,
+              row.lemma,
+              row.match_terms_json,
+              row.translated_text,
+              row.phonetic,
+              row.part_of_speech,
+              row.definition,
+              row.difficulty,
+              row.source_lang,
+              row.target_lang,
+              row.kind,
+              row.word_count,
+              row.created_at,
+              row.last_seen_at,
+              row.hit_count,
+              row.updated_at,
+              row.deleted_at,
+            )
           }),
         ]
       : []),

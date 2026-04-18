@@ -54,14 +54,29 @@ CREATE TABLE IF NOT EXISTS user_settings (
 CREATE TABLE IF NOT EXISTS vocabulary_items (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
-  item_json TEXT NOT NULL,
+  source_text TEXT NOT NULL,
   normalized_text TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
+  lemma TEXT,
+  match_terms_json TEXT NOT NULL,
+  translated_text TEXT NOT NULL,
+  phonetic TEXT,
+  part_of_speech TEXT,
+  definition TEXT,
+  difficulty TEXT,
+  source_lang TEXT NOT NULL,
+  target_lang TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  word_count INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  last_seen_at INTEGER NOT NULL,
+  hit_count INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  deleted_at INTEGER,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_vocabulary_user_id ON vocabulary_items(user_id);
-CREATE INDEX IF NOT EXISTS idx_vocabulary_normalized_text ON vocabulary_items(normalized_text);
+CREATE INDEX IF NOT EXISTS idx_vocabulary_lookup ON vocabulary_items(user_id, source_lang, target_lang, normalized_text);
 
 CREATE TABLE IF NOT EXISTS sync_state (
   user_id TEXT PRIMARY KEY,
