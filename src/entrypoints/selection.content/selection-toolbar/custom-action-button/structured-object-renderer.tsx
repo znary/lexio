@@ -11,12 +11,14 @@ import { IconHash, IconTypography } from "@tabler/icons-react"
 import { useMemo } from "react"
 import { z } from "zod"
 import { Thinking } from "@/components/thinking"
+import { getBuiltInDictionaryFieldLabel } from "@/utils/constants/built-in-dictionary-action"
 import { FieldSpeakButton } from "./field-speak-button"
 
 interface StructuredObjectRendererProps {
   outputSchema: SelectionToolbarCustomActionOutputField[]
   value: Record<string, unknown> | null
   isStreaming?: boolean
+  showThinking?: boolean
   thinking: ThinkingSnapshot | null
 }
 
@@ -57,7 +59,7 @@ function buildStructuredObjectSpec(
     elements[elementKey] = {
       type: "FieldRow",
       props: {
-        label: field.name,
+        label: getBuiltInDictionaryFieldLabel(field.id, field.name),
         type: field.type,
         value: displayValue,
         pending: isPending,
@@ -139,6 +141,7 @@ export function StructuredObjectRenderer({
   outputSchema,
   value,
   isStreaming = false,
+  showThinking = true,
   thinking,
 }: StructuredObjectRendererProps) {
   const spec = useMemo(
@@ -148,7 +151,7 @@ export function StructuredObjectRenderer({
 
   return (
     <div className="space-y-2">
-      {thinking && (
+      {showThinking && thinking && (
         <Thinking status={thinking.status} content={thinking.text} />
       )}
       <JSONUIProvider registry={STRUCTURED_OBJECT_REGISTRY} initialState={{}}>

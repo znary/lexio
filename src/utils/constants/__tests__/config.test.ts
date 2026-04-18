@@ -23,16 +23,8 @@ describe("dEFAULT_CONFIG", () => {
     vi.resetModules()
 
     const { DEFAULT_CONFIG } = await import("../config")
-    const defaultDictionaryAction = DEFAULT_CONFIG.selectionToolbar.customActions[0]
-
-    expect(defaultDictionaryAction).toEqual(expect.objectContaining({
-      id: "default-dictionary",
-    }))
-    expect(defaultDictionaryAction?.outputSchema).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "default-dictionary-term" }),
-    ]))
-    expect(defaultDictionaryAction?.outputSchema.every(field => typeof field.id === "string" && field.id.length > 0)).toBe(true)
-    expect(getRandomValues).toHaveBeenCalled()
+    expect(DEFAULT_CONFIG.selectionToolbar.customActions).toEqual([])
+    expect(getRandomValues).not.toHaveBeenCalled()
   })
 
   it("uses the panel as the default floating button click action", async () => {

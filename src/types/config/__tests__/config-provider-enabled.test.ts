@@ -1,5 +1,6 @@
 import type { ProviderConfig } from "@/types/config/provider"
 import { describe, expect, it } from "vitest"
+import { createBuiltInDictionaryAction } from "@/utils/constants/built-in-dictionary-action"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
 import { MANAGED_CLOUD_PROVIDER_ID } from "@/utils/constants/platform"
 import { configSchema } from "../config"
@@ -42,10 +43,9 @@ describe("config provider enabled validation", () => {
       providersConfig,
       selectionToolbar: {
         ...DEFAULT_CONFIG.selectionToolbar,
-        customActions: DEFAULT_CONFIG.selectionToolbar.customActions.map(action => ({
-          ...action,
-          providerId: fallbackProviderId,
-        })),
+        customActions: [
+          createBuiltInDictionaryAction(fallbackProviderId),
+        ],
       },
     })
 
@@ -84,10 +84,9 @@ describe("config provider enabled validation", () => {
             providerId: fallbackProviderId,
           },
         },
-        customActions: DEFAULT_CONFIG.selectionToolbar.customActions.map(action => ({
-          ...action,
-          providerId: MANAGED_CLOUD_PROVIDER_ID,
-        })),
+        customActions: [
+          createBuiltInDictionaryAction(MANAGED_CLOUD_PROVIDER_ID),
+        ],
       },
     })
 

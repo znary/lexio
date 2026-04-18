@@ -4,7 +4,9 @@ import { act, render, screen, waitFor } from "@testing-library/react"
 import { createElement } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { isLLMProviderConfig } from "@/types/config/provider"
+import { createBuiltInDictionaryAction } from "@/utils/constants/built-in-dictionary-action"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
+import { MANAGED_CLOUD_PROVIDER_ID } from "@/utils/constants/platform"
 import { CUSTOM_ACTION_CONTEXT_CHAR_LIMIT } from "../../../utils"
 import { buildCustomActionExecutionPlan, useCustomActionWebPageContext } from "../use-custom-action-execution"
 
@@ -50,10 +52,7 @@ function WebPageContextProbe({
 }
 
 function createCustomActionRequest() {
-  const action = DEFAULT_CONFIG.selectionToolbar.customActions[0]
-  if (!action) {
-    throw new Error("Default custom action is missing")
-  }
+  const action = createBuiltInDictionaryAction(MANAGED_CLOUD_PROVIDER_ID)
 
   const providerConfig = DEFAULT_CONFIG.providersConfig.find(provider =>
     provider.id === action.providerId,

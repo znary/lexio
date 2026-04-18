@@ -847,6 +847,8 @@ translation:
   loadingStatus:
     queued: В очереди
     translating: Переводится
+    ready: Готово
+    failed: Ошибка
 speak:
   fetchingAudio: Генерация аудио...
   playingAudio: Воспроизведение аудио...

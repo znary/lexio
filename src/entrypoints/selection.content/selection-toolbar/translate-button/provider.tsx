@@ -6,6 +6,7 @@ import type { LLMProviderConfig, ProviderConfig } from "@/types/config/provider"
 import type { SelectionToolbarCustomActionOutputField } from "@/types/config/selection-toolbar"
 import { i18n } from "#imports"
 import { ISO6393_TO_6391, LANG_CODE_TO_EN_NAME } from "@read-frog/definitions"
+import { IconAlertCircle, IconCheck, IconLoader2 } from "@tabler/icons-react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { createContext, use, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -16,8 +17,8 @@ import { isLLMProviderConfig, isTranslateProviderConfig } from "@/types/config/p
 import { createFeatureUsageContext, trackFeatureUsed } from "@/utils/analytics"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { filterEnabledProvidersConfig, getProviderConfigById } from "@/utils/config/helpers"
+import { createBuiltInDictionaryAction, shouldUseBuiltInDictionary } from "@/utils/constants/built-in-dictionary-action"
 import { DEFAULT_DICTIONARY_ACTION_ID } from "@/utils/constants/custom-action"
-import { CUSTOM_ACTION_TEMPLATES } from "@/utils/constants/custom-action-templates"
 import { prepareTranslationText } from "@/utils/host/translate/text-preparation"
 import { translateTextCore } from "@/utils/host/translate/translate-text"
 import { getOrCreateWebPageContext } from "@/utils/host/translate/webpage-context"
@@ -42,7 +43,6 @@ import {
   isAbortError,
 } from "../inline-error"
 import { useSelectionContextMenuRequestResolver } from "../use-selection-context-menu-request"
-import { TargetLanguageSelector } from "./target-language-selector"
 import { TranslationContent } from "./translation-content"
 
 interface SelectionTranslatePendingOpenRequest {
@@ -229,8 +229,6 @@ export function SelectionTranslationProvider({
   const [translatedText, setTranslatedText] = useState<string | undefined>(undefined)
   const [savedVocabularyItemId, setSavedVocabularyItemId] = useState<string | null>(null)
   const [savedVocabularyText, setSavedVocabularyText] = useState<string | null>(null)
-  const [isDetailedExplanationVisible, setIsDetailedExplanationVisible] = useState(false)
-  const [hasRequestedDetailedExplanation, setHasRequestedDetailedExplanation] = useState(false)
   const [thinking, setThinking] = useState<ThinkingSnapshot | null>(null)
   const [error, setError] = useState<SelectionToolbarInlineError | null>(null)
   const [isTranslating, setIsTranslating] = useState(false)
@@ -259,6 +257,10 @@ export function SelectionTranslationProvider({
     () => prepareTranslationText(selectionText),
     [selectionText],
   )
+  const shouldRenderDictionaryResult = useMemo(
+    () => shouldUseBuiltInDictionary(cleanedSelectionText),
+    [cleanedSelectionText],
+  )
   const llmProviders = useMemo(
     () => filterEnabledProvidersConfig(providersConfig).filter(isLLMProviderConfig),
     [providersConfig],
@@ -267,31 +269,32 @@ export function SelectionTranslationProvider({
     () => JSON.stringify(translateRequest),
     [translateRequest],
   )
-  const defaultDictionaryTemplate = useMemo(
-    () => CUSTOM_ACTION_TEMPLATES.find(template => template.id === "dictionary") ?? null,
-    [],
-  )
-  const dictionaryFallbackAction = useMemo(() => {
-    if (!defaultDictionaryTemplate || llmProviders.length === 0) {
-      return null
+  const dictionaryProviderId = useMemo(() => {
+    const configuredProviderId = selectionToolbarConfig.customActions
+      .find(action => action.id === DEFAULT_DICTIONARY_ACTION_ID)
+      ?.providerId
+
+    if (configuredProviderId) {
+      const configuredProvider = getProviderConfigById(providersConfig, configuredProviderId)
+      if (configuredProvider && isLLMProviderConfig(configuredProvider) && configuredProvider.enabled) {
+        return configuredProvider.id
+      }
     }
 
-    const fallbackAction = defaultDictionaryTemplate.createAction(llmProviders[0].id)
-    return {
-      ...fallbackAction,
-      id: DEFAULT_DICTIONARY_ACTION_ID,
-    }
-  }, [defaultDictionaryTemplate, llmProviders])
+    return llmProviders[0]?.id ?? null
+  }, [llmProviders, providersConfig, selectionToolbarConfig.customActions])
   const dictionaryAction = useMemo(
-    () => selectionToolbarConfig.customActions.find(action => action.id === DEFAULT_DICTIONARY_ACTION_ID) ?? dictionaryFallbackAction,
-    [dictionaryFallbackAction, selectionToolbarConfig.customActions],
+    () => shouldRenderDictionaryResult && dictionaryProviderId
+      ? createBuiltInDictionaryAction(dictionaryProviderId)
+      : null,
+    [dictionaryProviderId, shouldRenderDictionaryResult],
   )
   const dictionaryProviderConfig = useMemo(
-    () => dictionaryAction ? getProviderConfigById(providersConfig, dictionaryAction.providerId) ?? null : null,
-    [dictionaryAction, providersConfig],
+    () => dictionaryProviderId ? getProviderConfigById(providersConfig, dictionaryProviderId) ?? null : null,
+    [dictionaryProviderId, providersConfig],
   )
   const dictionaryWebPageContext = useCustomActionWebPageContext(
-    isOpen && hasRequestedDetailedExplanation,
+    isOpen && Boolean(dictionaryAction),
     popoverSessionKey,
   )
   const dictionaryExecutionPlan = useMemo(
@@ -324,9 +327,9 @@ export function SelectionTranslationProvider({
     analyticsSurface: sourceSurface,
     bodyRef,
     executionContext: dictionaryExecutionPlan.executionContext,
-    open: isOpen && hasRequestedDetailedExplanation,
+    open: isOpen && Boolean(dictionaryAction),
     popoverSessionKey,
-    rerunNonce: 0,
+    rerunNonce,
   })
 
   const resetPopoverSession = useCallback((options?: { clearAnchor?: boolean }) => {
@@ -337,8 +340,6 @@ export function SelectionTranslationProvider({
   }, [])
 
   const resetDetailedExplanation = useCallback(() => {
-    setIsDetailedExplanationVisible(false)
-    setHasRequestedDetailedExplanation(false)
     resetDetailedExplanationState()
   }, [resetDetailedExplanationState])
 
@@ -375,16 +376,6 @@ export function SelectionTranslationProvider({
     resetDetailedExplanation()
     setRerunNonce(prev => prev + 1)
   }, [cancelCurrentTranslation, resetDetailedExplanation])
-
-  const toggleDetailedExplanation = useCallback(() => {
-    setIsDetailedExplanationVisible((prev) => {
-      const nextVisible = !prev
-      if (nextVisible) {
-        setHasRequestedDetailedExplanation(true)
-      }
-      return nextVisible
-    })
-  }, [])
 
   const runTranslation = useCallback(async (runId: number) => {
     const preparedText = prepareTranslationText(selectionText)
@@ -644,16 +635,50 @@ export function SelectionTranslationProvider({
     }
   }, [])
 
-  const detailedExplanationError = hasRequestedDetailedExplanation
+  const detailedExplanationError = dictionaryAction
     ? (detailedExplanationRuntimeError ?? dictionaryExecutionPlan.error)
     : null
-  const detailedExplanationLoading = hasRequestedDetailedExplanation
+  const detailedExplanationLoading = Boolean(dictionaryAction)
     && (
       (dictionaryExecutionPlan.executionContext ? isDetailedExplanationRunning : false)
       || dictionaryWebPageContext === undefined
     )
   const detailedExplanationValue = dictionaryExecutionPlan.executionContext ? detailedExplanationResult : null
   const detailedExplanationThinkingValue = dictionaryExecutionPlan.executionContext ? detailedExplanationThinking : null
+  const headerStatus = useMemo(() => {
+    const isLoading = isTranslating || detailedExplanationLoading
+    const isFailed = Boolean(error || detailedExplanationError)
+    const isReady = !isLoading && !isFailed && Boolean(translatedText?.trim() || detailedExplanationValue)
+
+    if (isLoading) {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+          <IconLoader2 className="size-3 animate-spin" strokeWidth={1.8} />
+          <span>{i18n.t("translation.loadingStatus.translating")}</span>
+        </span>
+      )
+    }
+
+    if (isFailed) {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-destructive">
+          <IconAlertCircle className="size-3" strokeWidth={1.8} />
+          <span>{i18n.t("translation.loadingStatus.failed")}</span>
+        </span>
+      )
+    }
+
+    if (isReady) {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+          <IconCheck className="size-3" strokeWidth={2} />
+          <span>{i18n.t("translation.loadingStatus.ready")}</span>
+        </span>
+      )
+    }
+
+    return null
+  }, [detailedExplanationError, detailedExplanationLoading, detailedExplanationValue, error, isTranslating, translatedText])
 
   useEffect(() => {
     if (!savedVocabularyItemId || !dictionaryAction || detailedExplanationLoading) {
@@ -702,9 +727,9 @@ export function SelectionTranslationProvider({
             <SelectionToolbarTitleContent
               title="Translation"
               icon="ri:translate"
+              meta={headerStatus}
             />
             <div className="flex items-center gap-1">
-              <TargetLanguageSelector />
               <SelectionPopover.Pin />
               <SelectionPopover.Close />
             </div>
@@ -715,9 +740,7 @@ export function SelectionTranslationProvider({
               detailedExplanation={dictionaryAction
                 ? {
                     error: detailedExplanationError,
-                    isExpanded: isDetailedExplanationVisible,
                     isLoading: detailedExplanationLoading,
-                    onToggle: toggleDetailedExplanation,
                     outputSchema: dictionaryAction.outputSchema,
                     result: detailedExplanationValue,
                     thinking: detailedExplanationThinkingValue,

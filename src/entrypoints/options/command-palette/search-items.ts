@@ -93,15 +93,6 @@ export const SEARCH_ITEMS: SearchItem[] = [
     pageKey: "options.general.title",
   },
 
-  // Custom Actions page
-  {
-    sectionId: "custom-actions",
-    route: "/custom-actions",
-    titleKey: "options.floatingButtonAndToolbar.selectionToolbar.customActions.title",
-    descriptionKey: "options.floatingButtonAndToolbar.selectionToolbar.customActions.description",
-    pageKey: "options.floatingButtonAndToolbar.selectionToolbar.customActions.title",
-  },
-
   // Translation page
   {
     sectionId: "translation-mode",

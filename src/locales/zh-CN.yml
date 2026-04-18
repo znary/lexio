@@ -990,6 +990,8 @@ translation:
   loadingStatus:
     queued: 排队中
     translating: 翻译中
+    ready: 已完成
+    failed: 失败
 speak:
   fetchingAudio: 正在获取音频...
   playingAudio: 正在播放音频...

@@ -37,4 +37,17 @@ describe("selectionToolbarTitleContent", () => {
     expect(screen.getByTestId("selection-toolbar-title-icon")).toHaveAttribute("data-icon", "tabler:sparkles")
     expect(screen.getByTestId("selection-toolbar-title-icon")).toHaveClass("text-muted-foreground")
   })
+
+  it("renders meta content inline with the title", () => {
+    render(
+      <SelectionToolbarTitleContent
+        icon="tabler:sparkles"
+        title="Translation"
+        meta={<span>translation.loadingStatus.ready</span>}
+      />,
+    )
+
+    expect(screen.getByText("Translation")).toBeInTheDocument()
+    expect(screen.getByText("translation.loadingStatus.ready")).toBeInTheDocument()
+  })
 })

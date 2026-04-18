@@ -847,6 +847,8 @@ translation:
   loadingStatus:
     queued: 翻訳待ち
     translating: 翻訳中
+    ready: 完了
+    failed: 失敗
 speak:
   fetchingAudio: 音声を生成しています...
   playingAudio: 音声を再生しています...

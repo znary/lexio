@@ -847,6 +847,8 @@ translation:
   loadingStatus:
     queued: Çeviri için sırada
     translating: Çevriliyor
+    ready: Hazır
+    failed: Başarısız
 speak:
   fetchingAudio: Ses oluşturuluyor...
   playingAudio: Ses çalınıyor...

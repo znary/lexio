@@ -4,6 +4,7 @@ import { browser, i18n, storage } from "#imports"
 import { ANALYTICS_FEATURE, ANALYTICS_SURFACE } from "@/types/analytics"
 import { createFeatureUsageContext } from "@/utils/analytics"
 import { CONFIG_STORAGE_KEY } from "@/utils/constants/config"
+import { isSelectionToolbarInternalAction } from "@/utils/constants/custom-action"
 import { getTranslationStateKey, TRANSLATION_STATE_KEY_PREFIX } from "@/utils/constants/storage-keys"
 import { sendMessage } from "@/utils/message"
 import { ensureInitializedConfig } from "./config"
@@ -92,7 +93,7 @@ async function updateContextMenuItems(config: Config) {
 
   const { enabled: translateEnabled } = config.contextMenu
   const enabledCustomActions = config.selectionToolbar.customActions
-    .filter(action => action.enabled !== false)
+    .filter(action => action.enabled !== false && !isSelectionToolbarInternalAction(action))
 
   if (translateEnabled) {
     browser.contextMenus.create({

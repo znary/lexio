@@ -847,6 +847,8 @@ translation:
   loadingStatus:
     queued: Đang chờ dịch
     translating: Đang dịch
+    ready: Hoàn tất
+    failed: Thất bại
 speak:
   fetchingAudio: Đang tạo âm thanh...
   playingAudio: Đang phát âm thanh...

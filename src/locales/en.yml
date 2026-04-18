@@ -990,6 +990,8 @@ translation:
   loadingStatus:
     queued: Queued for translation
     translating: Translating
+    ready: Ready
+    failed: Failed
 speak:
   fetchingAudio: Generating audio...
   playingAudio: Playing audio...

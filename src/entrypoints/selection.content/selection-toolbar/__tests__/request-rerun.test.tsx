@@ -12,7 +12,8 @@ import { useRef } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/base-ui/tooltip"
 import { isLLMProviderConfig } from "@/types/config/provider"
-import { configAtom } from "@/utils/atoms/config"
+import { configAtom, configFieldsAtomMap } from "@/utils/atoms/config"
+import { createBuiltInDictionaryAction } from "@/utils/constants/built-in-dictionary-action"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
 import { MANAGED_CLOUD_PROVIDER_ID } from "@/utils/constants/platform"
 import { DEFAULT_PROVIDER_CONFIG } from "@/utils/constants/providers"
@@ -171,7 +172,12 @@ vi.mock("@/components/ui/selection-popover", async () => {
 })
 
 vi.mock("../../components/selection-toolbar-title-content", () => ({
-  SelectionToolbarTitleContent: ({ title }: { title: string }) => <div>{title}</div>,
+  SelectionToolbarTitleContent: ({ title, meta }: { title: string, meta?: React.ReactNode }) => (
+    <div>
+      <span>{title}</span>
+      <span data-testid="translation-header-status">{meta}</span>
+    </div>
+  ),
 }))
 
 vi.mock("../../components/selection-toolbar-footer-content", () => ({
@@ -285,12 +291,19 @@ function cloneConfig(config: Config): Config {
   return JSON.parse(JSON.stringify(config)) as Config
 }
 
-function createVisibleCustomActionConfig() {
+function createDefaultCustomActionConfig() {
   const config = cloneConfig(DEFAULT_CONFIG)
-  const [defaultAction] = config.selectionToolbar.customActions
-  if (!defaultAction) {
-    throw new Error("Default custom action is missing")
+  const defaultAction = createBuiltInDictionaryAction(MANAGED_CLOUD_PROVIDER_ID)
+  config.selectionToolbar.customActions = [defaultAction]
+
+  return {
+    action: defaultAction,
+    config,
   }
+}
+
+function createVisibleCustomActionConfig() {
+  const { action: defaultAction, config } = createDefaultCustomActionConfig()
 
   const visibleAction = {
     ...defaultAction,
@@ -303,15 +316,6 @@ function createVisibleCustomActionConfig() {
     action: visibleAction,
     config,
   }
-}
-
-function getDefaultCustomAction(config: Config = DEFAULT_CONFIG) {
-  const [action] = config.selectionToolbar.customActions
-  if (!action) {
-    throw new Error("Default custom action is missing")
-  }
-
-  return action
 }
 
 function createRangeFor(node: Node) {
@@ -1057,6 +1061,150 @@ describe("selection toolbar requests", () => {
     expect(translateTextCoreMock).not.toHaveBeenCalled()
   })
 
+  it("shows translating then ready in the header status", async () => {
+    const translationRun = createDeferredPromise<string>()
+    translateTextCoreMock.mockReturnValueOnce(translationRun.promise)
+
+    const store = createStore()
+    store.set(configAtom, createStandardTranslateConfig())
+    setSelectionState(store, { text: "Selected text" })
+    renderWithProviders(<TranslateButton />, store)
+
+    fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId("translation-header-status")).toHaveTextContent("translation.loadingStatus.translating")
+    })
+
+    await act(async () => {
+      translationRun.resolve("译文")
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId("translation-header-status")).toHaveTextContent("translation.loadingStatus.ready")
+    })
+  })
+
+  it("shows failed in the header status when translation fails", async () => {
+    translateTextCoreMock.mockRejectedValueOnce(new Error("network failed"))
+
+    const store = createStore()
+    store.set(configAtom, createStandardTranslateConfig())
+    setSelectionState(store, { text: "Selected text" })
+    renderWithProviders(<TranslateButton />, store)
+
+    fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId("translation-header-status")).toHaveTextContent("translation.loadingStatus.failed")
+    })
+  })
+
+  it("does not render a target-language switcher in the translation header", async () => {
+    translateTextCoreMock.mockResolvedValueOnce("译文")
+
+    const store = createStore()
+    store.set(configAtom, createStandardTranslateConfig())
+    setSelectionState(store, { text: "Selected text" })
+    renderWithProviders(<TranslateButton />, store)
+
+    fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
+
+    await waitFor(() => {
+      expect(translateTextCoreMock).toHaveBeenCalledTimes(1)
+    })
+
+    expect(screen.queryByRole("combobox", { name: "side.targetLang" })).not.toBeInTheDocument()
+  })
+
+  it("reruns the built-in detailed explanation when the target language changes", async () => {
+    translateTextCoreMock
+      .mockResolvedValueOnce("图书馆")
+      .mockResolvedValueOnce("Biblioteca")
+    streamBackgroundStructuredObjectMock
+      .mockResolvedValueOnce(createStructuredObjectSnapshot({ term: "library", definition: "图书馆" }))
+      .mockResolvedValueOnce(createStructuredObjectSnapshot({ term: "library", definition: "biblioteca" }))
+    getOrCreateWebPageContextMock.mockResolvedValue(null)
+
+    const store = createStore()
+    store.set(configAtom, createStandardTranslateConfig())
+    setSelectionState(store, { text: "Library" })
+    renderWithProviders(<TranslateButton />, store)
+
+    fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
+
+    await waitFor(() => {
+      expect(translateTextCoreMock).toHaveBeenCalledTimes(1)
+      expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(1)
+    })
+
+    const updatedConfig = cloneConfig(store.get(configAtom))
+    updatedConfig.language = {
+      ...updatedConfig.language,
+      targetCode: "spa",
+    }
+
+    act(() => {
+      store.set(configAtom, updatedConfig)
+    })
+
+    await waitFor(() => {
+      expect(translateTextCoreMock).toHaveBeenCalledTimes(2)
+      expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(2)
+    })
+
+    expect(streamBackgroundStructuredObjectMock.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        prompt: expect.stringContaining("Target language: Spanish"),
+        system: expect.stringContaining("Return the definition in Spanish"),
+      }),
+    )
+  })
+
+  it("reruns the built-in detailed explanation when the target language setter updates config", async () => {
+    translateTextCoreMock
+      .mockResolvedValueOnce("Persistence")
+      .mockResolvedValueOnce("持久化")
+    streamBackgroundStructuredObjectMock
+      .mockResolvedValueOnce(createStructuredObjectSnapshot({ term: "persistence", definition: "粘り強さ" }))
+      .mockResolvedValueOnce(createStructuredObjectSnapshot({ term: "persistence", definition: "持久化" }))
+    getOrCreateWebPageContextMock.mockResolvedValue(null)
+
+    const store = createStore()
+    const initialConfig = createStandardTranslateConfig()
+    initialConfig.language = {
+      ...initialConfig.language,
+      targetCode: "jpn",
+    }
+    store.set(configAtom, initialConfig)
+    setSelectionState(store, { text: "Persistence" })
+    renderWithProviders(<TranslateButton />, store)
+
+    fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
+
+    await waitFor(() => {
+      expect(translateTextCoreMock).toHaveBeenCalledTimes(1)
+      expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(1)
+    })
+
+    await act(async () => {
+      await store.set(configFieldsAtomMap.language, { targetCode: "cmn" })
+    })
+
+    await waitFor(() => {
+      expect(translateTextCoreMock).toHaveBeenCalledTimes(2)
+      expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(2)
+    })
+
+    expect(streamBackgroundStructuredObjectMock.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        prompt: expect.stringContaining("Target language: Simplified Mandarin Chinese"),
+        system: expect.stringContaining("Return the definition in Simplified Mandarin Chinese"),
+      }),
+    )
+  })
+
   it("opens a custom action from the context menu with the captured selection session", async () => {
     streamBackgroundStructuredObjectMock.mockResolvedValue(createStructuredObjectSnapshot({ summary: "Context menu result" }))
 
@@ -1065,11 +1213,10 @@ describe("selection toolbar requests", () => {
     document.body.appendChild(paragraph)
 
     const store = createStore()
-    store.set(configAtom, createStandardTranslateConfig())
+    const { action, config } = createDefaultCustomActionConfig()
+    store.set(configAtom, config)
     setSelectionState(store, { text: "Selected text", range: createRangeFor(paragraph) })
     renderWithProviders(<SelectionToolbarCustomActionButtons />, store)
-
-    const action = getDefaultCustomAction()
 
     act(() => {
       paragraph.dispatchEvent(new MouseEvent("contextmenu", {
@@ -1135,10 +1282,9 @@ describe("selection toolbar requests", () => {
 
   it("shows a toast when a custom action context menu request cannot recover a selection snapshot", async () => {
     const store = createStore()
-    store.set(configAtom, createStandardTranslateConfig())
+    const { action, config } = createDefaultCustomActionConfig()
+    store.set(configAtom, config)
     renderWithProviders(<SelectionToolbarCustomActionButtons />, store)
-
-    const action = getDefaultCustomAction()
 
     const handler = getRegisteredMessageHandler<{ actionId: string, selectionText: string }>(
       "openSelectionCustomActionFromContextMenu",
@@ -1173,10 +1319,10 @@ describe("selection toolbar requests", () => {
 
   it("does not rerun custom action requests on passive config refresh, but reruns when request values change", async () => {
     streamBackgroundStructuredObjectMock.mockResolvedValue(createStructuredObjectSnapshot({ summary: "done" }))
-    const action = getDefaultCustomAction()
+    const { action, config } = createDefaultCustomActionConfig()
 
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, config)
     setSelectionState(store, { text: "Selected text" })
     renderWithProviders(
       <ToolbarCustomActionTestTrigger actionId={action.id} label={action.name} />,
@@ -1238,10 +1384,10 @@ describe("selection toolbar requests", () => {
         return secondRun.promise
       })
 
-    const action = getDefaultCustomAction()
+    const { action, config } = createDefaultCustomActionConfig()
 
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, config)
     setSelectionState(store, { text: "Selected text" })
     renderWithProviders(
       <ToolbarCustomActionTestTrigger actionId={action.id} label={action.name} />,
@@ -1273,10 +1419,10 @@ describe("selection toolbar requests", () => {
   })
 
   it("shows a precheck alert when a custom action has no selected text", async () => {
-    const action = getDefaultCustomAction()
+    const { action, config } = createDefaultCustomActionConfig()
 
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, config)
     setSelectionState(store, { text: "   " })
     renderWithProviders(
       <ToolbarCustomActionTestTrigger actionId={action.id} label={action.name} />,
@@ -1307,10 +1453,10 @@ describe("selection toolbar requests", () => {
     streamBackgroundStructuredObjectMock
       .mockRejectedValueOnce(new Error("Structured output failed"))
       .mockResolvedValueOnce(createStructuredObjectSnapshot({ summary: "fresh" }))
-    const action = getDefaultCustomAction()
+    const { action, config } = createDefaultCustomActionConfig()
 
     const store = createStore()
-    store.set(configAtom, cloneConfig(DEFAULT_CONFIG))
+    store.set(configAtom, config)
     setSelectionState(store, { text: "Selected text" })
     renderWithProviders(
       <ToolbarCustomActionTestTrigger actionId={action.id} label={action.name} />,

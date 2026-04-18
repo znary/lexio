@@ -1,7 +1,5 @@
 import type { Config } from "@/types/config/config"
-import type { SelectionToolbarCustomAction } from "@/types/config/selection-toolbar"
 import type { PageTranslateRange } from "@/types/config/translate"
-import { CUSTOM_ACTION_TEMPLATES } from "./custom-action-templates"
 import { MANAGED_CLOUD_PROVIDER_ID } from "./platform"
 import { DEFAULT_TRANSLATE_PROMPTS_CONFIG } from "./prompt"
 import { DEFAULT_PROVIDER_CONFIG_LIST } from "./providers"
@@ -23,26 +21,6 @@ export const DEFAULT_DETECTED_CODE = "eng" as const
 export const CONFIG_SCHEMA_VERSION = 69
 
 export const DEFAULT_FLOATING_BUTTON_POSITION = 0.66
-
-function createDefaultDictionaryAction(): SelectionToolbarCustomAction | null {
-  const template = CUSTOM_ACTION_TEMPLATES.find(t => t.id === "dictionary")
-  if (!template)
-    return null
-
-  const action = template.createAction(MANAGED_CLOUD_PROVIDER_ID)
-  return {
-    ...action,
-    id: "default-dictionary",
-    outputSchema: action.outputSchema.map(field => ({
-      ...field,
-      id: field.id.startsWith("dictionary-")
-        ? `default-${field.id}`
-        : `default-dictionary-${field.id}`,
-    })),
-  }
-}
-
-const defaultDictionaryAction = createDefaultDictionaryAction()
 
 export const DEFAULT_CONFIG: Config = {
   language: {
@@ -111,7 +89,7 @@ export const DEFAULT_CONFIG: Config = {
         enabled: true,
       },
     },
-    customActions: defaultDictionaryAction ? [defaultDictionaryAction] : [],
+    customActions: [],
   },
   sideContent: {
     width: DEFAULT_SIDE_CONTENT_WIDTH,

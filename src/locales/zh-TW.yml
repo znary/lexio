@@ -847,6 +847,8 @@ translation:
   loadingStatus:
     queued: 排隊中
     translating: 翻譯中
+    ready: 已完成
+    failed: 失敗
 speak:
   fetchingAudio: 正在獲取音訊...
   playingAudio: 正在播放音訊...
