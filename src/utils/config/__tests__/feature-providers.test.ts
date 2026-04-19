@@ -47,6 +47,7 @@ describe("feature providers", () => {
       const patch = buildFeatureProviderPatch({
         "translate": MANAGED_CLOUD_PROVIDER_ID,
         "selectionToolbar.translate": "backup-managed-cloud",
+        "selectionToolbar.explain": "managed-cloud-explain",
       })
 
       expect(patch).toEqual({
@@ -57,6 +58,9 @@ describe("feature providers", () => {
           features: {
             translate: {
               providerId: "backup-managed-cloud",
+            },
+            explain: {
+              providerId: "managed-cloud-explain",
             },
           },
         },
@@ -81,6 +85,7 @@ describe("feature providers", () => {
           features: {
             ...DEFAULT_CONFIG.selectionToolbar.features,
             translate: { enabled: true, providerId: "deleted-provider" },
+            explain: { enabled: true, providerId: "deleted-provider" },
           },
         },
         inputTranslation: {
@@ -100,6 +105,7 @@ describe("feature providers", () => {
         "translate": "fallback-managed-cloud",
         "videoSubtitles": "fallback-managed-cloud",
         "selectionToolbar.translate": "fallback-managed-cloud",
+        "selectionToolbar.explain": "fallback-managed-cloud",
         "inputTranslation": "fallback-managed-cloud",
       })
     })

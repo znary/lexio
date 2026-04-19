@@ -38,6 +38,45 @@
   background-clip: padding-box;
 }
 
+.sidepanel-page-summary-card {
+  margin: 0.35rem 0 1rem;
+  border: 1px solid color-mix(in srgb, var(--rf-border) 82%, transparent);
+  border-radius: 1.25rem;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--rf-card) 92%, var(--rf-muted) 8%), var(--rf-card));
+  padding: 1rem 1rem 1.05rem;
+}
+
+.sidepanel-page-summary-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rf-muted-foreground);
+}
+
+.sidepanel-page-summary-title {
+  margin-top: 0.45rem;
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.45;
+  color: var(--rf-foreground);
+}
+
+.sidepanel-page-summary-url {
+  margin-top: 0.35rem;
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--rf-muted-foreground);
+}
+
+.sidepanel-page-summary-text {
+  margin-top: 0.85rem;
+  font-size: 0.96rem;
+  line-height: 1.75;
+  color: var(--rf-foreground);
+}
+
 .sidepanel-chat-thread .aui-avatar-root,
 .sidepanel-chat-thread .aui-assistant-avatar,
 .sidepanel-chat-thread .aui-branch-picker-root,

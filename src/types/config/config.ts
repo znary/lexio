@@ -46,6 +46,7 @@ const selectionToolbarSchema = z.object({
     .max(MAX_SELECTION_OVERLAY_OPACITY),
   features: z.object({
     translate: selectionToolbarFeatureSchema,
+    explain: selectionToolbarFeatureSchema,
     speak: selectionToolbarSpeakFeatureSchema,
   }),
   customActions: selectionToolbarCustomActionsSchema,

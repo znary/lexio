@@ -1,6 +1,6 @@
 import type { Config } from "@/types/config/config"
 import type { ProviderConfig } from "@/types/config/provider"
-import { isTranslateProvider } from "@/types/config/provider"
+import { isLLMProvider, isTranslateProvider } from "@/types/config/provider"
 import { mergeWithArrayOverwrite } from "../atoms/config"
 import { getProviderConfigById } from "../config/helpers"
 
@@ -8,6 +8,7 @@ export const FEATURE_KEYS = [
   "translate",
   "videoSubtitles",
   "selectionToolbar.translate",
+  "selectionToolbar.explain",
   "inputTranslation",
 ] as const
 
@@ -35,6 +36,11 @@ export const FEATURE_PROVIDER_DEFS = {
     getProviderId: (c: Config) => c.selectionToolbar.features.translate.providerId,
     configPath: ["selectionToolbar", "features", "translate", "providerId"],
   },
+  "selectionToolbar.explain": {
+    isProvider: isLLMProvider,
+    getProviderId: (c: Config) => c.selectionToolbar.features.explain.providerId,
+    configPath: ["selectionToolbar", "features", "explain", "providerId"],
+  },
   "inputTranslation": {
     isProvider: isTranslateProvider,
     getProviderId: (c: Config) => c.inputTranslation.providerId,
@@ -47,6 +53,7 @@ export const FEATURE_KEY_I18N_MAP = {
   "translate": "translate",
   "videoSubtitles": "videoSubtitles",
   "selectionToolbar.translate": "selectionToolbar_translate",
+  "selectionToolbar.explain": "selectionToolbar_explain",
   "inputTranslation": "inputTranslation",
 } as const satisfies Record<FeatureKey, string>
 

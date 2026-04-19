@@ -9,6 +9,7 @@ import { getUniqueName } from "@/utils/name"
 export const ICON_PATTERN = /^[^:\s]+:[^:\s]+$/
 export const DEFAULT_ACTION_NAME = "Custom AI Action"
 export const DEFAULT_DICTIONARY_ACTION_ID = "default-dictionary"
+export const DEFAULT_EXPLAIN_ACTION_ID = "default-explain"
 
 export function createOutputSchemaField(
   name: string,
@@ -77,5 +78,5 @@ export function getSelectionToolbarCustomActionTokenCellText(token: SelectionToo
 
 export function isSelectionToolbarInternalAction(action: Pick<SelectionToolbarCustomAction, "id"> | string) {
   const actionId = typeof action === "string" ? action : action.id
-  return actionId === DEFAULT_DICTIONARY_ACTION_ID
+  return actionId === DEFAULT_DICTIONARY_ACTION_ID || actionId === DEFAULT_EXPLAIN_ACTION_ID
 }

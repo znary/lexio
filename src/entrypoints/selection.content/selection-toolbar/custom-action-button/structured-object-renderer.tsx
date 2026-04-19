@@ -20,6 +20,7 @@ interface StructuredObjectRendererProps {
   isStreaming?: boolean
   showThinking?: boolean
   thinking: ThinkingSnapshot | null
+  fieldLabelResolver?: (field: SelectionToolbarCustomActionOutputField) => string
 }
 
 function formatFieldValue(value: unknown, type: SelectionToolbarCustomActionOutputField["type"]) {
@@ -43,6 +44,7 @@ function buildStructuredObjectSpec(
   outputSchema: SelectionToolbarCustomActionOutputField[],
   value: Record<string, unknown> | null,
   isStreaming: boolean,
+  fieldLabelResolver?: (field: SelectionToolbarCustomActionOutputField) => string,
 ): Spec {
   const rootKey = "root"
   const childKeys: string[] = []
@@ -59,7 +61,7 @@ function buildStructuredObjectSpec(
     elements[elementKey] = {
       type: "FieldRow",
       props: {
-        label: getBuiltInDictionaryFieldLabel(field.id, field.name),
+        label: fieldLabelResolver?.(field) ?? getBuiltInDictionaryFieldLabel(field.id, field.name),
         type: field.type,
         value: displayValue,
         pending: isPending,
@@ -143,10 +145,11 @@ export function StructuredObjectRenderer({
   isStreaming = false,
   showThinking = true,
   thinking,
+  fieldLabelResolver,
 }: StructuredObjectRendererProps) {
   const spec = useMemo(
-    () => buildStructuredObjectSpec(outputSchema, value, isStreaming),
-    [outputSchema, value, isStreaming],
+    () => buildStructuredObjectSpec(outputSchema, value, isStreaming, fieldLabelResolver),
+    [fieldLabelResolver, outputSchema, value, isStreaming],
   )
 
   return (

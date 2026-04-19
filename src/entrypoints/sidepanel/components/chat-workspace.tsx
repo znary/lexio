@@ -1,18 +1,23 @@
 import type { MessageStatus, ThreadMessage, ThreadMessageLike } from "@assistant-ui/react"
 import type { AssistantMessageConfig, UserMessageConfig } from "@assistant-ui/react-ui"
+import type { ReactNode } from "react"
+import type { CurrentWebPageSummaryResult } from "./current-webpage-summary"
 import type { PlatformChatMessage, PlatformChatThreadSummary } from "@/utils/platform/api"
 import type { SidepanelChatSnapshot } from "@/utils/platform/chat-cache"
 import { browser } from "#imports"
 import { AssistantRuntimeProvider, ComposerPrimitive, ThreadPrimitive, useLocalRuntime } from "@assistant-ui/react"
 import { AssistantMessage, ThreadConfigProvider, UserMessage } from "@assistant-ui/react-ui"
-import { IconArrowUp, IconClockHour4, IconLoader2, IconMessagePlus, IconSettings } from "@tabler/icons-react"
+import { IconArrowUp, IconClockHour4, IconFileDescription, IconLoader2, IconMessagePlus, IconSettings } from "@tabler/icons-react"
+import { useAtomValue } from "jotai"
 import { createContext, use, useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { PlatformQuickAccess } from "@/components/platform/platform-quick-access"
 import { Button } from "@/components/ui/base-ui/button"
+import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { getRandomUUID } from "@/utils/crypto-polyfill"
 import { createPlatformChatThread, deletePlatformChatThread, getPlatformChatThreadMessages, listPlatformChatThreads, streamPlatformChatThreadMessage } from "@/utils/platform/api"
 import { getSidepanelChatSnapshot, setSidepanelChatSnapshot } from "@/utils/platform/chat-cache"
+import { CurrentWebPageSummaryCard, generateCurrentWebPageSummary } from "./current-webpage-summary"
 import { SIDEPANEL_MARKDOWN_TEXT } from "./sidepanel-markdown"
 import { ThreadHistorySheet } from "./thread-history-sheet"
 
@@ -43,9 +48,11 @@ const USER_MESSAGE_CONFIG: UserMessageConfig = {
 
 interface ComposerControlsContextValue {
   isSignedIn: boolean
+  isSummarizingCurrentPage: boolean
   onOpenHistory: () => void
   onOpenSettings: () => void
   onStartNewChat: () => void
+  onSummarizeCurrentPage: () => void
 }
 
 const ComposerControlsContext = createContext<ComposerControlsContextValue | null>(null)
@@ -62,9 +69,11 @@ function useComposerControls(): ComposerControlsContextValue {
 function SiderComposer() {
   const {
     isSignedIn,
+    isSummarizingCurrentPage,
     onOpenHistory,
     onOpenSettings,
     onStartNewChat,
+    onSummarizeCurrentPage,
   } = useComposerControls()
 
   return (
@@ -78,6 +87,19 @@ function SiderComposer() {
 
       <div className="lexio-sider-composer-footer">
         <div className="lexio-sider-composer-tools">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="lexio-sider-tool-button"
+            aria-label="Summarize current page"
+            onClick={onSummarizeCurrentPage}
+            disabled={isSummarizingCurrentPage}
+          >
+            {isSummarizingCurrentPage
+              ? <IconLoader2 className="size-4 animate-spin" />
+              : <IconFileDescription className="size-4" />}
+          </Button>
           <Button
             type="button"
             variant="ghost"
@@ -127,7 +149,11 @@ function SiderComposer() {
   )
 }
 
-function SidepanelThread() {
+function SidepanelThread({
+  summaryPanel,
+}: {
+  summaryPanel?: ReactNode
+}) {
   return (
     <ThreadConfigProvider
       config={{
@@ -146,6 +172,7 @@ function SidepanelThread() {
     >
       <ThreadPrimitive.Root className="sidepanel-chat-shell">
         <ThreadPrimitive.Viewport className="sidepanel-chat-viewport">
+          {summaryPanel}
           <ThreadPrimitive.Messages
             components={{
               UserMessage,
@@ -259,17 +286,23 @@ function createSessionFromSnapshot(snapshot: SidepanelChatSnapshot): ChatSession
 
 function ChatRuntimePane({
   isSignedIn,
+  isSummarizingCurrentPage,
   onOpenHistory,
   onOpenSettings,
   onStartNewChat,
+  onSummarizeCurrentPage,
   session,
+  summaryPanel,
   onRunCommitted,
 }: {
   isSignedIn: boolean
+  isSummarizingCurrentPage: boolean
   onOpenHistory: () => void
   onOpenSettings: () => void
   onStartNewChat: () => void
+  onSummarizeCurrentPage: () => void
   session: ChatSessionState
+  summaryPanel?: ReactNode
   onRunCommitted: (threadId: string) => void
 }) {
   const threadIdRef = useRef(session.threadId)
@@ -310,13 +343,15 @@ function ChatRuntimePane({
       <ComposerControlsContext
         value={{
           isSignedIn,
+          isSummarizingCurrentPage,
           onOpenHistory,
           onOpenSettings,
           onStartNewChat,
+          onSummarizeCurrentPage,
         }}
       >
         <div className="sidepanel-chat-thread flex h-full min-h-0 flex-col">
-          <SidepanelThread />
+          <SidepanelThread summaryPanel={summaryPanel} />
         </div>
       </ComposerControlsContext>
     </AssistantRuntimeProvider>
@@ -332,9 +367,13 @@ export function ChatWorkspace({
   isSessionLoading: boolean
   sessionAccountKey: string | null
 }) {
+  const providersConfig = useAtomValue(configFieldsAtomMap.providersConfig)
+  const translateConfig = useAtomValue(configFieldsAtomMap.translate)
   const [threads, setThreads] = useState<PlatformChatThreadSummary[]>([])
   const [session, setSession] = useState<ChatSessionState>(() => createEmptySession())
+  const [currentWebPageSummary, setCurrentWebPageSummary] = useState<CurrentWebPageSummaryResult | null>(null)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+  const [isSummarizingCurrentPage, setIsSummarizingCurrentPage] = useState(false)
   const [isLoadingThread, setIsLoadingThread] = useState(false)
   const [isRefreshingThreads, setIsRefreshingThreads] = useState(false)
   const snapshotRef = useRef<SidepanelChatSnapshot | null>(null)
@@ -584,6 +623,23 @@ export function ChatWorkspace({
     setIsHistoryOpen(false)
   }
 
+  const summarizeCurrentPage = useCallback(async () => {
+    setIsSummarizingCurrentPage(true)
+    try {
+      const summary = await generateCurrentWebPageSummary({
+        providersConfig,
+        translate: translateConfig,
+      })
+      setCurrentWebPageSummary(summary)
+    }
+    catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to summarize the current page.")
+    }
+    finally {
+      setIsSummarizingCurrentPage(false)
+    }
+  }, [providersConfig, translateConfig])
+
   const isWorkspaceLoading = isSessionLoading
   const isBusy = isWorkspaceLoading || isLoadingThread
 
@@ -620,10 +676,15 @@ export function ChatWorkspace({
           <ChatRuntimePane
             key={session.sessionKey}
             isSignedIn={isSignedIn}
+            isSummarizingCurrentPage={isSummarizingCurrentPage}
             onOpenHistory={() => setIsHistoryOpen(true)}
             onOpenSettings={() => void browser.runtime.openOptionsPage()}
             onStartNewChat={handleStartNewChat}
+            onSummarizeCurrentPage={() => {
+              void summarizeCurrentPage()
+            }}
             session={session}
+            summaryPanel={currentWebPageSummary ? <CurrentWebPageSummaryCard summary={currentWebPageSummary} /> : null}
             onRunCommitted={(threadId) => {
               setSession(current => current.sessionKey === session.sessionKey
                 ? {

@@ -5,6 +5,7 @@ import { storage } from "#imports"
 import { DEFAULT_CONFIG, DETECTED_CODE_STORAGE_KEY } from "@/utils/constants/config"
 import { getDocumentInfo } from "@/utils/content/analyze"
 import { ensurePresetStyles } from "@/utils/host/translate/ui/style-injector"
+import { getOrCreateWebPageContext } from "@/utils/host/translate/webpage-context"
 import { logger } from "@/utils/logger"
 import { onMessage, sendMessage } from "@/utils/message"
 import { clearEffectiveSiteControlUrl } from "@/utils/site-control"
@@ -78,6 +79,14 @@ export async function bootstrapHostContent(ctx: ContentScriptContext, initialCon
     enabled ? void manager.start(window === window.top ? analyticsContext : undefined) : manager.stop()
   })
 
+  const cleanupCurrentWebPageContextListener = onMessage("getCurrentWebPageContext", async () => {
+    if (window !== window.top) {
+      return null
+    }
+
+    return await getOrCreateWebPageContext()
+  })
+
   ctx.onInvalidated(() => {
     removeHostToast()
     cleanupUrlListener()
@@ -85,6 +94,7 @@ export async function bootstrapHostContent(ctx: ContentScriptContext, initialCon
     cleanupPageTranslationTriggers()
     cleanupTranslationShortcut()
     cleanupTranslationStateListener()
+    cleanupCurrentWebPageContextListener()
     window.removeEventListener("extension:URLChange", handleExtensionUrlChange)
     window.__READ_FROG_HOST_INJECTED__ = false
     clearEffectiveSiteControlUrl()

@@ -9,6 +9,7 @@ interface CustomActionContentProps {
   selectionContent: string | null | undefined
   value: Record<string, unknown> | null
   thinking: ThinkingSnapshot | null
+  fieldLabelResolver?: (field: SelectionToolbarCustomActionOutputField) => string
 }
 
 export function CustomActionContent({
@@ -17,6 +18,7 @@ export function CustomActionContent({
   selectionContent,
   value,
   thinking,
+  fieldLabelResolver,
 }: CustomActionContentProps) {
   return (
     <div className="p-4">
@@ -32,6 +34,7 @@ export function CustomActionContent({
           value={value}
           isStreaming={isRunning}
           thinking={thinking}
+          fieldLabelResolver={fieldLabelResolver}
         />
       </div>
     </div>

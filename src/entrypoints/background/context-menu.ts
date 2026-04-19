@@ -11,6 +11,7 @@ import { ensureInitializedConfig } from "./config"
 
 export const MENU_ID_TRANSLATE = "read-frog-translate"
 export const MENU_ID_SELECTION_TRANSLATE = "read-frog-selection-translate"
+export const MENU_ID_SELECTION_EXPLAIN = "read-frog-selection-explain"
 export const MENU_ID_SELECTION_CUSTOM_ACTION_PREFIX = "read-frog-selection-custom-action:"
 
 function getSelectionCustomActionMenuId(actionId: string) {
@@ -91,11 +92,12 @@ async function updateContextMenuItems(config: Config) {
   // Remove all existing menu items first
   await browser.contextMenus.removeAll()
 
-  const { enabled: translateEnabled } = config.contextMenu
+  const { enabled: contextMenuEnabled } = config.contextMenu
+  const { explain: explainFeature } = config.selectionToolbar.features
   const enabledCustomActions = config.selectionToolbar.customActions
     .filter(action => action.enabled !== false && !isSelectionToolbarInternalAction(action))
 
-  if (translateEnabled) {
+  if (contextMenuEnabled) {
     browser.contextMenus.create({
       id: MENU_ID_TRANSLATE,
       title: i18n.t("contextMenu.translate"),
@@ -107,16 +109,24 @@ async function updateContextMenuItems(config: Config) {
       title: i18n.t("contextMenu.translateSelection"),
       contexts: ["selection"],
     })
+  }
 
-    if (enabledCustomActions.length > 0) {
-      enabledCustomActions.forEach((action) => {
-        browser.contextMenus.create({
-          id: getSelectionCustomActionMenuId(action.id),
-          title: action.name,
-          contexts: ["selection"],
-        })
+  if (contextMenuEnabled && explainFeature.enabled) {
+    browser.contextMenus.create({
+      id: MENU_ID_SELECTION_EXPLAIN,
+      title: i18n.t("contextMenu.explainSelection"),
+      contexts: ["selection"],
+    })
+  }
+
+  if (contextMenuEnabled && enabledCustomActions.length > 0) {
+    enabledCustomActions.forEach((action) => {
+      browser.contextMenus.create({
+        id: getSelectionCustomActionMenuId(action.id),
+        title: action.name,
+        contexts: ["selection"],
       })
-    }
+    })
   }
 
   // Update translate menu title for current tab
@@ -181,6 +191,11 @@ async function handleContextMenuClick(
     return
   }
 
+  if (info.menuItemId === MENU_ID_SELECTION_EXPLAIN) {
+    await handleSelectionExplainClick(info, tab.id)
+    return
+  }
+
   if (typeof info.menuItemId === "string" && info.menuItemId.startsWith(MENU_ID_SELECTION_CUSTOM_ACTION_PREFIX)) {
     const actionId = info.menuItemId.slice(MENU_ID_SELECTION_CUSTOM_ACTION_PREFIX.length)
     if (!actionId) {
@@ -230,6 +245,24 @@ async function handleSelectionTranslateClick(
     : tabId
 
   void sendMessage("openSelectionTranslationFromContextMenu", {
+    selectionText,
+  }, target)
+}
+
+async function handleSelectionExplainClick(
+  info: Browser.contextMenus.OnClickData,
+  tabId: number,
+) {
+  const selectionText = info.selectionText?.trim()
+  if (!selectionText) {
+    return
+  }
+
+  const target = typeof info.frameId === "number"
+    ? { tabId, frameId: info.frameId }
+    : tabId
+
+  void sendMessage("openSelectionExplainFromContextMenu", {
     selectionText,
   }, target)
 }

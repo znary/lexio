@@ -17,6 +17,10 @@ vi.mock("../speak-button", () => ({
   SpeakButton: () => null,
 }))
 
+vi.mock("../explain-button", () => ({
+  ExplainButton: () => <button type="button" aria-label="Explain">Explain</button>,
+}))
+
 vi.mock("../custom-action-button", () => ({
   SelectionToolbarCustomActionButtons: () => null,
 }))
@@ -35,6 +39,7 @@ vi.mock("@/utils/atoms/config", async (importOriginal) => {
         features: {
           translate: { enabled: true, providerId: "microsoft-translate-default" },
           speak: { enabled: true },
+          explain: { enabled: true, providerId: "microsoft-translate-default" },
         },
         customActions: [],
       }),
@@ -250,6 +255,20 @@ describe("selectionToolbar - isInputOrTextarea logic", () => {
 
     await triggerMouseUpWithSelection(screen.getByTestId("test-element"))
     await waitFor(expectToolbarVisible)
+  })
+
+  it("should render the Explain button when the feature is enabled", async () => {
+    render(
+      <div>
+        <SelectionToolbar />
+        <div data-testid="test-element">Some text</div>
+      </div>,
+    )
+
+    await clearToolbarState()
+    await triggerMouseUpWithSelection(screen.getByTestId("test-element"))
+
+    expect(screen.getByRole("button", { name: "Explain" })).toBeInTheDocument()
   })
 
   it("should keep the toolbar visible on right-click so context menu translation can reuse the selection", async () => {

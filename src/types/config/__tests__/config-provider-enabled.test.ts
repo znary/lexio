@@ -93,4 +93,30 @@ describe("config provider enabled validation", () => {
     expect(issuePaths).toContain("selectionToolbar.customActions.0.providerId")
     expect(issuePaths).not.toContain("translate.providerId")
   })
+
+  it("fails when the built-in explain feature uses a disabled provider", () => {
+    const fallbackProviderId = "managed-cloud-backup"
+    const providersConfig = [
+      createManagedProvider(MANAGED_CLOUD_PROVIDER_ID, { enabled: false }),
+      createManagedProvider(fallbackProviderId),
+    ]
+
+    const issuePaths = getIssuePaths({
+      ...DEFAULT_CONFIG,
+      providersConfig,
+      selectionToolbar: {
+        ...DEFAULT_CONFIG.selectionToolbar,
+        features: {
+          ...DEFAULT_CONFIG.selectionToolbar.features,
+          explain: {
+            enabled: true,
+            providerId: MANAGED_CLOUD_PROVIDER_ID,
+          },
+        },
+        customActions: [],
+      },
+    })
+
+    expect(issuePaths).toContain("selectionToolbar.features.explain.providerId")
+  })
 })

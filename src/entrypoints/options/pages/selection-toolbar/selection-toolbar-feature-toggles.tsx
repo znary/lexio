@@ -1,5 +1,5 @@
 import { i18n } from "#imports"
-import { RiTranslate } from "@remixicon/react"
+import { RiQuestionLine, RiTranslate } from "@remixicon/react"
 import { IconVolume } from "@tabler/icons-react"
 import { useAtom } from "jotai"
 import { Switch } from "@/components/ui/base-ui/switch"
@@ -15,7 +15,7 @@ export function SelectionToolbarFeatureToggles() {
   const { features } = selectionToolbar
 
   const setFeatureEnabled = (
-    key: "translate" | "speak",
+    key: "translate" | "explain" | "speak",
     enabled: boolean,
   ) => {
     void setSelectionToolbar({
@@ -42,6 +42,16 @@ export function SelectionToolbarFeatureToggles() {
           <Switch
             checked={features.translate.enabled}
             onCheckedChange={checked => setFeatureEnabled("translate", checked)}
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-2 text-sm">
+            <RiQuestionLine className="size-4 text-muted-foreground" />
+            {i18n.t("options.floatingButtonAndToolbar.selectionToolbar.featureToggles.explain")}
+          </span>
+          <Switch
+            checked={features.explain.enabled}
+            onCheckedChange={checked => setFeatureEnabled("explain", checked)}
           />
         </div>
         {!isFirefox && (

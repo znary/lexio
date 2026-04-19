@@ -28,6 +28,7 @@ import {
   SelectionCustomActionProvider,
   useSelectionCustomActionPopover,
 } from "../custom-action-button/provider"
+import { SelectionExplainProvider } from "../explain-button/provider"
 import { SelectionToolbar } from "../index"
 import { TranslateButton } from "../translate-button"
 import { SelectionTranslationProvider } from "../translate-button/provider"
@@ -481,9 +482,11 @@ function renderWithProviders(ui: ReactElement, store = createStore()) {
       <Provider store={store}>
         <TooltipProvider>
           <SelectionTranslationProvider>
-            <SelectionCustomActionProvider>
-              {ui}
-            </SelectionCustomActionProvider>
+            <SelectionExplainProvider>
+              <SelectionCustomActionProvider>
+                {ui}
+              </SelectionCustomActionProvider>
+            </SelectionExplainProvider>
           </SelectionTranslationProvider>
         </TooltipProvider>
       </Provider>

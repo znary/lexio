@@ -20,7 +20,15 @@ function createConfig(enabled: boolean): Config {
       enabled,
     },
     selectionToolbar: {
+      enabled: true,
       customActions: [],
+      disabledSelectionToolbarPatterns: [],
+      opacity: 100,
+      features: {
+        translate: { enabled: true, providerId: "microsoft-translate-default" },
+        speak: { enabled: true },
+        explain: { enabled: true, providerId: "microsoft-translate-default" },
+      },
     },
   } as unknown) as Config
 }
@@ -49,6 +57,7 @@ describe("background context menu", () => {
     i18n.t = vi.fn((key: string) => ({
       "contextMenu.translate": "Translate",
       "contextMenu.translateSelection": "Translate \"%s\"",
+      "contextMenu.explainSelection": "Explain \"%s\"",
       "contextMenu.showOriginal": "Show Original",
     })[key] ?? key) as typeof i18n.t
   })
@@ -69,6 +78,11 @@ describe("background context menu", () => {
     expect(browser.contextMenus.create).toHaveBeenNthCalledWith(2, {
       id: MENU_ID_SELECTION_TRANSLATE,
       title: "Translate \"%s\"",
+      contexts: ["selection"],
+    })
+    expect(browser.contextMenus.create).toHaveBeenNthCalledWith(3, {
+      id: "read-frog-selection-explain",
+      title: "Explain \"%s\"",
       contexts: ["selection"],
     })
     expect(browser.contextMenus.update).toHaveBeenCalledWith(MENU_ID_TRANSLATE, {
@@ -92,12 +106,12 @@ describe("background context menu", () => {
 
     await initializeContextMenu()
 
-    expect(browser.contextMenus.create).toHaveBeenNthCalledWith(3, {
+    expect(browser.contextMenus.create).toHaveBeenNthCalledWith(4, {
       id: `${MENU_ID_SELECTION_CUSTOM_ACTION_PREFIX}dictionary`,
       title: "Dictionary",
       contexts: ["selection"],
     })
-    expect(browser.contextMenus.create).toHaveBeenNthCalledWith(4, {
+    expect(browser.contextMenus.create).toHaveBeenNthCalledWith(5, {
       id: `${MENU_ID_SELECTION_CUSTOM_ACTION_PREFIX}rewrite`,
       title: "Rewrite",
       contexts: ["selection"],
@@ -136,6 +150,31 @@ describe("background context menu", () => {
 
     expect(sendMessageMock).toHaveBeenCalledWith(
       "openSelectionTranslationFromContextMenu",
+      { selectionText: "Selected text" },
+      { tabId: 5, frameId: 7 },
+    )
+  })
+
+  it("routes explain menu clicks to the matching tab and frame", async () => {
+    const { MENU_ID_SELECTION_EXPLAIN, registerContextMenuListeners } = await import("../context-menu")
+
+    registerContextMenuListeners()
+
+    const clickHandler = contextMenuClickListeners[0]
+    if (!clickHandler) {
+      throw new Error("Context menu click listener was not registered")
+    }
+
+    await clickHandler({
+      menuItemId: MENU_ID_SELECTION_EXPLAIN,
+      selectionText: "Selected text",
+      frameId: 7,
+    }, {
+      id: 5,
+    })
+
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      "openSelectionExplainFromContextMenu",
       { selectionText: "Selected text" },
       { tabId: 5, frameId: 7 },
     )

@@ -44,7 +44,9 @@ interface ProtocolMap {
   checkAndAskAutoPageTranslation: (data: { url: string, detectedCodeOrUnd: LangCodeISO6393 | "und" }) => void
   // ask host to start page translation
   askManagerToTogglePageTranslation: (data: { enabled: boolean, analyticsContext?: FeatureUsageContext }) => void
+  getCurrentWebPageContext: () => Promise<{ url: string, webTitle: string, webContent: string } | null>
   openSelectionTranslationFromContextMenu: (data: { selectionText: string }) => void
+  openSelectionExplainFromContextMenu: (data: { selectionText: string }) => void
   openSelectionCustomActionFromContextMenu: (data: { actionId: string, selectionText: string }) => void
   // analytics
   trackFeatureUsedEvent: (data: FeatureUsedEventProperties) => void

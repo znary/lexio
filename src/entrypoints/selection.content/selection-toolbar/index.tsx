@@ -19,6 +19,7 @@ import {
 } from "./atoms"
 import { CloseButton, DropEvent } from "./close-button"
 import { SelectionToolbarCustomActionButtons } from "./custom-action-button"
+import { ExplainButton } from "./explain-button"
 import { SpeakButton } from "./speak-button"
 import { TranslateButton } from "./translate-button"
 
@@ -516,6 +517,7 @@ export function SelectionToolbar() {
   const { features } = selectionToolbar
   const hasAnyEnabledFeature
     = features.translate.enabled
+      || features.explain.enabled
       || (!isFirefox && features.speak.enabled)
       || selectionToolbar.customActions.some(action =>
         action.enabled !== false && !isSelectionToolbarInternalAction(action),
@@ -538,6 +540,7 @@ export function SelectionToolbar() {
         >
           <div className="flex items-center overflow-x-auto overflow-y-hidden rounded-sm max-w-105 no-scrollbar">
             {features.translate.enabled && <TranslateButton />}
+            {features.explain.enabled && <ExplainButton />}
             {!isFirefox && features.speak.enabled && <SpeakButton />}
             <SelectionToolbarCustomActionButtons />
           </div>

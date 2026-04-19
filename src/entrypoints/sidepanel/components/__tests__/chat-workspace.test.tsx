@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { browser } from "#imports"
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { ChatWorkspace } from "../chat-workspace"
@@ -9,6 +10,7 @@ const {
   getSidepanelChatSnapshotMock,
   getPlatformChatThreadMessagesMock,
   listPlatformChatThreadsMock,
+  sendMessageMock,
   setSidepanelChatSnapshotMock,
   streamPlatformChatThreadMessageMock,
 } = vi.hoisted(() => ({
@@ -17,6 +19,7 @@ const {
   getSidepanelChatSnapshotMock: vi.fn(),
   getPlatformChatThreadMessagesMock: vi.fn(),
   listPlatformChatThreadsMock: vi.fn(),
+  sendMessageMock: vi.fn(),
   setSidepanelChatSnapshotMock: vi.fn(),
   streamPlatformChatThreadMessageMock: vi.fn(),
 }))
@@ -34,10 +37,17 @@ vi.mock("@/utils/platform/chat-cache", () => ({
   setSidepanelChatSnapshot: (...args: unknown[]) => setSidepanelChatSnapshotMock(...args),
 }))
 
+vi.mock("@/utils/message", () => ({
+  sendMessage: (...args: unknown[]) => sendMessageMock(...args),
+}))
+
 vi.mock("#imports", () => ({
   browser: {
     runtime: {
       openOptionsPage: vi.fn(),
+    },
+    tabs: {
+      query: vi.fn(),
     },
   },
 }))
@@ -105,8 +115,10 @@ describe("chatWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal("confirm", vi.fn(() => true))
+    browser.tabs.query = vi.fn().mockResolvedValue([{ id: 7 }])
     getSidepanelChatSnapshotMock.mockResolvedValue(null)
     listPlatformChatThreadsMock.mockResolvedValue([])
+    sendMessageMock.mockReset()
     setSidepanelChatSnapshotMock.mockResolvedValue(undefined)
   })
 
@@ -115,6 +127,7 @@ describe("chatWorkspace", () => {
 
     await screen.findByPlaceholderText("问任何问题")
     expect(screen.getByPlaceholderText("问任何问题")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Summarize current page" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Start new chat" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Open chat history" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Open full settings" })).toBeInTheDocument()
@@ -299,6 +312,38 @@ describe("chatWorkspace", () => {
       currentThreadMessages: expect.arrayContaining([
         expect.objectContaining({ contentText: "Draft reply" }),
       ]),
+    }))
+  })
+
+  it("summarizes the current page inside the sidepanel", async () => {
+    sendMessageMock
+      .mockResolvedValueOnce({
+        url: "https://example.com/article",
+        webTitle: "Example article",
+        webContent: "A detailed article body.",
+      })
+      .mockResolvedValueOnce("Short summary for the current page.")
+
+    render(<ChatWorkspace isSignedIn isSessionLoading={false} sessionAccountKey="user-1" />)
+
+    await screen.findByPlaceholderText("问任何问题")
+
+    fireEvent.click(screen.getByRole("button", { name: "Summarize current page" }))
+
+    expect(await screen.findByLabelText("Current page summary")).toBeInTheDocument()
+    expect(screen.getByText("Example article")).toBeInTheDocument()
+    expect(screen.getByText("Short summary for the current page.")).toBeInTheDocument()
+    expect(browser.tabs.query).toHaveBeenCalledWith({
+      active: true,
+      currentWindow: true,
+    })
+    expect(sendMessageMock).toHaveBeenNthCalledWith(1, "getCurrentWebPageContext", undefined, 7)
+    expect(sendMessageMock).toHaveBeenNthCalledWith(2, "getOrGenerateWebPageSummary", expect.objectContaining({
+      webTitle: "Example article",
+      webContent: "A detailed article body.",
+      providerConfig: expect.objectContaining({
+        id: expect.any(String),
+      }),
     }))
   })
 })

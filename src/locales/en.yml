@@ -8,6 +8,7 @@ dataTypes:
 contextMenu:
   translate: Translate
   translateSelection: Translate "%s"
+  explainSelection: Explain "%s"
   showOriginal: Show Original
 popup:
   theme: Theme
@@ -222,6 +223,7 @@ options:
       features:
         translate: Page Translation
         selectionToolbar_translate: Selection Toolbar Translation
+        selectionToolbar_explain: Explain
         tts: Text to Speech
         inputTranslation: Input Translation
         videoSubtitles: Video Subtitles
@@ -324,6 +326,7 @@ options:
         title: Feature Toggles
         description: Choose which built-in features to show in the selection toolbar
         translate: Translate
+        explain: Explain
         speak: Speak
       closeMenu:
         disableForSite: Disable for this site
@@ -349,9 +352,14 @@ options:
         customModel: Custom model
         model: Model
         modelNotAvailableForNonLLM: Model settings are only available for LLM providers
-        translate:
-          title: Selection Translation
-          description: Configure provider and model for the selection toolbar translation feature
+      translate:
+        title: Selection Translation
+        description: Configure provider and model for the selection toolbar translation feature
+      explain:
+        name: Explain
+        fieldMeaningDescription: Explain the selected text in a short learner-friendly way.
+        fieldWhyDescription: Explain the wording, grammar, or nuance that matters here.
+        fieldTipDescription: Give one short tip the learner can reuse later.
       customActions:
         title: Custom AI Actions
         description: Add your own structured AI actions for selected text
@@ -1049,6 +1057,7 @@ action:
   contextDetailsParagraphsLabel: Paragraphs
   translation: Translation
   speak: Speak
+  explain: Explain
   playing: Playing
 thinking:
   label: Thinking

@@ -10,6 +10,7 @@ import {
 } from "./overlay-layers"
 import { SelectionToolbar } from "./selection-toolbar"
 import { SelectionCustomActionProvider } from "./selection-toolbar/custom-action-button/provider"
+import { SelectionExplainProvider } from "./selection-toolbar/explain-button/provider"
 import { SelectionTranslationProvider } from "./selection-toolbar/translate-button/provider"
 import { useVocabularyHighlighting } from "./use-vocabulary-highlighting"
 
@@ -33,9 +34,11 @@ export default function App({
   return (
     <>
       <SelectionTranslationProvider>
-        <SelectionCustomActionProvider>
-          <SelectionToolbar />
-        </SelectionCustomActionProvider>
+        <SelectionExplainProvider>
+          <SelectionCustomActionProvider>
+            <SelectionToolbar />
+          </SelectionCustomActionProvider>
+        </SelectionExplainProvider>
       </SelectionTranslationProvider>
       <VocabularyHoverCard preview={vocabularyHoverPreview} />
       <Toaster
