@@ -16,8 +16,8 @@ import { CSSCodeEditor } from "@/components/ui/css-code-editor"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
 import { MAX_CUSTOM_CSS_LENGTH } from "@/types/config/translate"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
-import { WEBSITE_URL } from "@/utils/constants/url"
 import { lintCSS } from "@/utils/css/lint-css"
+import { buildPlatformSignInUrl } from "@/utils/platform/website"
 import { cn } from "@/utils/styles/utils"
 
 export function CSSEditor() {
@@ -67,7 +67,7 @@ export function CSSEditor() {
           <FieldLabel htmlFor="css-editor" data-invalid>
             {i18n.t("options.translation.translationStyle.cssEditor")}
           </FieldLabel>
-          <a href={`${WEBSITE_URL}/tutorial/custom-css`} className="text-xs text-link hover:opacity-90" target="_blank" rel="noreferrer">
+          <a href={buildPlatformSignInUrl()} className="text-xs text-link hover:opacity-90" target="_blank" rel="noreferrer">
             {i18n.t("options.apiProviders.howToConfigure")}
           </a>
         </div>

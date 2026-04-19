@@ -15,7 +15,6 @@ const InputTranslationPage = lazy(() => import("./pages/input-translation").then
 const VocabularyPage = lazy(() => import("./pages/vocabulary").then(module => ({ default: module.VocabularyPage })))
 const TextToSpeechPage = lazy(() => import("./pages/text-to-speech").then(module => ({ default: module.TextToSpeechPage })))
 const StatisticsPage = lazy(() => import("./pages/statistics").then(module => ({ default: module.StatisticsPage })))
-const ConfigPage = lazy(() => import("./pages/config").then(module => ({ default: module.ConfigPage })))
 
 const ROUTE_COMPONENTS: Record<RoutePath, ComponentType> = {
   "/": GeneralPage,
@@ -28,7 +27,6 @@ const ROUTE_COMPONENTS: Record<RoutePath, ComponentType> = {
   "/vocabulary": VocabularyPage,
   "/tts": TextToSpeechPage,
   "/statistics": StatisticsPage,
-  "/config": ConfigPage,
 }
 
 function RouteLoadingFallback() {

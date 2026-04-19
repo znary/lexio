@@ -4,6 +4,7 @@ import { WEBSITE_URL } from "@/utils/constants/url"
 import { logger } from "@/utils/logger"
 import { onMessage } from "@/utils/message"
 import { clearPlatformAuthSession, setPlatformAuthSession } from "@/utils/platform/storage"
+import { buildPlatformSignInUrl } from "@/utils/platform/website"
 import { SessionCacheGroupRegistry } from "@/utils/session-cache/session-cache-group-registry"
 import { runAiSegmentSubtitles } from "./ai-segmentation"
 import { setupAnalyticsMessageHandlers } from "./analytics"
@@ -46,7 +47,7 @@ export default defineBackground({
       // Open tutorial page when extension is installed
       if (details.reason === "install") {
         await browser.tabs.create({
-          url: `${WEBSITE_URL}/guide/step-1`,
+          url: buildPlatformSignInUrl(),
         })
       }
 

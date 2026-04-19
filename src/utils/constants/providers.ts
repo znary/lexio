@@ -8,8 +8,8 @@ import tensdaqLogoColor from "@/assets/providers/tensdaq-color.svg?url&no-inline
 import { API_PROVIDER_TYPES, CUSTOM_LLM_PROVIDER_TYPES, NON_API_TRANSLATE_PROVIDERS, NON_API_TRANSLATE_PROVIDERS_MAP, NON_CUSTOM_LLM_PROVIDER_TYPES, PURE_API_PROVIDER_TYPES, PURE_TRANSLATE_PROVIDERS, TRANSLATE_PROVIDER_TYPES } from "@/types/config/provider"
 import { omit, pick } from "@/types/utils"
 import { getLobeIconsCDNUrlFn } from "../logo"
+import { buildPlatformSignInUrl } from "../platform/website"
 import { MANAGED_CLOUD_PROVIDER_DESCRIPTION, MANAGED_CLOUD_PROVIDER_ID, MANAGED_CLOUD_PROVIDER_NAME, PLATFORM_LLM_BASE_URL } from "./platform"
-import { WEBSITE_URL } from "./url"
 
 export const DEFAULT_LLM_PROVIDER_MODELS: LLMProviderModels = {
   "openrouter": {
@@ -189,7 +189,7 @@ export const PROVIDER_ITEMS: Record<AllProviderTypes, { logo: (theme: Theme) => 
     "openai-compatible": {
       logo: () => customProviderLogo,
       name: "Custom Provider",
-      website: `${WEBSITE_URL}/tutorial/providers/openai-compatible-providers`,
+      website: buildPlatformSignInUrl(),
     },
     "openai": {
       logo: getLobeIconsCDNUrlFn("openai"),

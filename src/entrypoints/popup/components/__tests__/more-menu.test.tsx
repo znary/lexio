@@ -7,9 +7,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { MoreMenu } from "../more-menu"
 
-const { tabsCreateMock, getUrlMock, browserMock } = vi.hoisted(() => ({
+const { tabsCreateMock, getUrlMock, openMock, browserMock } = vi.hoisted(() => ({
   tabsCreateMock: vi.fn(),
   getUrlMock: vi.fn((path: string) => `chrome-extension://test${path}`),
+  openMock: vi.fn(),
   browserMock: {
     runtime: {
       getURL: (path: string) => `chrome-extension://test${path}`,
@@ -22,6 +23,7 @@ const { tabsCreateMock, getUrlMock, browserMock } = vi.hoisted(() => ({
 
 browserMock.tabs.create = tabsCreateMock
 browserMock.runtime.getURL = getUrlMock
+vi.stubGlobal("open", openMock)
 
 vi.mock("#imports", () => ({
   browser: browserMock,
@@ -117,6 +119,7 @@ describe("more menu", () => {
   beforeEach(() => {
     tabsCreateMock.mockReset()
     getUrlMock.mockClear()
+    openMock.mockReset()
   })
 
   it("opens the vocabulary page at the library section", () => {
@@ -128,5 +131,18 @@ describe("more menu", () => {
     expect(tabsCreateMock).toHaveBeenCalledWith({
       url: "chrome-extension://test/options.html#/vocabulary?section=vocabulary-library",
     })
+  })
+
+  it("opens the new website instead of the retired tutorial page", () => {
+    render(<MoreMenu />)
+
+    fireEvent.click(screen.getByRole("button", { name: "popup.more.title" }))
+    fireEvent.click(screen.getByRole("button", { name: "popup.more.tutorial" }))
+
+    expect(openMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/sign-in$/),
+      "_blank",
+      "noopener,noreferrer",
+    )
   })
 })

@@ -1,5 +1,6 @@
-import { browser, i18n } from "#imports"
+import { browser } from "#imports"
 import { EXTENSION_VERSION } from "@/utils/constants/app"
+import { buildPlatformSignInUrl } from "@/utils/platform/website"
 
 const EDGE_VERSION_RE = /Edg(?:e|A|iOS)?\/([\d.]+)/i
 const EDGE_LEGACY_VERSION_RE = /Edge\/([\d.]+)/i
@@ -13,6 +14,7 @@ const MAC_PLATFORM_RE = /Mac/i
 const LINUX_PLATFORM_RE = /Linux/i
 
 type BrowserType = "chrome" | "edge" | "firefox"
+type BrowserApi = Pick<typeof browser, "i18n" | "runtime">
 
 function getBrowserVersion(browserType: string): string {
   const ua = globalThis.navigator?.userAgent ?? ""
@@ -54,21 +56,29 @@ function getOS(): string {
   return "Unknown"
 }
 
-function getUILang(): string {
-  const uiLang = browser.i18n.getUILanguage?.()
-  return uiLang || globalThis.navigator?.language || "unknown"
+function getUILang(browserApi: BrowserApi): string {
+  try {
+    const uiLang = browserApi.i18n.getUILanguage?.()
+    if (uiLang) {
+      return uiLang
+    }
+  }
+  catch {}
+
+  return globalThis.navigator?.language || "unknown"
 }
 
-export async function setupUninstallSurvey() {
-  const surveyUrl = i18n.t("uninstallSurveyUrl") as string
-  const browserType = import.meta.env.BROWSER
+export async function setupUninstallSurvey(
+  browserApi: BrowserApi = browser,
+  browserType: string = import.meta.env.BROWSER ?? "chrome",
+) {
+  const searchParams = new URLSearchParams({
+    rf_version: EXTENSION_VERSION,
+    browser_type: browserType,
+    browser_version: getBrowserVersion(browserType),
+    os: getOS(),
+    ui_lang: getUILang(browserApi),
+  })
 
-  const url = new URL(surveyUrl)
-  url.searchParams.set("rf_version", EXTENSION_VERSION)
-  url.searchParams.set("browser_type", browserType)
-  url.searchParams.set("browser_version", getBrowserVersion(browserType))
-  url.searchParams.set("os", getOS())
-  url.searchParams.set("ui_lang", getUILang())
-
-  void browser.runtime.setUninstallURL(url.toString())
+  void browserApi.runtime.setUninstallURL(buildPlatformSignInUrl(searchParams))
 }

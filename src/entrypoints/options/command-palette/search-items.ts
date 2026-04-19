@@ -28,37 +28,6 @@ const TTS_SEARCH_ITEMS: SearchItemDefinition[] = !IS_FIREFOX
     }]
   : []
 
-const CONFIG_SEARCH_ITEMS = [
-  {
-    sectionId: "beta-experience",
-    route: "/config",
-    titleKey: "options.betaExperience.title",
-    descriptionKey: "options.betaExperience.description",
-    pageKey: "options.config.title",
-  },
-  {
-    sectionId: "manual-config-sync",
-    route: "/config",
-    titleKey: "options.config.sync.title",
-    descriptionKey: "options.config.sync.description",
-    pageKey: "options.config.title",
-  },
-  {
-    sectionId: "config-backup",
-    route: "/config",
-    titleKey: "options.config.backup.title",
-    descriptionKey: "options.config.backup.description",
-    pageKey: "options.config.title",
-  },
-  {
-    sectionId: "reset-config",
-    route: "/config",
-    titleKey: "options.config.resetConfig.title",
-    descriptionKey: "options.config.resetConfig.description",
-    pageKey: "options.config.title",
-  },
-] satisfies SearchItemDefinition[]
-
 const VOCABULARY_SEARCH_ITEMS = [
   {
     sectionId: "vocabulary-settings",
@@ -162,12 +131,6 @@ export const SEARCH_ITEMS: SearchItem[] = [
     route: "/translation",
     titleKey: "options.translation.skipLanguages.title",
     descriptionKey: "options.translation.skipLanguages.description",
-    pageKey: "options.translation.title",
-  },
-  {
-    sectionId: "request-rate",
-    route: "/translation",
-    titleKey: "options.translation.requestQueueConfig.title",
     pageKey: "options.translation.title",
   },
   {
@@ -300,12 +263,6 @@ export const SEARCH_ITEMS: SearchItem[] = [
     pageKey: "options.videoSubtitles.title",
   },
   {
-    sectionId: "subtitles-request-rate",
-    route: "/video-subtitles",
-    titleKey: "options.videoSubtitles.requestQueueConfig.title",
-    pageKey: "options.videoSubtitles.title",
-  },
-  {
     sectionId: "subtitles-request-batch",
     route: "/video-subtitles",
     titleKey: "options.videoSubtitles.batchQueueConfig.title",
@@ -325,7 +282,4 @@ export const SEARCH_ITEMS: SearchItem[] = [
 
   // Vocabulary page
   ...VOCABULARY_SEARCH_ITEMS,
-
-  // Config page
-  ...CONFIG_SEARCH_ITEMS,
 ] satisfies SearchItemDefinition[]

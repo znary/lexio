@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/base-ui/dropdown-menu"
 import { buildSectionSearch } from "@/entrypoints/options/command-palette/section-scroll"
-import { WEBSITE_URL } from "@/utils/constants/url"
+import { buildPlatformSignInUrl } from "@/utils/platform/website"
 
 export function MoreMenu() {
   const vocabularyUrl = browser.runtime.getURL(`/options.html#/vocabulary${buildSectionSearch("vocabulary-library")}`)
@@ -43,7 +43,7 @@ export function MoreMenu() {
         </DropdownMenuItem>
 
         <DropdownMenuItem
-          onClick={() => window.open(`${WEBSITE_URL}/tutorial`, "_blank", "noopener,noreferrer")}
+          onClick={() => window.open(buildPlatformSignInUrl(), "_blank", "noopener,noreferrer")}
           className="cursor-pointer"
         >
           <Icon icon="tabler:help-circle" className="size-4" strokeWidth={1.6} />

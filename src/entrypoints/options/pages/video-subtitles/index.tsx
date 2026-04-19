@@ -4,7 +4,6 @@ import { ClearAiSegmentationCache } from "./clear-ai-segmentation-cache"
 import { SubtitlesConfig } from "./subtitles-config"
 import { SubtitlesCustomPrompts } from "./subtitles-custom-prompts"
 import { SubtitlesRequestBatch } from "./subtitles-request-batch"
-import { SubtitlesRequestRate } from "./subtitles-request-rate"
 import { SubtitlesStyleSettings } from "./subtitles-style-settings"
 
 export function VideoSubtitlesPage() {
@@ -14,7 +13,6 @@ export function VideoSubtitlesPage() {
         <SubtitlesConfig />
         <SubtitlesStyleSettings />
         <SubtitlesCustomPrompts />
-        <SubtitlesRequestRate />
         <SubtitlesRequestBatch />
         <ClearAiSegmentationCache />
       </div>

@@ -112,13 +112,6 @@ export function SettingsNav() {
               <span>{i18n.t("options.statistics.title")}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-
-          <SidebarMenuItem>
-            <SidebarMenuButton render={<Link to="/config" />} isActive={pathname === "/config"}>
-              <Icon icon="tabler:settings" />
-              <span>{i18n.t("options.config.title")}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>

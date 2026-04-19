@@ -10,7 +10,6 @@ import { PageTranslationShortcut } from "./page-translation-shortcut"
 import { PersonalizedPrompts } from "./personalized-prompt"
 import { PreloadConfig } from "./preload-config"
 import { RequestBatch } from "./request-batch"
-import { RequestRate } from "./request-rate"
 import { SkipLanguages } from "./skip-languages"
 import { SmallParagraphFilter } from "./small-paragraph-filter"
 import { TranslateRange } from "./translate-range"
@@ -29,7 +28,6 @@ export function TranslationPage() {
       <AutoTranslateWebsitePatterns />
       <AutoTranslateLanguages />
       <SkipLanguages />
-      <RequestRate />
       <RequestBatch />
       <PreloadConfig />
       <SmallParagraphFilter />

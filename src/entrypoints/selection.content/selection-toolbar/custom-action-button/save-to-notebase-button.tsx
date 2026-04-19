@@ -1,10 +1,8 @@
 import type { SelectionToolbarCustomAction } from "@/types/config/selection-toolbar"
 import { i18n } from "#imports"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { useAtomValue } from "jotai"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/base-ui/button"
-import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { authClient } from "@/utils/auth/auth-client"
 import {
   buildNotebaseRowCells,
@@ -25,12 +23,6 @@ export function SaveToNotebaseButton({
   isRunning: boolean
   result: Record<string, unknown> | null
 }) {
-  const betaExperienceConfig = useAtomValue(configFieldsAtomMap.betaExperience)
-
-  if (!betaExperienceConfig.enabled) {
-    return null
-  }
-
   return (
     <SaveToNotebaseButtonEnabled
       action={action}

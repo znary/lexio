@@ -28,7 +28,7 @@ export function TranslationServiceDropdown() {
   const handleConfigureAPI = async () => {
     try {
       await browser.tabs.create({
-        url: browser.runtime.getURL("/options.html#/config"),
+        url: browser.runtime.getURL("/options.html#/"),
       })
     }
     catch (error) {

@@ -9,5 +9,4 @@ export const ROUTE_DEFS = [
   { path: "/vocabulary" },
   ...(import.meta.env.BROWSER === "firefox" ? [] : [{ path: "/tts" }]),
   { path: "/statistics" },
-  { path: "/config" },
 ] as const

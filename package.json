@@ -1,7 +1,7 @@
 {
   "name": "@read-frog/extension",
   "type": "module",
-  "version": "1.32.2",
+  "version": "1.0.0",
   "private": true,
   "packageManager": "pnpm@10.32.1",
   "description": "Lexio browser extension for immersive translation and language learning",

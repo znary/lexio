@@ -1,6 +1,6 @@
 import { Icon } from "@iconify/react"
 import { useCallback, useRef, useState } from "react"
-import { WEBSITE_URL } from "@/utils/constants/url"
+import { buildPlatformSignInUrl } from "@/utils/platform/website"
 import { cn } from "@/utils/styles/utils"
 
 type Corner = "bottom-right" | "top-right"
@@ -63,7 +63,7 @@ export function HelpButton() {
         localStorage.setItem(STORAGE_KEY, newCorner)
       }
       else {
-        window.open(`${WEBSITE_URL}/support`, "_blank", "noopener,noreferrer")
+        window.open(buildPlatformSignInUrl(), "_blank", "noopener,noreferrer")
       }
       hasDraggedRef.current = false
       setDragging(false)

@@ -29,3 +29,7 @@ export function buildPlatformWebsiteUrl(path: string, searchParams?: URLSearchPa
   }
   return url.toString()
 }
+
+export function buildPlatformSignInUrl(searchParams?: URLSearchParams): string {
+  return buildPlatformWebsiteUrl(PLATFORM_WEBSITE_PATHS.signIn, searchParams)
+}
