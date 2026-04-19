@@ -32,4 +32,10 @@ describe("dEFAULT_CONFIG", () => {
 
     expect(DEFAULT_CONFIG.floatingButton.clickAction).toBe("panel")
   })
+
+  it("uses a paragraph-following translation style on install", async () => {
+    const { DEFAULT_CONFIG } = await import("../config")
+
+    expect(DEFAULT_CONFIG.translate.translationNodeStyle.preset).toBe("weakened")
+  })
 })
