@@ -4,17 +4,31 @@ import { describe, expect, it, vi } from "vitest"
 
 vi.mock("@/utils/platform/use-platform-auth-session", () => ({
   usePlatformAuthSession: () => ({
+    session: {
+      user: {
+        email: "user@example.com",
+      },
+    },
     isLoading: false,
     isSignedIn: true,
   }),
 }))
 
 vi.mock("../components/chat-workspace", () => ({
-  ChatWorkspace: ({ isSignedIn, isSessionLoading }: { isSignedIn: boolean, isSessionLoading: boolean }) => (
+  ChatWorkspace: ({
+    isSignedIn,
+    isSessionLoading,
+    sessionAccountKey,
+  }: {
+    isSignedIn: boolean
+    isSessionLoading: boolean
+    sessionAccountKey: string | null
+  }) => (
     <div>
       chat workspace
       {String(isSignedIn)}
       {String(isSessionLoading)}
+      {String(sessionAccountKey)}
     </div>
   ),
 }))
@@ -25,6 +39,6 @@ describe("sidepanel app", () => {
 
     render(<App />)
 
-    expect(screen.getByText("chat workspacetruefalse")).toBeInTheDocument()
+    expect(screen.getByText("chat workspacetruefalseuser@example.com")).toBeInTheDocument()
   })
 })

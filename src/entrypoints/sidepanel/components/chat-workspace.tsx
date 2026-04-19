@@ -1,6 +1,7 @@
 import type { MessageStatus, ThreadMessage, ThreadMessageLike } from "@assistant-ui/react"
 import type { AssistantMessageConfig, UserMessageConfig } from "@assistant-ui/react-ui"
 import type { PlatformChatMessage, PlatformChatThreadSummary } from "@/utils/platform/api"
+import type { SidepanelChatSnapshot } from "@/utils/platform/chat-cache"
 import { browser } from "#imports"
 import { AssistantRuntimeProvider, ComposerPrimitive, ThreadPrimitive, useLocalRuntime } from "@assistant-ui/react"
 import { AssistantMessage, makeMarkdownText, ThreadConfigProvider, UserMessage } from "@assistant-ui/react-ui"
@@ -14,6 +15,7 @@ import { PlatformQuickAccess } from "@/components/platform/platform-quick-access
 import { Button } from "@/components/ui/base-ui/button"
 import { getRandomUUID } from "@/utils/crypto-polyfill"
 import { createPlatformChatThread, deletePlatformChatThread, getPlatformChatThreadMessages, listPlatformChatThreads, streamPlatformChatThreadMessage } from "@/utils/platform/api"
+import { getSidepanelChatSnapshot, setSidepanelChatSnapshot } from "@/utils/platform/chat-cache"
 import { ThreadHistorySheet } from "./thread-history-sheet"
 
 interface ChatSessionState {
@@ -172,6 +174,14 @@ function createEmptySession(): ChatSessionState {
   }
 }
 
+function createThreadSession(threadId: string, messages: PlatformChatMessage[]): ChatSessionState {
+  return {
+    sessionKey: `${threadId}-${getRandomUUID()}`,
+    threadId,
+    initialMessages: messages.map(toInitialMessage),
+  }
+}
+
 function toInitialMessage(message: PlatformChatMessage): ThreadMessageLike {
   return {
     id: message.id,
@@ -203,6 +213,55 @@ function extractLatestUserText(messages: readonly ThreadMessage[]): string {
   }
 
   return text
+}
+
+function findThreadSummary(threads: PlatformChatThreadSummary[], threadId: string | null): PlatformChatThreadSummary | null {
+  if (!threadId) {
+    return null
+  }
+
+  return threads.find(thread => thread.id === threadId) ?? null
+}
+
+function hasThreadSummaryChanged(
+  previousThread: PlatformChatThreadSummary | null,
+  nextThread: PlatformChatThreadSummary | null,
+): boolean {
+  if (!previousThread || !nextThread) {
+    return previousThread !== nextThread
+  }
+
+  return previousThread.title !== nextThread.title
+    || previousThread.updatedAt !== nextThread.updatedAt
+    || previousThread.lastMessageAt !== nextThread.lastMessageAt
+}
+
+function buildSnapshot(
+  threads: PlatformChatThreadSummary[],
+  currentThreadId: string | null,
+  currentThreadMessages: PlatformChatMessage[],
+  currentThreadSummary?: PlatformChatThreadSummary | null,
+): SidepanelChatSnapshot {
+  const resolvedCurrentThreadId = currentThreadId ?? null
+  const resolvedCurrentThreadSummary = resolvedCurrentThreadId
+    ? (currentThreadSummary ?? findThreadSummary(threads, resolvedCurrentThreadId))
+    : null
+
+  return {
+    threads,
+    currentThreadId: resolvedCurrentThreadId,
+    currentThreadSummary: resolvedCurrentThreadSummary,
+    currentThreadMessages: resolvedCurrentThreadId ? currentThreadMessages : [],
+    cachedAt: Date.now(),
+  }
+}
+
+function createSessionFromSnapshot(snapshot: SidepanelChatSnapshot): ChatSessionState {
+  if (!snapshot.currentThreadId) {
+    return createEmptySession()
+  }
+
+  return createThreadSession(snapshot.currentThreadId, snapshot.currentThreadMessages)
 }
 
 function ChatRuntimePane({
@@ -274,31 +333,60 @@ function ChatRuntimePane({
 export function ChatWorkspace({
   isSignedIn,
   isSessionLoading,
+  sessionAccountKey,
 }: {
   isSignedIn: boolean
   isSessionLoading: boolean
+  sessionAccountKey: string | null
 }) {
   const [threads, setThreads] = useState<PlatformChatThreadSummary[]>([])
   const [session, setSession] = useState<ChatSessionState>(() => createEmptySession())
-  const [isBootstrapping, setIsBootstrapping] = useState(true)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [isLoadingThread, setIsLoadingThread] = useState(false)
   const [isRefreshingThreads, setIsRefreshingThreads] = useState(false)
+  const snapshotRef = useRef<SidepanelChatSnapshot | null>(null)
+
+  async function persistSnapshot(snapshot: SidepanelChatSnapshot) {
+    snapshotRef.current = snapshot
+
+    if (!sessionAccountKey) {
+      return
+    }
+
+    await setSidepanelChatSnapshot(sessionAccountKey, snapshot)
+  }
 
   useEffect(() => {
     let isDisposed = false
 
     async function bootstrapChat() {
-      if (!isSignedIn) {
+      if (!isSignedIn || !sessionAccountKey) {
         if (!isDisposed) {
+          snapshotRef.current = null
           setThreads([])
           setSession(createEmptySession())
-          setIsBootstrapping(false)
+          setIsRefreshingThreads(false)
         }
         return
       }
 
-      setIsBootstrapping(true)
+      const cachedSnapshot = await getSidepanelChatSnapshot(sessionAccountKey)
+      if (isDisposed) {
+        return
+      }
+
+      snapshotRef.current = cachedSnapshot
+
+      if (cachedSnapshot) {
+        setThreads(cachedSnapshot.threads)
+        setSession(createSessionFromSnapshot(cachedSnapshot))
+      }
+      else {
+        setThreads([])
+        setSession(createEmptySession())
+      }
+
+      setIsRefreshingThreads(true)
       try {
         const nextThreads = await listPlatformChatThreads()
         if (isDisposed) {
@@ -307,34 +395,60 @@ export function ChatWorkspace({
 
         setThreads(nextThreads)
 
-        if (!nextThreads[0]) {
-          setSession(createEmptySession())
+        const cachedThreadId = cachedSnapshot?.currentThreadId ?? null
+        if (!cachedThreadId) {
+          await persistSnapshot(buildSnapshot(nextThreads, null, []))
           return
         }
 
-        setIsLoadingThread(true)
-        const payload = await getPlatformChatThreadMessages(nextThreads[0].id)
+        const nextCurrentThread = findThreadSummary(nextThreads, cachedThreadId)
+        if (!nextCurrentThread) {
+          setSession((current) => {
+            if (current.threadId !== cachedThreadId) {
+              return current
+            }
+
+            return createEmptySession()
+          })
+          await persistSnapshot(buildSnapshot(nextThreads, null, []))
+          return
+        }
+
+        if (!hasThreadSummaryChanged(cachedSnapshot?.currentThreadSummary ?? null, nextCurrentThread)) {
+          await persistSnapshot(buildSnapshot(
+            nextThreads,
+            cachedThreadId,
+            cachedSnapshot?.currentThreadMessages ?? [],
+            nextCurrentThread,
+          ))
+          return
+        }
+
+        const payload = await getPlatformChatThreadMessages(cachedThreadId)
         if (isDisposed) {
           return
         }
 
-        setSession({
-          sessionKey: nextThreads[0].id,
-          threadId: nextThreads[0].id,
-          initialMessages: payload.messages.map(toInitialMessage),
+        setSession((current) => {
+          if (current.threadId !== cachedThreadId) {
+            return current
+          }
+
+          return createThreadSession(cachedThreadId, payload.messages)
         })
+        await persistSnapshot(buildSnapshot(
+          nextThreads,
+          cachedThreadId,
+          payload.messages,
+          payload.thread ?? nextCurrentThread,
+        ))
       }
-      catch (error) {
-        if (!isDisposed) {
-          toast.error(error instanceof Error ? error.message : "Failed to load Lexio Cloud chat.")
-          setThreads([])
-          setSession(createEmptySession())
-        }
+      catch {
+        // Keep the cached view when background sync fails.
       }
       finally {
         if (!isDisposed) {
-          setIsLoadingThread(false)
-          setIsBootstrapping(false)
+          setIsRefreshingThreads(false)
         }
       }
     }
@@ -344,30 +458,46 @@ export function ChatWorkspace({
     return () => {
       isDisposed = true
     }
-  }, [isSignedIn])
+  }, [isSignedIn, sessionAccountKey])
 
-  async function refreshThreads(keepThreadId: string | null) {
+  async function refreshThreads(keepThreadId: string | null, options?: { showErrorToast?: boolean }) {
     setIsRefreshingThreads(true)
     try {
       const nextThreads = await listPlatformChatThreads()
       setThreads(nextThreads)
 
-      if (!keepThreadId) {
-        return
+      const snapshot = snapshotRef.current
+      const preferredThreadId = keepThreadId ?? snapshot?.currentThreadId ?? null
+      const nextCurrentThreadId = preferredThreadId && nextThreads.some(thread => thread.id === preferredThreadId)
+        ? preferredThreadId
+        : null
+
+      if (keepThreadId && !nextCurrentThreadId) {
+        setSession((current) => {
+          if (current.threadId !== keepThreadId) {
+            return current
+          }
+
+          return createEmptySession()
+        })
       }
 
-      const exists = nextThreads.some(thread => thread.id === keepThreadId)
-      if (!exists) {
-        if (nextThreads[0]) {
-          await selectThread(nextThreads[0].id)
-        }
-        else {
-          setSession(createEmptySession())
-        }
-      }
+      const nextCurrentThreadSummary = findThreadSummary(nextThreads, nextCurrentThreadId)
+      const nextCurrentThreadMessages = snapshot?.currentThreadId === nextCurrentThreadId
+        ? snapshot.currentThreadMessages
+        : []
+
+      await persistSnapshot(buildSnapshot(
+        nextThreads,
+        nextCurrentThreadId,
+        nextCurrentThreadMessages,
+        nextCurrentThreadSummary,
+      ))
     }
     catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to refresh threads.")
+      if (options?.showErrorToast ?? true) {
+        toast.error(error instanceof Error ? error.message : "Failed to refresh threads.")
+      }
     }
     finally {
       setIsRefreshingThreads(false)
@@ -383,11 +513,13 @@ export function ChatWorkspace({
     setIsLoadingThread(true)
     try {
       const payload = await getPlatformChatThreadMessages(threadId)
-      setSession({
-        sessionKey: threadId,
+      setSession(createThreadSession(threadId, payload.messages))
+      await persistSnapshot(buildSnapshot(
+        threads,
         threadId,
-        initialMessages: payload.messages.map(toInitialMessage),
-      })
+        payload.messages,
+        payload.thread ?? findThreadSummary(threads, threadId),
+      ))
     }
     catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load that thread.")
@@ -405,19 +537,52 @@ export function ChatWorkspace({
       const nextThreads = await listPlatformChatThreads()
       setThreads(nextThreads)
 
-      if (!isDeletingCurrentThread) {
-        return
-      }
-
-      if (nextThreads[0]) {
-        await selectThread(nextThreads[0].id)
-      }
-      else {
+      if (isDeletingCurrentThread) {
         setSession(createEmptySession())
       }
+
+      const previousSnapshot = snapshotRef.current
+      const nextCurrentThreadId = previousSnapshot?.currentThreadId === threadId
+        ? null
+        : previousSnapshot?.currentThreadId ?? null
+      const nextCurrentThreadSummary = findThreadSummary(nextThreads, nextCurrentThreadId)
+      const nextCurrentThreadMessages = previousSnapshot?.currentThreadId === nextCurrentThreadId
+        ? previousSnapshot.currentThreadMessages
+        : []
+
+      await persistSnapshot(buildSnapshot(
+        nextThreads,
+        nextCurrentThreadId,
+        nextCurrentThreadMessages,
+        nextCurrentThreadSummary,
+      ))
     }
     catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete this thread.")
+    }
+  }
+
+  async function syncCommittedThread(threadId: string) {
+    if (!sessionAccountKey) {
+      return
+    }
+
+    try {
+      const [nextThreads, payload] = await Promise.all([
+        listPlatformChatThreads(),
+        getPlatformChatThreadMessages(threadId),
+      ])
+
+      setThreads(nextThreads)
+      await persistSnapshot(buildSnapshot(
+        nextThreads,
+        threadId,
+        payload.messages,
+        payload.thread ?? findThreadSummary(nextThreads, threadId),
+      ))
+    }
+    catch {
+      // Keep the active UI unchanged when post-send sync fails.
     }
   }
 
@@ -426,7 +591,7 @@ export function ChatWorkspace({
     setIsHistoryOpen(false)
   }
 
-  const isWorkspaceLoading = isSessionLoading || isBootstrapping
+  const isWorkspaceLoading = isSessionLoading
   const isBusy = isWorkspaceLoading || isLoadingThread
 
   let content = (
@@ -473,7 +638,7 @@ export function ChatWorkspace({
                     threadId,
                   }
                 : current)
-              void refreshThreads(threadId)
+              void syncCommittedThread(threadId)
             }}
           />
         )
@@ -493,7 +658,7 @@ export function ChatWorkspace({
         currentThreadId={session.threadId}
         isBusy={isBusy}
         isRefreshing={isRefreshingThreads}
-        onRefresh={() => refreshThreads(session.threadId)}
+        onRefresh={() => refreshThreads(session.threadId, { showErrorToast: true })}
         onSelectThread={async (threadId) => {
           setIsHistoryOpen(false)
           await selectThread(threadId)
