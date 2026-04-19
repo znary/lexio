@@ -5,6 +5,11 @@ const noContentMock = vi.fn()
 const handleRouteErrorMock = vi.fn()
 const handleLlmChatCompletionsMock = vi.fn()
 const handleTranslateTextMock = vi.fn()
+const handleChatThreadListMock = vi.fn()
+const handleChatThreadCreateMock = vi.fn()
+const handleChatThreadMessagesMock = vi.fn()
+const handleChatThreadMessageStreamMock = vi.fn()
+const handleChatThreadDeleteMock = vi.fn()
 
 vi.mock("../lib/auth", () => ({
   mintExtensionToken: vi.fn(),
@@ -43,6 +48,14 @@ vi.mock("../routes/sync", () => ({
 
 vi.mock("../routes/translate", () => ({
   handleTranslateText: (...args: unknown[]) => handleTranslateTextMock(...args),
+}))
+
+vi.mock("../routes/chat", () => ({
+  handleChatThreadList: (...args: unknown[]) => handleChatThreadListMock(...args),
+  handleChatThreadCreate: (...args: unknown[]) => handleChatThreadCreateMock(...args),
+  handleChatThreadMessages: (...args: unknown[]) => handleChatThreadMessagesMock(...args),
+  handleChatThreadMessageStream: (...args: unknown[]) => handleChatThreadMessageStreamMock(...args),
+  handleChatThreadDelete: (...args: unknown[]) => handleChatThreadDeleteMock(...args),
 }))
 
 vi.mock("../routes/vocabulary", () => ({
@@ -168,6 +181,130 @@ describe("platform handler translation routing", () => {
 
     expect(response.status).toBe(404)
     expect(handleTranslateTextMock).not.toHaveBeenCalled()
+  })
+
+  it("routes GET /v1/chat/threads to the chat thread list handler", async () => {
+    handleChatThreadListMock.mockResolvedValue(new Response(JSON.stringify({
+      threads: [],
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const { default: handler } = await import("../index")
+    const response = await handler.fetch(
+      new Request("https://example.com/v1/chat/threads", {
+        method: "GET",
+      }),
+      {} as never,
+      {} as never,
+    )
+
+    expect(response.status).toBe(200)
+    expect(handleChatThreadListMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("routes POST /v1/chat/threads to the chat thread create handler", async () => {
+    handleChatThreadCreateMock.mockResolvedValue(new Response(JSON.stringify({
+      thread: {
+        id: "thread_1",
+      },
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const { default: handler } = await import("../index")
+    const response = await handler.fetch(
+      new Request("https://example.com/v1/chat/threads", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      }),
+      {} as never,
+      {} as never,
+    )
+
+    expect(response.status).toBe(200)
+    expect(handleChatThreadCreateMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("routes GET /v1/chat/threads/:id/messages to the chat message list handler", async () => {
+    handleChatThreadMessagesMock.mockResolvedValue(new Response(JSON.stringify({
+      thread: { id: "thread_1" },
+      messages: [],
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const { default: handler } = await import("../index")
+    const response = await handler.fetch(
+      new Request("https://example.com/v1/chat/threads/thread_1/messages", {
+        method: "GET",
+      }),
+      {} as never,
+      {} as never,
+    )
+
+    expect(response.status).toBe(200)
+    expect(handleChatThreadMessagesMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("routes POST /v1/chat/threads/:id/messages/stream to the chat stream handler", async () => {
+    handleChatThreadMessageStreamMock.mockResolvedValue(new Response("data: [DONE]\n\n", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+      },
+    }))
+
+    const { default: handler } = await import("../index")
+    const response = await handler.fetch(
+      new Request("https://example.com/v1/chat/threads/thread_1/messages/stream", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content: "hello",
+        }),
+      }),
+      {} as never,
+      {} as never,
+    )
+
+    expect(response.status).toBe(200)
+    expect(handleChatThreadMessageStreamMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("routes DELETE /v1/chat/threads/:id to the chat delete handler", async () => {
+    handleChatThreadDeleteMock.mockResolvedValue(new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const { default: handler } = await import("../index")
+    const response = await handler.fetch(
+      new Request("https://example.com/v1/chat/threads/thread_1", {
+        method: "DELETE",
+      }),
+      {} as never,
+      {} as never,
+    )
+
+    expect(response.status).toBe(200)
+    expect(handleChatThreadDeleteMock).toHaveBeenCalledTimes(1)
   })
 
   it("does not expose the old /v1/ai routes", async () => {

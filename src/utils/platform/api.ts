@@ -8,6 +8,8 @@ import { clearPlatformAuthSession, getPlatformAuthSession, setPlatformAuthSessio
 
 export const PLATFORM_TOKEN_REFRESH_HEADER = "x-lexio-platform-token"
 export const PLATFORM_TOKEN_EXPIRES_AT_HEADER = "x-lexio-platform-token-expires-at"
+const SSE_LINE_SPLIT_PATTERN = /\r?\n/
+const CRLF_PATTERN = /\r\n/g
 
 export interface PlatformUserPayload {
   id: string
@@ -40,6 +42,21 @@ export interface PlatformMeResponse {
 export interface PlatformPullResponse {
   settings: Record<string, unknown> | null
   vocabularyItems: VocabularyItem[]
+}
+
+export interface PlatformChatThreadSummary {
+  id: string
+  title: string
+  createdAt: string
+  updatedAt: string
+  lastMessageAt: string | null
+}
+
+export interface PlatformChatMessage {
+  id: string
+  role: "user" | "assistant"
+  contentText: string
+  createdAt: string
 }
 
 export interface ManagedTranslateRequest {
@@ -710,4 +727,178 @@ export async function clearVocabularyItems(): Promise<{ ok: true }> {
     method: "DELETE",
   })
   return await response.json() as { ok: true }
+}
+
+function extractPlatformChatDelta(payload: unknown): string {
+  if (!payload || typeof payload !== "object") {
+    return ""
+  }
+
+  const choice = (payload as {
+    choices?: Array<{
+      delta?: {
+        content?: unknown
+      }
+    }>
+  }).choices?.[0]
+  const content = choice?.delta?.content
+
+  if (typeof content === "string") {
+    return content
+  }
+
+  if (!Array.isArray(content)) {
+    return ""
+  }
+
+  return content
+    .map((part) => {
+      if (typeof part === "string") {
+        return part
+      }
+
+      if (!part || typeof part !== "object") {
+        return ""
+      }
+
+      return typeof (part as { text?: unknown }).text === "string"
+        ? (part as { text: string }).text
+        : ""
+    })
+    .join("")
+}
+
+async function* consumePlatformChatStream(response: Response): AsyncGenerator<string, string, void> {
+  if (!response.body) {
+    throw new Error("Platform chat stream is unavailable.")
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+  let accumulatedText = ""
+
+  const flushEvent = (rawEvent: string): string | null => {
+    const lines = rawEvent.split(SSE_LINE_SPLIT_PATTERN)
+    let payloadText = ""
+
+    for (const line of lines) {
+      if (!line.startsWith("data:")) {
+        continue
+      }
+
+      const chunk = line.slice(5).trimStart()
+      if (!chunk) {
+        continue
+      }
+
+      if (chunk === "[DONE]") {
+        return null
+      }
+
+      payloadText += chunk
+    }
+
+    if (!payloadText) {
+      return ""
+    }
+
+    const delta = extractPlatformChatDelta(JSON.parse(payloadText))
+    if (!delta) {
+      return ""
+    }
+
+    accumulatedText += delta
+    return accumulatedText
+  }
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done }).replace(CRLF_PATTERN, "\n")
+
+      let separatorIndex = buffer.indexOf("\n\n")
+      while (separatorIndex >= 0) {
+        const nextEvent = buffer.slice(0, separatorIndex)
+        buffer = buffer.slice(separatorIndex + 2)
+
+        const flushed = flushEvent(nextEvent)
+        if (flushed === null) {
+          return accumulatedText
+        }
+
+        if (flushed) {
+          yield flushed
+        }
+
+        separatorIndex = buffer.indexOf("\n\n")
+      }
+
+      if (done) {
+        break
+      }
+    }
+
+    if (buffer.trim()) {
+      const flushed = flushEvent(buffer)
+      if (flushed) {
+        yield flushed
+      }
+    }
+  }
+  finally {
+    reader.releaseLock()
+  }
+
+  return accumulatedText
+}
+
+export async function listPlatformChatThreads(): Promise<PlatformChatThreadSummary[]> {
+  const response = await platformFetch("/v1/chat/threads")
+  const data = await response.json() as { threads: PlatformChatThreadSummary[] }
+  return data.threads
+}
+
+export async function createPlatformChatThread(): Promise<PlatformChatThreadSummary> {
+  const response = await platformFetch("/v1/chat/threads", {
+    method: "POST",
+  })
+  const data = await response.json() as { thread: PlatformChatThreadSummary }
+  return data.thread
+}
+
+export async function getPlatformChatThreadMessages(threadId: string): Promise<{
+  thread: PlatformChatThreadSummary
+  messages: PlatformChatMessage[]
+}> {
+  const response = await platformFetch(`/v1/chat/threads/${encodeURIComponent(threadId)}/messages`)
+  return await response.json() as {
+    thread: PlatformChatThreadSummary
+    messages: PlatformChatMessage[]
+  }
+}
+
+export async function deletePlatformChatThread(threadId: string): Promise<void> {
+  await platformFetch(`/v1/chat/threads/${encodeURIComponent(threadId)}`, {
+    method: "DELETE",
+  })
+}
+
+export async function* streamPlatformChatThreadMessage(
+  threadId: string,
+  content: string,
+  options: {
+    signal?: AbortSignal
+  } = {},
+): AsyncGenerator<string, string, void> {
+  const response = await platformFetch(`/v1/chat/threads/${encodeURIComponent(threadId)}/messages/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({ content }),
+    signal: options.signal,
+  })
+
+  return yield* consumePlatformChatStream(response)
 }

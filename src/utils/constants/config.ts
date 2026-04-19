@@ -4,7 +4,6 @@ import { MANAGED_CLOUD_PROVIDER_ID } from "./platform"
 import { DEFAULT_TRANSLATE_PROMPTS_CONFIG } from "./prompt"
 import { DEFAULT_PROVIDER_CONFIG_LIST } from "./providers"
 import { DEFAULT_SELECTION_OVERLAY_OPACITY } from "./selection"
-import { DEFAULT_SIDE_CONTENT_WIDTH } from "./side"
 import { DEFAULT_BACKGROUND_OPACITY, DEFAULT_DISPLAY_MODE, DEFAULT_FONT_FAMILY, DEFAULT_FONT_SCALE, DEFAULT_FONT_WEIGHT, DEFAULT_SUBTITLE_COLOR, DEFAULT_SUBTITLE_POSITION, DEFAULT_TRANSLATION_POSITION } from "./subtitles"
 import { DEFAULT_AUTO_TRANSLATE_SHORTCUT_KEY, DEFAULT_BATCH_CONFIG, DEFAULT_MIN_CHARACTERS_PER_NODE, DEFAULT_MIN_WORDS_PER_NODE, DEFAULT_PRELOAD_MARGIN, DEFAULT_PRELOAD_THRESHOLD, DEFAULT_REQUEST_CAPACITY, DEFAULT_REQUEST_RATE } from "./translate"
 import { TRANSLATION_NODE_STYLE_ON_INSTALLED } from "./translation-node-style"
@@ -18,7 +17,7 @@ export const PLATFORM_AUTH_STORAGE_KEY = "__platformAuth"
 export const THEME_STORAGE_KEY = "theme"
 export const DETECTED_CODE_STORAGE_KEY = "detectedCode"
 export const DEFAULT_DETECTED_CODE = "eng" as const
-export const CONFIG_SCHEMA_VERSION = 69
+export const CONFIG_SCHEMA_VERSION = 70
 
 export const DEFAULT_FLOATING_BUTTON_POSITION = 0.66
 
@@ -90,9 +89,6 @@ export const DEFAULT_CONFIG: Config = {
       },
     },
     customActions: [],
-  },
-  sideContent: {
-    width: DEFAULT_SIDE_CONTENT_WIDTH,
   },
   betaExperience: {
     enabled: false,

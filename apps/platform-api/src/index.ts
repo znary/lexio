@@ -4,6 +4,13 @@ import type { Env } from "./lib/env"
 import { mintExtensionToken, requireSession } from "./lib/auth"
 import { handleRouteError, noContent } from "./lib/http"
 import { handleExchangeExtensionToken } from "./routes/auth"
+import {
+  handleChatThreadCreate,
+  handleChatThreadDelete,
+  handleChatThreadList,
+  handleChatThreadMessages,
+  handleChatThreadMessageStream,
+} from "./routes/chat"
 import { handleHealthCheck } from "./routes/health"
 import { handleLlmChatCompletions } from "./routes/llm"
 import { handleMe } from "./routes/me"
@@ -24,6 +31,9 @@ type PlatformEnv = Env
 const PLATFORM_TOKEN_HEADER = "x-lexio-platform-token"
 const PLATFORM_TOKEN_EXPIRES_AT_HEADER = "x-lexio-platform-token-expires-at"
 const VOCABULARY_ITEM_PATH_REGEX = /^\/v1\/vocabulary\/([^/]+)$/
+const CHAT_THREAD_PATH_REGEX = /^\/v1\/chat\/threads\/([^/]+)$/
+const CHAT_THREAD_MESSAGES_PATH_REGEX = /^\/v1\/chat\/threads\/([^/]+)\/messages$/
+const CHAT_THREAD_MESSAGE_STREAM_PATH_REGEX = /^\/v1\/chat\/threads\/([^/]+)\/messages\/stream$/
 
 async function withRefreshedExtensionSession(response: Response, session: SessionContext | null, env: PlatformEnv): Promise<Response> {
   if (!session || session.tokenType !== "extension") {
@@ -81,6 +91,34 @@ const handler: ExportedHandler<PlatformEnv> = {
 
       if (request.method === "POST" && url.pathname === "/v1/sync/push") {
         response = await handleSyncPush(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      if (request.method === "GET" && url.pathname === "/v1/chat/threads") {
+        response = await handleChatThreadList(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      if (request.method === "POST" && url.pathname === "/v1/chat/threads") {
+        response = await handleChatThreadCreate(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      const chatThreadMessagesMatch = url.pathname.match(CHAT_THREAD_MESSAGES_PATH_REGEX)
+      if (request.method === "GET" && chatThreadMessagesMatch) {
+        response = await handleChatThreadMessages(request, env, session, chatThreadMessagesMatch[1])
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      const chatThreadMessageStreamMatch = url.pathname.match(CHAT_THREAD_MESSAGE_STREAM_PATH_REGEX)
+      if (request.method === "POST" && chatThreadMessageStreamMatch) {
+        response = await handleChatThreadMessageStream(request, env, session, chatThreadMessageStreamMatch[1])
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      const chatThreadMatch = url.pathname.match(CHAT_THREAD_PATH_REGEX)
+      if (request.method === "DELETE" && chatThreadMatch) {
+        response = await handleChatThreadDelete(request, env, session, chatThreadMatch[1])
         return withRefreshedExtensionSession(response, session, env)
       }
 

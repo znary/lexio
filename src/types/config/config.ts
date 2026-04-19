@@ -6,7 +6,6 @@ import {
   MAX_SELECTION_OVERLAY_OPACITY,
   MIN_SELECTION_OVERLAY_OPACITY,
 } from "@/utils/constants/selection"
-import { MIN_SIDE_CONTENT_WIDTH } from "@/utils/constants/side"
 import { vocabularySettingsSchema } from "../vocabulary"
 import { languageDetectionConfigSchema } from "./language-detection"
 import { isLLMProvider, NON_API_TRANSLATE_PROVIDERS_MAP, providersConfigSchema } from "./provider"
@@ -50,11 +49,6 @@ const selectionToolbarSchema = z.object({
     speak: selectionToolbarSpeakFeatureSchema,
   }),
   customActions: selectionToolbarCustomActionsSchema,
-})
-
-// side content schema
-const sideContentSchema = z.object({
-  width: z.number().min(MIN_SIDE_CONTENT_WIDTH),
 })
 
 // beta experience schema
@@ -105,7 +99,6 @@ export const configSchema = z.object({
   tts: ttsConfigSchema,
   floatingButton: floatingButtonSchema,
   selectionToolbar: selectionToolbarSchema,
-  sideContent: sideContentSchema,
   betaExperience: betaExperienceSchema,
   contextMenu: contextMenuSchema,
   inputTranslation: inputTranslationSchema,

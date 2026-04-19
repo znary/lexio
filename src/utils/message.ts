@@ -26,6 +26,7 @@ interface ProtocolMap {
   // navigation
   openPage: (data: { url: string, active?: boolean }) => void
   openOptionsPage: () => void
+  openSidePanel: () => Promise<boolean>
   // config
   getInitialConfig: () => Config | null
   // translation state

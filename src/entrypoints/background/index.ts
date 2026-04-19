@@ -19,6 +19,7 @@ import { initMockData } from "./mock-data"
 import { newUserGuide } from "./new-user-guide"
 import { handlePlatformAuthExternalMessage } from "./platform-auth"
 import { proxyFetch } from "./proxy-fetch"
+import { openSidePanelInActiveWindow, setUpSidePanelBehavior } from "./sidepanel"
 import { setUpSubtitlesTranslationQueue, setUpWebPageTranslationQueue } from "./translation-queues"
 import { translationMessage } from "./translation-signal"
 import { setupTTSPlaybackMessageHandlers } from "./tts-playback"
@@ -65,6 +66,11 @@ export default defineBackground({
     onMessage("openOptionsPage", () => {
       logger.info("openOptionsPage")
       void browser.runtime.openOptionsPage()
+    })
+
+    onMessage("openSidePanel", async () => {
+      logger.info("openSidePanel")
+      return await openSidePanelInActiveWindow()
     })
 
     browser.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
@@ -127,6 +133,7 @@ export default defineBackground({
     void setUpWebPageTranslationQueue()
     void setUpSubtitlesTranslationQueue()
     void setUpDatabaseCleanup()
+    void setUpSidePanelBehavior()
     setUpConfigBackup()
     void setupUninstallSurvey()
 

@@ -1,7 +1,9 @@
 import type { SessionContext } from "./auth"
 import type { Entitlements, Env, Plan } from "./env"
+import { forwardChatCompletions } from "./ai"
 import { getClerkClient } from "./auth"
 import { buildEntitlements } from "./env"
+import { HttpError, withCors } from "./http"
 import { deserializeVocabularyItem, serializeVocabularyItem } from "./vocabulary"
 
 export interface UserRecord {
@@ -17,7 +19,47 @@ export interface SyncPayload {
   vocabularyItems?: Record<string, unknown>[]
 }
 
+export interface ChatThreadSummary {
+  id: string
+  title: string
+  createdAt: string
+  updatedAt: string
+  lastMessageAt: string | null
+}
+
+export interface ChatMessageRecord {
+  id: string
+  role: "user" | "assistant"
+  contentText: string
+  createdAt: string
+}
+
+interface ChatThreadRow {
+  id: string
+  title: string
+  created_at: string
+  updated_at: string
+  last_message_at: string | null
+  deleted_at?: string | null
+}
+
+interface ChatMessageRow {
+  id: string
+  role: "user" | "assistant"
+  content_text: string
+  sequence: number
+  created_at: string
+}
+
+export interface AppendChatMessageAndStreamReplyInput {
+  userId: string
+  threadId: string
+  content: string
+}
+
 const UUID_DASH_PATTERN = /-/g
+const WHITESPACE_SEQUENCE_PATTERN = /\s+/g
+const SSE_LINE_SPLIT_PATTERN = /\r?\n/
 
 function createId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().replace(UUID_DASH_PATTERN, "")}`
@@ -29,6 +71,108 @@ function nowIso(): string {
 
 function toBooleanInteger(value: boolean): number {
   return value ? 1 : 0
+}
+
+function mapChatThreadSummary(row: ChatThreadRow): ChatThreadSummary {
+  return {
+    id: row.id,
+    title: row.title,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastMessageAt: row.last_message_at,
+  }
+}
+
+function mapChatMessageRecord(row: ChatMessageRow): ChatMessageRecord {
+  return {
+    id: row.id,
+    role: row.role,
+    contentText: row.content_text,
+    createdAt: row.created_at,
+  }
+}
+
+function normalizeChatTitle(content: string): string {
+  const collapsed = content.replace(WHITESPACE_SEQUENCE_PATTERN, " ").trim()
+  if (!collapsed) {
+    return "New chat"
+  }
+
+  return collapsed.length > 60 ? `${collapsed.slice(0, 57).trimEnd()}...` : collapsed
+}
+
+async function getChatThreadRow(env: Env, userId: string, threadId: string): Promise<ChatThreadRow> {
+  const row = await env.DB.prepare(`
+    SELECT id, title, created_at, updated_at, last_message_at, deleted_at
+    FROM chat_threads
+    WHERE id = ?1 AND user_id = ?2 AND deleted_at IS NULL
+    LIMIT 1
+  `).bind(threadId, userId).first<ChatThreadRow>()
+
+  if (!row) {
+    throw new HttpError(404, "Chat thread not found")
+  }
+
+  return row
+}
+
+async function getChatMessageRows(env: Env, threadId: string): Promise<ChatMessageRow[]> {
+  const rows = await env.DB.prepare(`
+    SELECT id, role, content_text, sequence, created_at
+    FROM chat_messages
+    WHERE thread_id = ?1
+    ORDER BY sequence ASC
+  `).bind(threadId).all<ChatMessageRow>()
+
+  return (rows.results ?? []) as ChatMessageRow[]
+}
+
+function extractStreamTextPart(payloadText: string): string {
+  try {
+    const payload = JSON.parse(payloadText) as {
+      choices?: Array<{
+        delta?: {
+          content?: string | Array<{ text?: string }>
+        }
+      }>
+    }
+    const content = payload.choices?.[0]?.delta?.content
+
+    if (typeof content === "string") {
+      return content
+    }
+
+    if (!Array.isArray(content)) {
+      return ""
+    }
+
+    return content.map(part => typeof part?.text === "string" ? part.text : "").join("")
+  }
+  catch {
+    return ""
+  }
+}
+
+function consumeSseBuffer(buffer: string): { remaining: string, text: string } {
+  const lines = buffer.split(SSE_LINE_SPLIT_PATTERN)
+  const remaining = lines.pop() ?? ""
+  let text = ""
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (!line.startsWith("data:")) {
+      continue
+    }
+
+    const payloadText = line.slice(5).trim()
+    if (!payloadText || payloadText === "[DONE]") {
+      continue
+    }
+
+    text += extractStreamTextPart(payloadText)
+  }
+
+  return { remaining, text }
 }
 
 export async function syncUserFromClerkId(env: Env, clerkUserId: string): Promise<UserRecord> {
@@ -272,6 +416,224 @@ export async function pushSyncData(env: Env, userId: string, payload: SyncPayloa
   ]
 
   await env.DB.batch(statements)
+}
+
+export async function listChatThreads(env: Env, userId: string): Promise<ChatThreadSummary[]> {
+  const rows = await env.DB.prepare(`
+    SELECT id, title, created_at, updated_at, last_message_at
+    FROM chat_threads
+    WHERE user_id = ?1 AND deleted_at IS NULL
+    ORDER BY COALESCE(last_message_at, updated_at) DESC, created_at DESC
+  `).bind(userId).all<ChatThreadRow>()
+
+  return ((rows.results ?? []) as ChatThreadRow[]).map(mapChatThreadSummary)
+}
+
+export async function createChatThread(env: Env, userId: string): Promise<ChatThreadSummary> {
+  const timestamp = nowIso()
+  const id = createId("thread")
+
+  await env.DB.prepare(`
+    INSERT INTO chat_threads (id, user_id, title, created_at, updated_at, last_message_at, deleted_at)
+    VALUES (?1, ?2, ?3, ?4, ?4, NULL, NULL)
+  `).bind(
+    id,
+    userId,
+    "New chat",
+    timestamp,
+  ).run()
+
+  return {
+    id,
+    title: "New chat",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    lastMessageAt: null,
+  }
+}
+
+export async function getChatThreadMessages(
+  env: Env,
+  userId: string,
+  threadId: string,
+): Promise<{ thread: ChatThreadSummary, messages: ChatMessageRecord[] }> {
+  const thread = await getChatThreadRow(env, userId, threadId)
+  const messageRows = await getChatMessageRows(env, threadId)
+
+  return {
+    thread: mapChatThreadSummary(thread),
+    messages: messageRows.map(mapChatMessageRecord),
+  }
+}
+
+export async function appendChatMessageAndStreamReply(
+  env: Env,
+  input: AppendChatMessageAndStreamReplyInput,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const content = input.content.trim()
+  if (!content) {
+    throw new HttpError(400, "content is required")
+  }
+
+  const thread = await getChatThreadRow(env, input.userId, input.threadId)
+  const priorMessages = await getChatMessageRows(env, input.threadId)
+  const userMessageCreatedAt = nowIso()
+  const userMessageSequence = priorMessages.length + 1
+  const nextTitle = priorMessages.length === 0 || thread.title === "New chat"
+    ? normalizeChatTitle(content)
+    : thread.title
+
+  await env.DB.batch([
+    env.DB.prepare(`
+      INSERT INTO chat_messages (id, thread_id, role, content_text, sequence, created_at)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+    `).bind(
+      createId("msg"),
+      input.threadId,
+      "user",
+      content,
+      userMessageSequence,
+      userMessageCreatedAt,
+    ),
+    env.DB.prepare(`
+      UPDATE chat_threads
+      SET title = ?1,
+          updated_at = ?2,
+          last_message_at = ?2
+      WHERE id = ?3 AND user_id = ?4 AND deleted_at IS NULL
+    `).bind(
+      nextTitle,
+      userMessageCreatedAt,
+      input.threadId,
+      input.userId,
+    ),
+  ])
+
+  const plan = await getPlanForUser(env, input.userId)
+  const upstream = await forwardChatCompletions(env, {
+    stream: true,
+    messages: [
+      ...priorMessages.map(message => ({
+        role: message.role,
+        content: message.content_text,
+      })),
+      {
+        role: "user",
+        content,
+      },
+    ],
+  }, plan, signal)
+
+  if (!upstream.body) {
+    await recordUsage(env, input.userId, "managed-chat", "stream", 1)
+    return new Response(upstream.body, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: withCors(upstream.headers),
+    })
+  }
+
+  const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
+  const reader = upstream.body.getReader()
+  const writer = writable.getWriter()
+  const decoder = new TextDecoder()
+  let assistantText = ""
+  let textBuffer = ""
+  let streamError: unknown = null
+
+  void (async () => {
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          break
+        }
+
+        await writer.write(value)
+        textBuffer += decoder.decode(value, { stream: true })
+        const consumed = consumeSseBuffer(textBuffer)
+        textBuffer = consumed.remaining
+        assistantText += consumed.text
+      }
+
+      textBuffer += decoder.decode()
+      const consumed = consumeSseBuffer(textBuffer)
+      textBuffer = consumed.remaining
+      assistantText += consumed.text
+    }
+    catch (error) {
+      streamError = error
+    }
+    finally {
+      reader.releaseLock()
+
+      try {
+        if (!streamError && assistantText.trim()) {
+          const assistantCreatedAt = nowIso()
+          await env.DB.batch([
+            env.DB.prepare(`
+              INSERT INTO chat_messages (id, thread_id, role, content_text, sequence, created_at)
+              VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            `).bind(
+              createId("msg"),
+              input.threadId,
+              "assistant",
+              assistantText,
+              userMessageSequence + 1,
+              assistantCreatedAt,
+            ),
+            env.DB.prepare(`
+              UPDATE chat_threads
+              SET updated_at = ?1,
+                  last_message_at = ?1
+              WHERE id = ?2 AND user_id = ?3 AND deleted_at IS NULL
+            `).bind(
+              assistantCreatedAt,
+              input.threadId,
+              input.userId,
+            ),
+          ])
+        }
+
+        await recordUsage(env, input.userId, "managed-chat", "stream", 1)
+      }
+      catch (error) {
+        if (!streamError) {
+          streamError = error
+        }
+      }
+
+      if (streamError) {
+        await writer.abort(streamError)
+      }
+      else {
+        await writer.close()
+      }
+    }
+  })()
+
+  return new Response(readable, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers: withCors(upstream.headers),
+  })
+}
+
+export async function deleteChatThread(env: Env, userId: string, threadId: string): Promise<boolean> {
+  const deletedAt = nowIso()
+  const result = await env.DB.prepare(`
+    UPDATE chat_threads
+    SET deleted_at = ?1,
+        updated_at = ?1
+    WHERE id = ?2 AND user_id = ?3 AND deleted_at IS NULL
+  `).bind(
+    deletedAt,
+    threadId,
+    userId,
+  ).run()
+
+  return result.meta.changes > 0
 }
 
 export async function recordUsage(

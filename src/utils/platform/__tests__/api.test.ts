@@ -225,6 +225,142 @@ describe("platform api helpers", () => {
     expect(result).toBe("AB")
   })
 
+  it("lists chat threads from the platform API", async () => {
+    const { listPlatformChatThreads } = await import("../api")
+    getPlatformAuthSessionMock.mockResolvedValue({
+      token: "platform-token",
+      user: {
+        email: "user@example.com",
+      },
+      updatedAt: Date.now(),
+    })
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      threads: [
+        {
+          id: "thread_1",
+          title: "First thread",
+          createdAt: "2026-04-18T00:00:00.000Z",
+          updatedAt: "2026-04-18T00:00:00.000Z",
+          lastMessageAt: "2026-04-18T00:00:00.000Z",
+        },
+      ],
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(listPlatformChatThreads()).resolves.toEqual([
+      {
+        id: "thread_1",
+        title: "First thread",
+        createdAt: "2026-04-18T00:00:00.000Z",
+        updatedAt: "2026-04-18T00:00:00.000Z",
+        lastMessageAt: "2026-04-18T00:00:00.000Z",
+      },
+    ])
+    expect(fetchMock).toHaveBeenCalledWith("https://platform.example.com/v1/chat/threads", {
+      headers: expect.any(Headers),
+    })
+  })
+
+  it("loads chat thread messages from the platform API", async () => {
+    const { getPlatformChatThreadMessages } = await import("../api")
+    getPlatformAuthSessionMock.mockResolvedValue({
+      token: "platform-token",
+      user: {
+        email: "user@example.com",
+      },
+      updatedAt: Date.now(),
+    })
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      thread: {
+        id: "thread_1",
+        title: "First thread",
+        createdAt: "2026-04-18T00:00:00.000Z",
+        updatedAt: "2026-04-18T00:00:00.000Z",
+        lastMessageAt: "2026-04-18T00:00:00.000Z",
+      },
+      messages: [
+        {
+          id: "msg_1",
+          role: "user",
+          contentText: "hello",
+          createdAt: "2026-04-18T00:00:00.000Z",
+        },
+      ],
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(getPlatformChatThreadMessages("thread_1")).resolves.toEqual({
+      thread: {
+        id: "thread_1",
+        title: "First thread",
+        createdAt: "2026-04-18T00:00:00.000Z",
+        updatedAt: "2026-04-18T00:00:00.000Z",
+        lastMessageAt: "2026-04-18T00:00:00.000Z",
+      },
+      messages: [
+        {
+          id: "msg_1",
+          role: "user",
+          contentText: "hello",
+          createdAt: "2026-04-18T00:00:00.000Z",
+        },
+      ],
+    })
+    expect(fetchMock).toHaveBeenCalledWith("https://platform.example.com/v1/chat/threads/thread_1/messages", {
+      headers: expect.any(Headers),
+    })
+  })
+
+  it("parses streamed chat chunks from the platform API", async () => {
+    const { streamPlatformChatThreadMessage } = await import("../api")
+    getPlatformAuthSessionMock.mockResolvedValue({
+      token: "platform-token",
+      user: {
+        email: "user@example.com",
+      },
+      updatedAt: Date.now(),
+    })
+
+    const encoder = new TextEncoder()
+    const fetchMock = vi.fn().mockResolvedValue(new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode("data: {\"choices\":[{\"delta\":{\"content\":\"Hel\"}}]}\n\n"))
+        controller.enqueue(encoder.encode("data: {\"choices\":[{\"delta\":{\"content\":\"lo\"}}]}\n\n"))
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"))
+        controller.close()
+      },
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+      },
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const snapshots: string[] = []
+    for await (const snapshot of streamPlatformChatThreadMessage("thread_1", "hello")) {
+      snapshots.push(snapshot)
+    }
+
+    expect(snapshots).toEqual(["Hel", "Hello"])
+    expect(fetchMock).toHaveBeenCalledWith("https://platform.example.com/v1/chat/threads/thread_1/messages/stream", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ content: "hello" }),
+    }))
+  })
+
   it("reports queued and running translation states before completion", async () => {
     const { translateWithManagedPlatform } = await import("../api")
     getPlatformAuthSessionMock.mockResolvedValue({
