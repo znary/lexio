@@ -4,18 +4,16 @@ import type { PlatformChatMessage, PlatformChatThreadSummary } from "@/utils/pla
 import type { SidepanelChatSnapshot } from "@/utils/platform/chat-cache"
 import { browser } from "#imports"
 import { AssistantRuntimeProvider, ComposerPrimitive, ThreadPrimitive, useLocalRuntime } from "@assistant-ui/react"
-import { AssistantMessage, makeMarkdownText, ThreadConfigProvider, UserMessage } from "@assistant-ui/react-ui"
+import { AssistantMessage, ThreadConfigProvider, UserMessage } from "@assistant-ui/react-ui"
 import { IconArrowUp, IconClockHour4, IconLoader2, IconMessagePlus, IconSettings } from "@tabler/icons-react"
-import { createContext, use, useEffect, useRef, useState } from "react"
-import rehypeKatex from "rehype-katex"
-import remarkGfm from "remark-gfm"
-import remarkMath from "remark-math"
+import { createContext, use, useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { PlatformQuickAccess } from "@/components/platform/platform-quick-access"
 import { Button } from "@/components/ui/base-ui/button"
 import { getRandomUUID } from "@/utils/crypto-polyfill"
 import { createPlatformChatThread, deletePlatformChatThread, getPlatformChatThreadMessages, listPlatformChatThreads, streamPlatformChatThreadMessage } from "@/utils/platform/api"
 import { getSidepanelChatSnapshot, setSidepanelChatSnapshot } from "@/utils/platform/chat-cache"
+import { SIDEPANEL_MARKDOWN_TEXT } from "./sidepanel-markdown"
 import { ThreadHistorySheet } from "./thread-history-sheet"
 
 interface ChatSessionState {
@@ -29,18 +27,13 @@ const COMPLETE_STATUS: MessageStatus = {
   reason: "stop",
 }
 
-const SIDE_PANEL_MARKDOWN_TEXT = makeMarkdownText({
-  remarkPlugins: [remarkGfm, remarkMath],
-  rehypePlugins: [rehypeKatex],
-})
-
 const ASSISTANT_MESSAGE_CONFIG: AssistantMessageConfig = {
   allowReload: false,
   allowSpeak: false,
   allowFeedbackPositive: false,
   allowFeedbackNegative: false,
   components: {
-    Text: SIDE_PANEL_MARKDOWN_TEXT,
+    Text: SIDEPANEL_MARKDOWN_TEXT,
   },
 }
 
@@ -346,7 +339,7 @@ export function ChatWorkspace({
   const [isRefreshingThreads, setIsRefreshingThreads] = useState(false)
   const snapshotRef = useRef<SidepanelChatSnapshot | null>(null)
 
-  async function persistSnapshot(snapshot: SidepanelChatSnapshot) {
+  const persistSnapshot = useCallback(async (snapshot: SidepanelChatSnapshot) => {
     snapshotRef.current = snapshot
 
     if (!sessionAccountKey) {
@@ -354,7 +347,7 @@ export function ChatWorkspace({
     }
 
     await setSidepanelChatSnapshot(sessionAccountKey, snapshot)
-  }
+  }, [sessionAccountKey])
 
   useEffect(() => {
     let isDisposed = false
@@ -458,7 +451,7 @@ export function ChatWorkspace({
     return () => {
       isDisposed = true
     }
-  }, [isSignedIn, sessionAccountKey])
+  }, [isSignedIn, sessionAccountKey, persistSnapshot])
 
   async function refreshThreads(keepThreadId: string | null, options?: { showErrorToast?: boolean }) {
     setIsRefreshingThreads(true)

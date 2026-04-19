@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest"
 const testDir = dirname(fileURLToPath(import.meta.url))
 const mainEntryPath = resolve(testDir, "../main.tsx")
 const sidepanelStylesPath = resolve(testDir, "../styles.css")
-const chatWorkspacePath = resolve(testDir, "../components/chat-workspace.tsx")
+const sidepanelMarkdownPath = resolve(testDir, "../components/sidepanel-markdown.tsx")
 
 describe("sidepanel main entry", () => {
   it("loads assistant-ui markdown styles for markdown message parts", () => {
@@ -24,10 +24,12 @@ describe("sidepanel main entry", () => {
 
   it("enables math plugins and katex styles for markdown formulas", () => {
     const mainSource = readFileSync(mainEntryPath, "utf8")
-    const chatWorkspaceSource = readFileSync(chatWorkspacePath, "utf8")
+    const sidepanelMarkdownSource = readFileSync(sidepanelMarkdownPath, "utf8")
 
     expect(mainSource).toContain("katex/dist/katex.min.css")
-    expect(chatWorkspaceSource).toContain("remarkMath")
-    expect(chatWorkspaceSource).toContain("rehypeKatex")
+    expect(sidepanelMarkdownSource).toContain("remarkMath")
+    expect(sidepanelMarkdownSource).toContain("rehypeKatex")
+    expect(sidepanelMarkdownSource).toContain("remarkBreaks")
+    expect(sidepanelMarkdownSource).toContain("react-syntax-highlighter")
   })
 })
