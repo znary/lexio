@@ -41,6 +41,23 @@ popup:
     rateUs: Оценить нас
     ebook: Сторонняя читалка электронных книг
     tutorial: Руководство
+platform:
+  quickAccess:
+    title: Lexio Cloud
+    accountHint: Войдите один раз, чтобы синхронизировать настройки, словарь и свой тариф.
+    menuLabel: Открыть меню аккаунта
+    status:
+      loading: Загрузка
+      signedIn: Вход выполнен
+      signedOut: Вход не выполнен
+    actions:
+      signIn: Войти
+      reconnect: Подключить заново
+      plans: Тарифы
+      openSettings: Открыть полные настройки
+      logOut: Выйти
+    toast:
+      loggedOut: Вы вышли из аккаунта
 errorRecovery:
   title: Что-то пошло не так
   description: Активирован режим восстановления. Вы можете экспортировать текущие настройки как резервную копию, затем сбросить настройки и попробовать снова.
@@ -185,6 +202,16 @@ options:
       testing: Тестирование...
   general:
     title: Общие
+    quickSettings:
+      cloud:
+        title: Lexio Cloud
+        description: Управляйте облачным аккаунтом и тарифом перед началом чата.
+      reading:
+        title: Чтение
+        description: Измените элементы управления переводом, которыми пользуетесь чаще всего.
+      shortcuts:
+        title: Быстрые действия
+        description: Меняйте быстрые действия и AI-контекст, не выходя из настроек.
     appearance:
       title: Внешний вид
       theme: Тема

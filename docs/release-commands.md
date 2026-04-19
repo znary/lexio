@@ -1,7 +1,8 @@
 # 发布和打包命令
 
-这份文档只说明三件事：
+这份文档只说明四件事：
 
+- 发布前怎么处理 D1 migration
 - 发布 API
 - 发布 Web
 - 打包浏览器扩展
@@ -30,6 +31,49 @@
 | 打包 Firefox 扩展     | `pnpm package:extension:firefox` | 生成 Firefox zip                                   |
 | 一次打包全部扩展      | `pnpm package:extension:all`     | 顺序生成 Chrome / Edge / Firefox 三份 zip          |
 
+## 数据库有变更时的发布顺序
+
+只要 `apps/platform-api/migrations/` 下新增了 SQL 文件，就按这个顺序发：
+
+1. 先执行远端 D1 migration
+2. 再发布 API
+
+不要反过来。原因很简单：如果 API 代码先上线，而 D1 里还没有新表或新列，请求会直接报错。
+
+这次 chat thread 功能就是这个情况。`0002_chat_threads.sql` 会新增：
+
+- `chat_threads`
+- `chat_messages`
+
+所以正确命令顺序是：
+
+```bash
+pnpm migrate:api:remote
+pnpm deploy:api
+```
+
+如果你想更明确一点，也可以直接执行 `wrangler` 命令：
+
+```bash
+pnpm --dir apps/platform-api exec wrangler d1 migrations apply lexio-platform --remote
+pnpm --dir apps/platform-api exec wrangler deploy
+```
+
+## 一次完整发布 API 的最短流程
+
+没有数据库变更时：
+
+```bash
+pnpm deploy:api
+```
+
+有数据库变更时：
+
+```bash
+pnpm migrate:api:remote
+pnpm deploy:api
+```
+
 ## 最常用的三条命令
 
 ### 1. 发布 API
@@ -45,12 +89,14 @@ cd apps/platform-api
 pnpm run deploy
 ```
 
-如果这次改动包含 D1 migration，先按需要执行：
+如果这次改动包含 D1 migration，先执行远端 migration，再发布 API：
 
 ```bash
-pnpm migrate:api:local
 pnpm migrate:api:remote
+pnpm deploy:api
 ```
+
+`pnpm migrate:api:local` 只用于本地验证，不会改 Cloudflare 上的远端数据库。
 
 ## 2. 发布 Web
 

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /* eslint-disable react/no-clone-element, react/no-context-provider, react/no-use-context */
 import type { MouseEvent, ReactElement, ReactNode } from "react"
+import { browser } from "#imports"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { createContext, useContext, useState } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -11,6 +12,18 @@ const watchPlatformAuthSessionMock = vi.fn()
 const openPlatformExtensionSyncTabMock = vi.fn()
 const openPlatformPricingTabMock = vi.fn()
 const clearPlatformAuthSessionMock = vi.fn()
+const openOptionsPageMock = vi.fn()
+
+vi.mock("#imports", async () => {
+  const actual = await vi.importActual<typeof import("#imports")>("#imports")
+
+  return {
+    ...actual,
+    i18n: {
+      t: (key: string) => key,
+    },
+  }
+})
 
 vi.mock("@/components/ui/base-ui/button", () => ({
   Button: ({
@@ -133,14 +146,14 @@ describe("platformQuickAccess", () => {
     render(<PlatformQuickAccess variant="menu" size="sm" />)
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Open account menu")).toBeInTheDocument()
+      expect(screen.getByLabelText("platform.quickAccess.menuLabel")).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByLabelText("Open account menu"))
+    fireEvent.click(screen.getByLabelText("platform.quickAccess.menuLabel"))
 
-    expect(screen.getByText("Lexio Cloud")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Plans" })).toBeInTheDocument()
+    expect(screen.getByText("platform.quickAccess.title")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "platform.quickAccess.actions.signIn" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "platform.quickAccess.actions.plans" })).toBeInTheDocument()
   })
 
   it("shows logout inside the popup menu when signed in", async () => {
@@ -156,15 +169,32 @@ describe("platformQuickAccess", () => {
     render(<PlatformQuickAccess variant="menu" />)
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Open account menu")).toBeInTheDocument()
+      expect(screen.getByLabelText("platform.quickAccess.menuLabel")).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByLabelText("Open account menu"))
+    fireEvent.click(screen.getByLabelText("platform.quickAccess.menuLabel"))
 
     expect(screen.getByText("user@example.com")).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: "Log out" }))
+    fireEvent.click(screen.getByRole("button", { name: "platform.quickAccess.actions.logOut" }))
 
     expect(clearPlatformAuthSessionMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("can show a full settings item inside the account menu", async () => {
+    browser.runtime.openOptionsPage = (...args: unknown[]) => openOptionsPageMock(...args)
+    getPlatformAuthSessionMock.mockResolvedValue(null)
+    watchPlatformAuthSessionMock.mockReturnValue(() => {})
+
+    render(<PlatformQuickAccess variant="menu" includeSettingsEntry />)
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("platform.quickAccess.menuLabel")).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByLabelText("platform.quickAccess.menuLabel"))
+    fireEvent.click(screen.getByRole("button", { name: "platform.quickAccess.actions.openSettings" }))
+
+    expect(openOptionsPageMock).toHaveBeenCalledTimes(1)
   })
 
   it("keeps the inline card actions and logout button for options pages", async () => {
@@ -178,10 +208,11 @@ describe("platformQuickAccess", () => {
     render(<PlatformQuickAccess />)
 
     await waitFor(() => {
-      expect(screen.getByText("Signed in")).toBeInTheDocument()
+      expect(screen.getByText("platform.quickAccess.status.signedIn")).toBeInTheDocument()
     })
 
-    expect(screen.getByRole("button", { name: "Reconnect" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Log out" })).toBeInTheDocument()
+    expect(screen.getByText("platform.quickAccess.accountHint")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "platform.quickAccess.actions.reconnect" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "platform.quickAccess.actions.logOut" })).toBeInTheDocument()
   })
 })

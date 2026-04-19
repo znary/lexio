@@ -41,6 +41,23 @@ popup:
     rateUs: Đánh giá chúng tôi
     ebook: Trình đọc sách điện tử bên thứ ba
     tutorial: Hướng dẫn
+platform:
+  quickAccess:
+    title: Lexio Cloud
+    accountHint: Đăng nhập một lần để đồng bộ cài đặt, từ vựng và gói của bạn.
+    menuLabel: Mở menu tài khoản
+    status:
+      loading: Đang tải
+      signedIn: Đã đăng nhập
+      signedOut: Chưa đăng nhập
+    actions:
+      signIn: Đăng nhập
+      reconnect: Kết nối lại
+      plans: Gói dịch vụ
+      openSettings: Mở toàn bộ cài đặt
+      logOut: Đăng xuất
+    toast:
+      loggedOut: Đã đăng xuất
 errorRecovery:
   title: Đã xảy ra sự cố
   description: Chế độ khôi phục đang hoạt động. Bạn có thể xuất cài đặt hiện tại để sao lưu, sau đó đặt lại cài đặt và thử lại.
@@ -185,6 +202,16 @@ options:
       testing: Đang kiểm tra...
   general:
     title: Chung
+    quickSettings:
+      cloud:
+        title: Lexio Cloud
+        description: Quản lý tài khoản đám mây và gói trước khi bạn bắt đầu trò chuyện.
+      reading:
+        title: Đọc
+        description: Thay đổi các điều khiển dịch mà bạn dùng thường xuyên nhất.
+      shortcuts:
+        title: Phím tắt
+        description: Điều chỉnh thao tác nhanh và ngữ cảnh AI mà không cần rời khỏi phần cài đặt.
     appearance:
       title: Giao diện
       theme: Chủ đề

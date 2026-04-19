@@ -41,6 +41,23 @@ popup:
     rateUs: レビューを書く
     ebook: サードパーティ電子書籍リーダー
     tutorial: 使い方ガイド
+platform:
+  quickAccess:
+    title: Lexio Cloud
+    accountHint: 一度サインインすると、設定、単語、契約プランを同期できます。
+    menuLabel: アカウントメニューを開く
+    status:
+      loading: 読み込み中
+      signedIn: サインイン済み
+      signedOut: 未サインイン
+    actions:
+      signIn: サインイン
+      reconnect: 再接続
+      plans: プラン
+      openSettings: 詳細設定を開く
+      logOut: ログアウト
+    toast:
+      loggedOut: ログアウトしました
 errorRecovery:
   title: 問題が発生しました
   description: 復旧モードが有効です。現在の設定をバックアップとしてエクスポートし、設定をリセットして再試行してください。
@@ -185,6 +202,16 @@ options:
       testing: テスト中...
   general:
     title: 一般
+    quickSettings:
+      cloud:
+        title: Lexio Cloud
+        description: チャットを始める前に、クラウドアカウントとプランを管理します。
+      reading:
+        title: 読解
+        description: よく使う翻訳コントロールを変更します。
+      shortcuts:
+        title: ショートカット
+        description: 設定画面を離れずにクイック操作と AI コンテキストを調整します。
     appearance:
       title: 外観
       theme: テーマ

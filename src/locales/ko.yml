@@ -41,6 +41,23 @@ popup:
     rateUs: 리뷰 남기기
     ebook: 서드파티 전자책 리더
     tutorial: 사용 가이드
+platform:
+  quickAccess:
+    title: Lexio Cloud
+    accountHint: 로그인하면 설정, 단어장, 요금제를 동기화할 수 있습니다.
+    menuLabel: 계정 메뉴 열기
+    status:
+      loading: 불러오는 중
+      signedIn: 로그인됨
+      signedOut: 로그인 안 됨
+    actions:
+      signIn: 로그인
+      reconnect: 다시 연결
+      plans: 요금제
+      openSettings: 전체 설정 열기
+      logOut: 로그아웃
+    toast:
+      loggedOut: 로그아웃됨
 errorRecovery:
   title: 문제가 발생했습니다
   description: 복구 모드가 활성화되었습니다. 현재 설정을 백업으로 내보낸 뒤 설정을 초기화하고 다시 시도하세요.
@@ -185,6 +202,16 @@ options:
       testing: 테스트 중...
   general:
     title: 일반
+    quickSettings:
+      cloud:
+        title: Lexio Cloud
+        description: 채팅을 시작하기 전에 클라우드 계정과 요금제를 관리하세요.
+      reading:
+        title: 읽기
+        description: 자주 쓰는 번역 제어를 바꿉니다.
+      shortcuts:
+        title: 단축키
+        description: 설정을 떠나지 않고 빠른 작업과 AI 컨텍스트를 조정합니다.
     appearance:
       title: 외관
       theme: 테마

@@ -37,6 +37,23 @@ popup:
     translationHub: Translation Hub
     vocabulary: Vocabulary
     tutorial: Tutorial
+platform:
+  quickAccess:
+    title: Lexio Cloud
+    accountHint: Sign in once to sync settings, vocabulary, and your managed plan.
+    menuLabel: Open account menu
+    status:
+      loading: Loading
+      signedIn: Signed in
+      signedOut: Not signed in
+    actions:
+      signIn: Sign in
+      reconnect: Reconnect
+      plans: Plans
+      openSettings: Open full settings
+      logOut: Log out
+    toast:
+      loggedOut: Logged out.
 errorRecovery:
   title: Something went wrong
   description: Recovery mode is active. You can export your current settings as a backup, then reset settings and try again.
@@ -182,6 +199,16 @@ options:
       testing: Testing...
   general:
     title: General
+    quickSettings:
+      cloud:
+        title: Lexio Cloud
+        description: Manage your cloud account and plan before you start chatting.
+      reading:
+        title: Reading
+        description: Change the translation controls you use most often.
+      shortcuts:
+        title: Shortcuts
+        description: Adjust quick actions and AI context without leaving settings.
     appearance:
       title: Appearance
       theme: Theme

@@ -37,6 +37,23 @@ popup:
     translationHub: 翻译中心
     vocabulary: 单词本
     tutorial: 使用教程
+platform:
+  quickAccess:
+    title: Lexio Cloud
+    accountHint: 登录后可同步设置、词汇和你的托管套餐。
+    menuLabel: 打开账户菜单
+    status:
+      loading: 加载中
+      signedIn: 已登录
+      signedOut: 未登录
+    actions:
+      signIn: 登录
+      reconnect: 重新连接
+      plans: 套餐
+      openSettings: 打开完整设置
+      logOut: 退出登录
+    toast:
+      loggedOut: 已退出登录
 errorRecovery:
   title: 应用发生异常
   description: 已进入恢复模式。你可以先导出当前设置作为备份，再重置设置后重试。
@@ -182,6 +199,16 @@ options:
       testing: 测试中...
   general:
     title: 通用
+    quickSettings:
+      cloud:
+        title: Lexio Cloud
+        description: 在开始聊天前管理你的云账户和套餐。
+      reading:
+        title: 阅读
+        description: 调整你最常用的翻译控制项。
+      shortcuts:
+        title: 快捷操作
+        description: 不离开设置页也能调整快捷操作和 AI 上下文。
     appearance:
       title: 外观
       theme: 主题

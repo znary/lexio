@@ -41,6 +41,23 @@ popup:
     rateUs: Bizi Değerlendirin
     ebook: Üçüncü Taraf E-kitap Okuyucu
     tutorial: Rehber
+platform:
+  quickAccess:
+    title: Lexio Cloud
+    accountHint: Ayarları, kelimeleri ve planını eşitlemek için bir kez giriş yap.
+    menuLabel: Hesap menüsünü aç
+    status:
+      loading: Yükleniyor
+      signedIn: Giriş yapıldı
+      signedOut: Giriş yapılmadı
+    actions:
+      signIn: Giriş yap
+      reconnect: Yeniden bağlan
+      plans: Planlar
+      openSettings: Tüm ayarları aç
+      logOut: Çıkış yap
+    toast:
+      loggedOut: Çıkış yapıldı
 errorRecovery:
   title: Bir sorun oluştu
   description: Kurtarma modu etkin. Geçerli ayarlarınızı yedek olarak dışa aktarabilir, ardından ayarları sıfırlayıp tekrar deneyebilirsiniz.
@@ -185,6 +202,16 @@ options:
       testing: Test ediliyor...
   general:
     title: Genel
+    quickSettings:
+      cloud:
+        title: Lexio Cloud
+        description: Sohbete başlamadan önce bulut hesabını ve planını yönet.
+      reading:
+        title: Okuma
+        description: En sık kullandığın çeviri kontrollerini değiştir.
+      shortcuts:
+        title: Kısayollar
+        description: Ayarlardan çıkmadan hızlı işlemleri ve AI bağlamını düzenle.
     appearance:
       title: Görünüm
       theme: Tema

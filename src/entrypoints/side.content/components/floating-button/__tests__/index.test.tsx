@@ -24,17 +24,15 @@ vi.mock("@/utils/atoms/config", () => ({
     floatingButton: atom({
       enabled: true,
       position: 0.66,
-      clickAction: "translate",
+      clickAction: "panel",
       disabledFloatingButtonPatterns: [],
     }),
-    sideContent: atom({ width: 360 }),
   },
 }))
 
 vi.mock("../../../atoms", () => ({
   enablePageTranslationAtom: atom({ enabled: false }),
   isDraggingButtonAtom: atom(false),
-  isSideOpenAtom: atom(false),
 }))
 
 vi.mock("../../../index", () => ({
@@ -63,6 +61,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   sendMessageMock.mockReset()
+  sendMessageMock.mockResolvedValue(true)
 })
 
 describe("floatingButton close trigger", () => {
@@ -109,7 +108,7 @@ describe("floatingButton close trigger", () => {
     )
   })
 
-  it("does not start page translation when the main floating trigger is clicked", () => {
+  it("opens the native side panel when the main floating trigger is clicked", () => {
     render(<FloatingButton />)
 
     const mainTrigger = screen.getByRole("img").closest("div")
@@ -122,12 +121,6 @@ describe("floatingButton close trigger", () => {
     fireEvent.mouseDown(mainTrigger!, { clientY: 100 })
     fireEvent.mouseUp(document, { clientY: 100 })
 
-    expect(sendMessageMock).not.toHaveBeenCalledWith(
-      "tryToSetEnablePageTranslationOnContentScript",
-      expect.anything(),
-    )
-    expect(mainTrigger?.parentElement).toHaveStyle({
-      right: "calc(360px + var(--removed-body-scroll-bar-size, 0px))",
-    })
+    expect(sendMessageMock).toHaveBeenCalledWith("openSidePanel", undefined)
   })
 })

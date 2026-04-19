@@ -41,6 +41,23 @@ popup:
     rateUs: 好評支持
     ebook: 第三方電子書閱讀器
     tutorial: 使用教程
+platform:
+  quickAccess:
+    title: Lexio Cloud
+    accountHint: 登入後可同步設定、詞彙和你的託管方案。
+    menuLabel: 打開帳戶選單
+    status:
+      loading: 載入中
+      signedIn: 已登入
+      signedOut: 未登入
+    actions:
+      signIn: 登入
+      reconnect: 重新連線
+      plans: 方案
+      openSettings: 打開完整設定
+      logOut: 登出
+    toast:
+      loggedOut: 已登出
 errorRecovery:
   title: 應用發生異常
   description: 已進入恢復模式。你可以先導出當前設定作為備份，再重置設定後重試。
@@ -185,6 +202,16 @@ options:
       testing: 測試中...
   general:
     title: 通用
+    quickSettings:
+      cloud:
+        title: Lexio Cloud
+        description: 在開始聊天前管理你的雲端帳戶和方案。
+      reading:
+        title: 閱讀
+        description: 調整你最常用的翻譯控制項。
+      shortcuts:
+        title: 快捷操作
+        description: 不離開設定頁也能調整快捷操作和 AI 上下文。
     appearance:
       title: 外觀
       theme: 主題
