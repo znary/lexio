@@ -5,26 +5,32 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { ChatWorkspace } from "../chat-workspace"
 
 const {
+  clearSidepanelChatDraftMock,
   consumePendingSidepanelChatRequestMock,
   createPlatformChatThreadMock,
   deletePlatformChatThreadMock,
   getPendingSidepanelChatRequestsMock,
+  getSidepanelChatDraftMock,
   getSidepanelChatSnapshotMock,
   getPlatformChatThreadMessagesMock,
   listPlatformChatThreadsMock,
   sendMessageMock,
+  setSidepanelChatDraftMock,
   setSidepanelChatSnapshotMock,
   streamPlatformChatThreadMessageMock,
   watchPendingSidepanelChatRequestMock,
 } = vi.hoisted(() => ({
+  clearSidepanelChatDraftMock: vi.fn(),
   consumePendingSidepanelChatRequestMock: vi.fn(),
   createPlatformChatThreadMock: vi.fn(),
   deletePlatformChatThreadMock: vi.fn(),
   getPendingSidepanelChatRequestsMock: vi.fn(),
+  getSidepanelChatDraftMock: vi.fn(),
   getSidepanelChatSnapshotMock: vi.fn(),
   getPlatformChatThreadMessagesMock: vi.fn(),
   listPlatformChatThreadsMock: vi.fn(),
   sendMessageMock: vi.fn(),
+  setSidepanelChatDraftMock: vi.fn(),
   setSidepanelChatSnapshotMock: vi.fn(),
   streamPlatformChatThreadMessageMock: vi.fn(),
   watchPendingSidepanelChatRequestMock: vi.fn(),
@@ -41,6 +47,12 @@ vi.mock("@/utils/platform/api", () => ({
 vi.mock("@/utils/platform/chat-cache", () => ({
   getSidepanelChatSnapshot: (...args: unknown[]) => getSidepanelChatSnapshotMock(...args),
   setSidepanelChatSnapshot: (...args: unknown[]) => setSidepanelChatSnapshotMock(...args),
+}))
+
+vi.mock("@/utils/platform/sidepanel-chat-draft", () => ({
+  clearSidepanelChatDraft: (...args: unknown[]) => clearSidepanelChatDraftMock(...args),
+  getSidepanelChatDraft: (...args: unknown[]) => getSidepanelChatDraftMock(...args),
+  setSidepanelChatDraft: (...args: unknown[]) => setSidepanelChatDraftMock(...args),
 }))
 
 vi.mock("@/utils/platform/sidepanel-chat-request", () => ({
@@ -108,6 +120,17 @@ function createMessage(overrides: Partial<{
   }
 }
 
+function createDraftSession(overrides: Partial<{
+  sessionKey: string
+  createdAt: number
+}> = {}) {
+  return {
+    sessionKey: "draft-session-1",
+    createdAt: 1_745_020_000_000,
+    ...overrides,
+  }
+}
+
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
   const promise = new Promise<T>((innerResolve) => {
@@ -147,12 +170,15 @@ describe("chatWorkspace", () => {
     vi.clearAllMocks()
     vi.stubGlobal("confirm", vi.fn(() => true))
     browser.tabs.query = vi.fn().mockResolvedValue([{ id: 7, windowId: 1 }])
+    clearSidepanelChatDraftMock.mockResolvedValue(undefined)
     consumePendingSidepanelChatRequestMock.mockResolvedValue(undefined)
     getPendingSidepanelChatRequestsMock.mockResolvedValue([])
+    getSidepanelChatDraftMock.mockResolvedValue(null)
     getSidepanelChatSnapshotMock.mockResolvedValue(null)
     listPlatformChatThreadsMock.mockResolvedValue([])
     sendMessageMock.mockReset()
     sendMessageMock.mockResolvedValue(true)
+    setSidepanelChatDraftMock.mockResolvedValue(undefined)
     setSidepanelChatSnapshotMock.mockResolvedValue(undefined)
     watchPendingSidepanelChatRequestMock.mockImplementation(() => () => {})
   })
@@ -295,6 +321,70 @@ describe("chatWorkspace", () => {
     }))
   })
 
+  it("persists a saved draft when starting a new chat", async () => {
+    const savedThread = createThread()
+    const cachedMessage = createMessage()
+    getSidepanelChatSnapshotMock.mockResolvedValue({
+      threads: [savedThread],
+      currentThreadId: savedThread.id,
+      currentThreadSummary: savedThread,
+      currentThreadMessages: [cachedMessage],
+      cachedAt: Date.now(),
+    })
+    listPlatformChatThreadsMock.mockResolvedValue([savedThread])
+
+    render(<ChatWorkspace isSignedIn isSessionLoading={false} sessionAccountKey="user-1" />)
+
+    await screen.findByText("Cached hello")
+
+    fireEvent.click(screen.getByRole("button", { name: "Start new chat" }))
+
+    await waitFor(() => {
+      expect(screen.queryByText("Cached hello")).not.toBeInTheDocument()
+    })
+
+    expect(setSidepanelChatSnapshotMock).toHaveBeenLastCalledWith("user-1", expect.objectContaining({
+      currentThreadId: null,
+      threads: [expect.objectContaining({ id: "thread-1" })],
+    }))
+    expect(setSidepanelChatDraftMock).toHaveBeenCalledWith("user-1", expect.objectContaining({
+      sessionKey: expect.any(String),
+    }))
+
+    fireEvent.click(screen.getByRole("button", { name: "Open chat history" }))
+
+    expect(await screen.findByRole("button", { name: "Open draft chat" })).toBeInTheDocument()
+    expect(screen.getByText("Saved thread")).toBeInTheDocument()
+  })
+
+  it("reuses the existing saved draft instead of creating another empty chat", async () => {
+    const savedThread = createThread()
+    const draftSession = createDraftSession()
+    getSidepanelChatSnapshotMock.mockResolvedValue({
+      threads: [savedThread],
+      currentThreadId: null,
+      currentThreadSummary: null,
+      currentThreadMessages: [],
+      cachedAt: Date.now(),
+    })
+    getSidepanelChatDraftMock.mockResolvedValue(draftSession)
+    listPlatformChatThreadsMock.mockResolvedValue([savedThread])
+
+    render(<ChatWorkspace isSignedIn isSessionLoading={false} sessionAccountKey="user-1" />)
+
+    await screen.findByPlaceholderText("问任何问题")
+
+    fireEvent.click(screen.getByRole("button", { name: "Start new chat" }))
+    fireEvent.click(screen.getByRole("button", { name: "Open chat history" }))
+
+    expect(await screen.findByRole("button", { name: "Open draft chat" })).toBeInTheDocument()
+    expect(screen.getAllByRole("button", { name: "Open draft chat" })).toHaveLength(1)
+    expect(setSidepanelChatDraftMock).not.toHaveBeenCalled()
+    expect(setSidepanelChatSnapshotMock).toHaveBeenLastCalledWith("user-1", expect.objectContaining({
+      currentThreadId: null,
+    }))
+  })
+
   it("clears a stale cached thread when it no longer exists remotely", async () => {
     const staleThread = createThread()
     const replacementThread = createThread({
@@ -334,14 +424,23 @@ describe("chatWorkspace", () => {
     }))
   })
 
-  it("refreshes the committed thread snapshot without resetting the current UI", async () => {
+  it("refreshes the committed thread snapshot without keeping the empty draft", async () => {
     const committedThread = createThread({
       id: "thread-new",
       title: "New thread",
       updatedAt: "2026-04-19T12:10:00.000Z",
       lastMessageAt: "2026-04-19T12:10:00.000Z",
     })
+    const draftSession = createDraftSession()
     createPlatformChatThreadMock.mockResolvedValue(committedThread)
+    getSidepanelChatSnapshotMock.mockResolvedValue({
+      threads: [],
+      currentThreadId: null,
+      currentThreadSummary: null,
+      currentThreadMessages: [],
+      cachedAt: Date.now(),
+    })
+    getSidepanelChatDraftMock.mockResolvedValue(draftSession)
     listPlatformChatThreadsMock
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([committedThread])
@@ -398,6 +497,7 @@ describe("chatWorkspace", () => {
         expect.objectContaining({ contentText: "Draft reply" }),
       ]),
     }))
+    expect(clearSidepanelChatDraftMock).toHaveBeenCalledWith("user-1")
   })
 
   it("auto-sends a pending sidepanel chat request when the workspace opens", async () => {

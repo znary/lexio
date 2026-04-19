@@ -1,4 +1,5 @@
 import type { PlatformChatThreadSummary } from "@/utils/platform/api"
+import type { SidepanelChatDraft } from "@/utils/platform/sidepanel-chat-draft"
 import { IconClockHour4, IconLoader2, IconMessagePlus, IconRefresh, IconTrash } from "@tabler/icons-react"
 import { useState } from "react"
 import {
@@ -26,28 +27,35 @@ function formatThreadTimestamp(lastMessageAt: string | null): string {
 
 export function ThreadHistorySheet({
   currentThreadId,
+  draftSession,
+  isDraftSelected,
   isBusy,
   isRefreshing,
   onDeleteThread,
   onOpenChange,
   onRefresh,
+  onSelectDraft,
   onSelectThread,
   onStartNewChat,
   open,
   threads,
 }: {
   currentThreadId: string | null
+  draftSession: SidepanelChatDraft | null
+  isDraftSelected: boolean
   isBusy: boolean
   isRefreshing: boolean
   onDeleteThread: (threadId: string) => void | Promise<void>
   onOpenChange: (open: boolean) => void
   onRefresh: () => void | Promise<void>
+  onSelectDraft: () => void | Promise<void>
   onSelectThread: (threadId: string) => void | Promise<void>
   onStartNewChat: () => void
   open: boolean
   threads: PlatformChatThreadSummary[]
 }) {
   const [pendingDeleteThread, setPendingDeleteThread] = useState<PlatformChatThreadSummary | null>(null)
+  const historyCount = threads.length + (draftSession ? 1 : 0)
 
   return (
     <>
@@ -67,7 +75,7 @@ export function ThreadHistorySheet({
                     History
                   </SheetTitle>
                   <Badge variant="outline" size="sm">
-                    {threads.length}
+                    {historyCount}
                     {" "}
                     saved
                   </Badge>
@@ -104,7 +112,34 @@ export function ThreadHistorySheet({
 
           <ScrollArea className="max-h-[calc(78vh-128px)]">
             <div className="space-y-2 px-4 pt-4 pb-6">
-              {threads.length === 0
+              {draftSession
+                ? (
+                    <div
+                      className={`flex items-center gap-3 rounded-2xl border px-3 py-3 transition-colors ${
+                        isDraftSelected
+                          ? "border-primary/25 bg-primary/8"
+                          : "border-border/70 bg-background hover:bg-muted/50"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        aria-label="Open draft chat"
+                        className="min-w-0 flex-1 text-left"
+                        onClick={() => void onSelectDraft()}
+                        disabled={isBusy}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="truncate text-sm font-medium">New chat</span>
+                          <span className="shrink-0 text-xs text-muted-foreground">Draft</span>
+                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {isDraftSelected ? "Current draft" : "Empty draft"}
+                        </div>
+                      </button>
+                    </div>
+                  )
+                : null}
+              {threads.length === 0 && !draftSession
                 ? (
                     <div className="rounded-2xl border border-dashed border-border/80 bg-muted/40 px-4 py-6 text-sm text-muted-foreground">
                       No saved threads yet. Start a new chat and the first message will create one.

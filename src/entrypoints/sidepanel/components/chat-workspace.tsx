@@ -2,6 +2,7 @@ import type { MessageStatus, ThreadMessage, ThreadMessageLike } from "@assistant
 import type { AssistantMessageConfig, UserMessageConfig } from "@assistant-ui/react-ui"
 import type { PlatformChatMessage, PlatformChatThreadSummary } from "@/utils/platform/api"
 import type { SidepanelChatSnapshot } from "@/utils/platform/chat-cache"
+import type { SidepanelChatDraft } from "@/utils/platform/sidepanel-chat-draft"
 import type { SidepanelChatRequest } from "@/utils/platform/sidepanel-chat-request"
 import { browser, i18n } from "#imports"
 import { AssistantRuntimeProvider, ComposerPrimitive, ThreadPrimitive, useLocalRuntime, useThreadRuntime } from "@assistant-ui/react"
@@ -18,6 +19,7 @@ import { getRandomUUID } from "@/utils/crypto-polyfill"
 import { sendMessage } from "@/utils/message"
 import { createPlatformChatThread, deletePlatformChatThread, getPlatformChatThreadMessages, listPlatformChatThreads, streamPlatformChatThreadMessage } from "@/utils/platform/api"
 import { getSidepanelChatSnapshot, setSidepanelChatSnapshot } from "@/utils/platform/chat-cache"
+import { clearSidepanelChatDraft, getSidepanelChatDraft, setSidepanelChatDraft } from "@/utils/platform/sidepanel-chat-draft"
 import {
   buildSidepanelChatRequestPrompt,
   consumePendingSidepanelChatRequest,
@@ -32,6 +34,7 @@ interface ChatSessionState {
   sessionKey: string
   threadId: string | null
   initialMessages: ThreadMessageLike[]
+  draftSessionKey: string | null
 }
 
 type PendingChatRequestsAction
@@ -225,6 +228,14 @@ function createEmptySession(): ChatSessionState {
     sessionKey: `new-${getRandomUUID()}`,
     threadId: null,
     initialMessages: [],
+    draftSessionKey: null,
+  }
+}
+
+function createSavedDraft(): SidepanelChatDraft {
+  return {
+    sessionKey: `draft-${getRandomUUID()}`,
+    createdAt: Date.now(),
   }
 }
 
@@ -287,6 +298,16 @@ function createThreadSession(threadId: string, messages: PlatformChatMessage[]):
     sessionKey: `${threadId}-${getRandomUUID()}`,
     threadId,
     initialMessages: messages.map(toInitialMessage),
+    draftSessionKey: null,
+  }
+}
+
+function createDraftSession(draft: SidepanelChatDraft): ChatSessionState {
+  return {
+    sessionKey: draft.sessionKey,
+    threadId: null,
+    initialMessages: [],
+    draftSessionKey: draft.sessionKey,
   }
 }
 
@@ -364,9 +385,12 @@ function buildSnapshot(
   }
 }
 
-function createSessionFromSnapshot(snapshot: SidepanelChatSnapshot): ChatSessionState {
-  if (!snapshot.currentThreadId) {
-    return createEmptySession()
+function createSessionFromSnapshot(
+  snapshot: SidepanelChatSnapshot | null,
+  draftSession: SidepanelChatDraft | null,
+): ChatSessionState {
+  if (!snapshot?.currentThreadId) {
+    return draftSession ? createDraftSession(draftSession) : createEmptySession()
   }
 
   return createThreadSession(snapshot.currentThreadId, snapshot.currentThreadMessages)
@@ -467,6 +491,7 @@ export function ChatWorkspace({
   const language = useAtomValue(configFieldsAtomMap.language)
   const [threads, setThreads] = useState<PlatformChatThreadSummary[]>([])
   const [session, setSession] = useState<ChatSessionState>(() => createEmptySession())
+  const [draftSession, setDraftSession] = useState<SidepanelChatDraft | null>(null)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [isSummarizingCurrentPage, setIsSummarizingCurrentPage] = useState(false)
   const [isLoadingThread, setIsLoadingThread] = useState(false)
@@ -475,6 +500,7 @@ export function ChatWorkspace({
   const [pendingChatRequests, dispatchPendingChatRequests] = useReducer(pendingChatRequestsReducer, [])
   const [isChatBootstrapReady, setIsChatBootstrapReady] = useState(false)
   const snapshotRef = useRef<SidepanelChatSnapshot | null>(null)
+  const draftSessionRef = useRef<SidepanelChatDraft | null>(null)
   const replacePendingChatRequests = useCallback((requests: SidepanelChatRequest[]) => {
     dispatchPendingChatRequests({ type: "replace", requests })
   }, [])
@@ -489,6 +515,22 @@ export function ChatWorkspace({
     await setSidepanelChatSnapshot(sessionAccountKey, snapshot)
   }, [sessionAccountKey])
 
+  const persistDraftSession = useCallback(async (nextDraftSession: SidepanelChatDraft | null) => {
+    draftSessionRef.current = nextDraftSession
+    setDraftSession(nextDraftSession)
+
+    if (!sessionAccountKey) {
+      return
+    }
+
+    if (nextDraftSession) {
+      await setSidepanelChatDraft(sessionAccountKey, nextDraftSession)
+      return
+    }
+
+    await clearSidepanelChatDraft(sessionAccountKey)
+  }, [sessionAccountKey])
+
   useEffect(() => {
     let isDisposed = false
 
@@ -500,28 +542,35 @@ export function ChatWorkspace({
       if (!isSignedIn || !sessionAccountKey) {
         if (!isDisposed) {
           snapshotRef.current = null
+          draftSessionRef.current = null
           setThreads([])
           setSession(createEmptySession())
+          setDraftSession(null)
           setIsRefreshingThreads(false)
           setIsChatBootstrapReady(true)
         }
         return
       }
 
-      const cachedSnapshot = await getSidepanelChatSnapshot(sessionAccountKey)
+      const [cachedSnapshot, cachedDraftSession] = await Promise.all([
+        getSidepanelChatSnapshot(sessionAccountKey),
+        getSidepanelChatDraft(sessionAccountKey),
+      ])
       if (isDisposed) {
         return
       }
 
       snapshotRef.current = cachedSnapshot
+      draftSessionRef.current = cachedDraftSession
+      setDraftSession(cachedDraftSession)
 
       if (cachedSnapshot) {
         setThreads(cachedSnapshot.threads)
-        setSession(createSessionFromSnapshot(cachedSnapshot))
+        setSession(createSessionFromSnapshot(cachedSnapshot, cachedDraftSession))
       }
       else {
         setThreads([])
-        setSession(createEmptySession())
+        setSession(createSessionFromSnapshot(null, cachedDraftSession))
       }
 
       setIsRefreshingThreads(true)
@@ -546,7 +595,7 @@ export function ChatWorkspace({
               return current
             }
 
-            return createEmptySession()
+            return cachedDraftSession ? createDraftSession(cachedDraftSession) : createEmptySession()
           })
           await persistSnapshot(buildSnapshot(nextThreads, null, []))
           return
@@ -660,7 +709,7 @@ export function ChatWorkspace({
             return current
           }
 
-          return createEmptySession()
+          return draftSessionRef.current ? createDraftSession(draftSessionRef.current) : createEmptySession()
         })
       }
 
@@ -688,7 +737,6 @@ export function ChatWorkspace({
 
   async function selectThread(threadId: string) {
     if (!threadId) {
-      setSession(createEmptySession())
       return
     }
 
@@ -711,6 +759,18 @@ export function ChatWorkspace({
     }
   }
 
+  function selectDraft() {
+    const nextDraftSession = draftSessionRef.current
+    if (!nextDraftSession) {
+      handleStartNewChat()
+      return
+    }
+
+    setIsHistoryOpen(false)
+    setSession(createDraftSession(nextDraftSession))
+    void persistSnapshot(buildSnapshot(threads, null, []))
+  }
+
   async function handleDeleteThread(threadId: string) {
     try {
       const isDeletingCurrentThread = session.threadId === threadId
@@ -720,7 +780,7 @@ export function ChatWorkspace({
       setThreads(nextThreads)
 
       if (isDeletingCurrentThread) {
-        setSession(createEmptySession())
+        setSession(draftSessionRef.current ? createDraftSession(draftSessionRef.current) : createEmptySession())
       }
 
       const previousSnapshot = snapshotRef.current
@@ -779,8 +839,13 @@ export function ChatWorkspace({
   }, [currentWindowId])
 
   function handleStartNewChat() {
-    setSession(createEmptySession())
+    const nextDraftSession = draftSessionRef.current ?? createSavedDraft()
+    setSession(createDraftSession(nextDraftSession))
     setIsHistoryOpen(false)
+    if (!draftSessionRef.current) {
+      void persistDraftSession(nextDraftSession)
+    }
+    void persistSnapshot(buildSnapshot(threads, null, []))
   }
 
   const summarizeCurrentPage = useCallback(async () => {
@@ -866,12 +931,17 @@ export function ChatWorkspace({
             session={session}
             targetLanguageCode={language.targetCode}
             onRunCommitted={(threadId) => {
+              const shouldClearDraft = session.draftSessionKey !== null
               setSession(current => current.sessionKey === session.sessionKey
                 ? {
                     ...current,
                     threadId,
+                    draftSessionKey: null,
                   }
                 : current)
+              if (shouldClearDraft) {
+                void persistDraftSession(null)
+              }
               void syncCommittedThread(threadId)
             }}
           />
@@ -890,9 +960,12 @@ export function ChatWorkspace({
         open={isHistoryOpen}
         onOpenChange={setIsHistoryOpen}
         currentThreadId={session.threadId}
+        draftSession={draftSession}
+        isDraftSelected={session.threadId === null && session.draftSessionKey !== null}
         isBusy={isBusy}
         isRefreshing={isRefreshingThreads}
         onRefresh={() => refreshThreads(session.threadId, { showErrorToast: true })}
+        onSelectDraft={selectDraft}
         onSelectThread={async (threadId) => {
           setIsHistoryOpen(false)
           await selectThread(threadId)
