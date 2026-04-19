@@ -18,6 +18,7 @@ import App from "./app"
 import "@/assets/styles/theme.css"
 import "@assistant-ui/react-ui/styles/index.css"
 import "@assistant-ui/react-ui/styles/markdown.css"
+import "katex/dist/katex.min.css"
 import "./styles.css"
 
 function HydrateAtoms({

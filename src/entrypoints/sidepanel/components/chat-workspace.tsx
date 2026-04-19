@@ -6,7 +6,9 @@ import { AssistantRuntimeProvider, ComposerPrimitive, ThreadPrimitive, useLocalR
 import { AssistantMessage, makeMarkdownText, ThreadConfigProvider, UserMessage } from "@assistant-ui/react-ui"
 import { IconArrowUp, IconClockHour4, IconLoader2, IconMessagePlus, IconSettings } from "@tabler/icons-react"
 import { createContext, use, useEffect, useRef, useState } from "react"
+import rehypeKatex from "rehype-katex"
 import remarkGfm from "remark-gfm"
+import remarkMath from "remark-math"
 import { toast } from "sonner"
 import { PlatformQuickAccess } from "@/components/platform/platform-quick-access"
 import { Button } from "@/components/ui/base-ui/button"
@@ -26,7 +28,8 @@ const COMPLETE_STATUS: MessageStatus = {
 }
 
 const SIDE_PANEL_MARKDOWN_TEXT = makeMarkdownText({
-  remarkPlugins: [remarkGfm],
+  remarkPlugins: [remarkGfm, remarkMath],
+  rehypePlugins: [rehypeKatex],
 })
 
 const ASSISTANT_MESSAGE_CONFIG: AssistantMessageConfig = {
