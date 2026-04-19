@@ -35,7 +35,7 @@ export interface SidepanelChatSnapshot {
 
 const SIDEPANEL_CHAT_SNAPSHOT_KEY_PREFIX = "__sidepanelChatSnapshot:"
 
-function getSnapshotStorageKey(accountKey: string): string {
+function getSnapshotStorageKey(accountKey: string): `local:${string}` {
   return `local:${SIDEPANEL_CHAT_SNAPSHOT_KEY_PREFIX}${encodeURIComponent(accountKey)}`
 }
 

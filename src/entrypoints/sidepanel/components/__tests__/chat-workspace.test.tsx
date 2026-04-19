@@ -78,6 +78,18 @@ function createMessage(overrides: Partial<{
   }
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve
+  })
+
+  return {
+    promise,
+    resolve,
+  }
+}
+
 describe("chatWorkspace", () => {
   beforeAll(() => {
     class ResizeObserverMock {
@@ -114,7 +126,7 @@ describe("chatWorkspace", () => {
   it("shows a cached thread immediately while refreshing history in the background", async () => {
     const cachedThread = createThread()
     const cachedMessage = createMessage()
-    let resolveThreads: ((threads: ReturnType<typeof createThread>[]) => void) | null = null
+    const threadsDeferred = createDeferred<ReturnType<typeof createThread>[]>()
     getSidepanelChatSnapshotMock.mockResolvedValue({
       threads: [cachedThread],
       currentThreadId: cachedThread.id,
@@ -122,9 +134,7 @@ describe("chatWorkspace", () => {
       currentThreadMessages: [cachedMessage],
       cachedAt: Date.now(),
     })
-    listPlatformChatThreadsMock.mockReturnValue(new Promise((resolve) => {
-      resolveThreads = resolve
-    }))
+    listPlatformChatThreadsMock.mockReturnValue(threadsDeferred.promise)
 
     render(<ChatWorkspace isSignedIn isSessionLoading={false} sessionAccountKey="user-1" />)
 
@@ -135,7 +145,7 @@ describe("chatWorkspace", () => {
     expect(getSidepanelChatSnapshotMock).toHaveBeenCalledWith("user-1")
     expect(listPlatformChatThreadsMock).toHaveBeenCalledTimes(1)
 
-    resolveThreads?.([cachedThread])
+    threadsDeferred.resolve([cachedThread])
   })
 
   it("keeps an empty session when only remote history exists", async () => {
@@ -195,7 +205,7 @@ describe("chatWorkspace", () => {
       updatedAt: "2026-04-19T11:10:00.000Z",
       lastMessageAt: "2026-04-19T11:10:00.000Z",
     })
-    let resolveThreads: ((threads: ReturnType<typeof createThread>[]) => void) | null = null
+    const threadsDeferred = createDeferred<ReturnType<typeof createThread>[]>()
     getSidepanelChatSnapshotMock.mockResolvedValue({
       threads: [staleThread],
       currentThreadId: staleThread.id,
@@ -203,16 +213,14 @@ describe("chatWorkspace", () => {
       currentThreadMessages: [createMessage()],
       cachedAt: Date.now(),
     })
-    listPlatformChatThreadsMock.mockReturnValue(new Promise((resolve) => {
-      resolveThreads = resolve
-    }))
+    listPlatformChatThreadsMock.mockReturnValue(threadsDeferred.promise)
 
     render(<ChatWorkspace isSignedIn isSessionLoading={false} sessionAccountKey="user-1" />)
 
     await screen.findByText("Cached hello")
     expect(screen.getByText("Cached hello")).toBeInTheDocument()
 
-    resolveThreads?.([replacementThread])
+    threadsDeferred.resolve([replacementThread])
 
     await waitFor(() => {
       expect(screen.queryByText("Cached hello")).not.toBeInTheDocument()
