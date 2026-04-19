@@ -58,6 +58,12 @@ platform:
       logOut: 로그아웃
     toast:
       loggedOut: 로그아웃됨
+sidepanel:
+  actions:
+    explainPage: 페이지 설명
+    newChat: 새 대화
+    history: 대화 기록
+    account: 계정
 errorRecovery:
   title: 문제가 발생했습니다
   description: 복구 모드가 활성화되었습니다. 현재 설정을 백업으로 내보낸 뒤 설정을 초기화하고 다시 시도하세요.

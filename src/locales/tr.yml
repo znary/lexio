@@ -58,6 +58,12 @@ platform:
       logOut: Çıkış yap
     toast:
       loggedOut: Çıkış yapıldı
+sidepanel:
+  actions:
+    explainPage: Sayfayı açıkla
+    newChat: Yeni sohbet
+    history: Geçmiş
+    account: Hesap
 errorRecovery:
   title: Bir sorun oluştu
   description: Kurtarma modu etkin. Geçerli ayarlarınızı yedek olarak dışa aktarabilir, ardından ayarları sıfırlayıp tekrar deneyebilirsiniz.

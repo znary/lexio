@@ -60,6 +60,12 @@ platform:
       logOut: 登出
     toast:
       loggedOut: 已登出
+sidepanel:
+  actions:
+    explainPage: 解釋網頁
+    newChat: 新對話
+    history: 歷史對話
+    account: 帳戶
 errorRecovery:
   title: 應用發生異常
   description: 已進入恢復模式。你可以先導出當前設定作為備份，再重置設定後重試。

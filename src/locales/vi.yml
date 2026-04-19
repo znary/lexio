@@ -58,6 +58,12 @@ platform:
       logOut: Đăng xuất
     toast:
       loggedOut: Đã đăng xuất
+sidepanel:
+  actions:
+    explainPage: Giải thích trang
+    newChat: Cuộc trò chuyện mới
+    history: Lịch sử trò chuyện
+    account: Tài khoản
 errorRecovery:
   title: Đã xảy ra sự cố
   description: Chế độ khôi phục đang hoạt động. Bạn có thể xuất cài đặt hiện tại để sao lưu, sau đó đặt lại cài đặt và thử lại.

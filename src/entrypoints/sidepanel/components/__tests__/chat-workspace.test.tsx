@@ -67,6 +67,9 @@ vi.mock("#imports", () => ({
       query: vi.fn(),
     },
   },
+  i18n: {
+    t: (key: string) => key,
+  },
 }))
 
 vi.mock("@/components/platform/platform-quick-access", () => ({
@@ -117,6 +120,17 @@ function createDeferred<T>() {
   }
 }
 
+async function openTooltip(trigger: Element) {
+  fireEvent.mouseEnter(trigger)
+  fireEvent.focus(trigger)
+
+  await waitFor(() => {
+    expect(document.querySelector("[data-slot='tooltip-content']")).toBeTruthy()
+  })
+
+  return document.querySelector("[data-slot='tooltip-content']")
+}
+
 describe("chatWorkspace", () => {
   beforeAll(() => {
     class ResizeObserverMock {
@@ -155,6 +169,56 @@ describe("chatWorkspace", () => {
     expect(screen.getByRole("button", { name: "Open account menu" })).toBeInTheDocument()
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument()
     expect(listPlatformChatThreadsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps new chat as the first composer tool and moves page explain behind it", async () => {
+    const { container } = render(<ChatWorkspace isSignedIn isSessionLoading={false} sessionAccountKey="user-1" />)
+
+    await screen.findByPlaceholderText("问任何问题")
+
+    const toolButtons = Array.from(
+      container.querySelector(".lexio-sider-composer-tools")!.querySelectorAll("button"),
+    ).map(button => button.getAttribute("aria-label") ?? button.textContent?.trim())
+
+    expect(toolButtons).toEqual([
+      "Start new chat",
+      "Summarize current page",
+      "Open chat history",
+      "Open full settings",
+      "Open account menu",
+    ])
+  })
+
+  it("shows short hover labels for the composer tools", async () => {
+    render(<ChatWorkspace isSignedIn isSessionLoading={false} sessionAccountKey="user-1" />)
+
+    await screen.findByPlaceholderText("问任何问题")
+
+    const newChatTrigger = screen.getByRole("button", { name: "Start new chat" }).closest("[data-slot='tooltip-trigger']")
+    const summarizeTrigger = screen.getByRole("button", { name: "Summarize current page" }).closest("[data-slot='tooltip-trigger']")
+    const historyTrigger = screen.getByRole("button", { name: "Open chat history" }).closest("[data-slot='tooltip-trigger']")
+    const settingsTrigger = screen.getByRole("button", { name: "Open full settings" }).closest("[data-slot='tooltip-trigger']")
+    const accountTrigger = screen.getByRole("button", { name: "Open account menu" }).closest("[data-slot='tooltip-trigger']")
+
+    expect(newChatTrigger).toBeTruthy()
+    expect(summarizeTrigger).toBeTruthy()
+    expect(historyTrigger).toBeTruthy()
+    expect(settingsTrigger).toBeTruthy()
+    expect(accountTrigger).toBeTruthy()
+
+    expect(await openTooltip(newChatTrigger!)).toHaveTextContent("sidepanel.actions.newChat")
+    fireEvent.mouseLeave(newChatTrigger!)
+
+    expect(await openTooltip(summarizeTrigger!)).toHaveTextContent("sidepanel.actions.explainPage")
+    fireEvent.mouseLeave(summarizeTrigger!)
+
+    expect(await openTooltip(historyTrigger!)).toHaveTextContent("sidepanel.actions.history")
+    fireEvent.mouseLeave(historyTrigger!)
+
+    expect(await openTooltip(settingsTrigger!)).toHaveTextContent("options.sidebar.settings")
+    fireEvent.mouseLeave(settingsTrigger!)
+
+    expect(await openTooltip(accountTrigger!)).toHaveTextContent("sidepanel.actions.account")
   })
 
   it("shows a cached thread immediately while refreshing history in the background", async () => {

@@ -33,6 +33,7 @@ vi.mock("@/utils/atoms/config", () => ({
 vi.mock("../../../atoms", () => ({
   enablePageTranslationAtom: atom({ enabled: false }),
   isDraggingButtonAtom: atom(false),
+  isSideOpenAtom: atom(false),
 }))
 
 vi.mock("../../../index", () => ({
@@ -108,19 +109,26 @@ describe("floatingButton close trigger", () => {
     )
   })
 
-  it("opens the native side panel when the main floating trigger is clicked", () => {
+  it("expands the secondary actions when the main floating trigger is clicked", () => {
     render(<FloatingButton />)
 
     const mainTrigger = screen.getByRole("img").closest("div")
+    const hiddenButtons = screen.getAllByTestId("hidden-button")
 
     expect(mainTrigger).not.toBeNull()
     expect(mainTrigger?.parentElement).toHaveStyle({
       right: "var(--removed-body-scroll-bar-size, 0px)",
     })
+    hiddenButtons.forEach((button) => {
+      expect(button).not.toHaveClass("translate-x-0")
+    })
 
     fireEvent.mouseDown(mainTrigger!, { clientY: 100 })
     fireEvent.mouseUp(document, { clientY: 100 })
 
-    expect(sendMessageMock).toHaveBeenCalledWith("openSidePanel", undefined)
+    expect(sendMessageMock).not.toHaveBeenCalledWith("openSidePanel", undefined)
+    hiddenButtons.forEach((button) => {
+      expect(button).toHaveClass("translate-x-0")
+    })
   })
 })

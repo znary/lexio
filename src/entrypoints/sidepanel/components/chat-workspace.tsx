@@ -3,7 +3,7 @@ import type { AssistantMessageConfig, UserMessageConfig } from "@assistant-ui/re
 import type { PlatformChatMessage, PlatformChatThreadSummary } from "@/utils/platform/api"
 import type { SidepanelChatSnapshot } from "@/utils/platform/chat-cache"
 import type { SidepanelChatRequest } from "@/utils/platform/sidepanel-chat-request"
-import { browser } from "#imports"
+import { browser, i18n } from "#imports"
 import { AssistantRuntimeProvider, ComposerPrimitive, ThreadPrimitive, useLocalRuntime, useThreadRuntime } from "@assistant-ui/react"
 import { AssistantMessage, ThreadConfigProvider, UserMessage } from "@assistant-ui/react-ui"
 import { IconArrowUp, IconClockHour4, IconFileDescription, IconLoader2, IconMessagePlus, IconSettings } from "@tabler/icons-react"
@@ -12,6 +12,7 @@ import { createContext, use, useCallback, useEffect, useReducer, useRef, useStat
 import { toast } from "sonner"
 import { PlatformQuickAccess } from "@/components/platform/platform-quick-access"
 import { Button } from "@/components/ui/base-ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/base-ui/tooltip"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { getRandomUUID } from "@/utils/crypto-polyfill"
 import { sendMessage } from "@/utils/message"
@@ -77,6 +78,23 @@ function useComposerControls(): ComposerControlsContextValue {
   return context
 }
 
+function ComposerToolTooltip({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex" />}>
+        {children}
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 function SiderComposer() {
   const {
     isSignedIn,
@@ -98,56 +116,66 @@ function SiderComposer() {
 
       <div className="lexio-sider-composer-footer">
         <div className="lexio-sider-composer-tools">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="lexio-sider-tool-button"
-            aria-label="Summarize current page"
-            onClick={onSummarizeCurrentPage}
-            disabled={isSummarizingCurrentPage}
-          >
-            {isSummarizingCurrentPage
-              ? <IconLoader2 className="size-4 animate-spin" />
-              : <IconFileDescription className="size-4" />}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="lexio-sider-tool-button"
-            aria-label="Start new chat"
-            onClick={onStartNewChat}
-            disabled={!isSignedIn}
-          >
-            <IconMessagePlus className="size-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="lexio-sider-tool-button"
-            aria-label="Open chat history"
-            onClick={onOpenHistory}
-            disabled={!isSignedIn}
-          >
-            <IconClockHour4 className="size-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="lexio-sider-tool-button"
-            aria-label="Open full settings"
-            onClick={onOpenSettings}
-          >
-            <IconSettings className="size-4" />
-          </Button>
-          <PlatformQuickAccess
-            variant="menu"
-            size="sm"
-            className="lexio-sider-tool-button"
-          />
+          <ComposerToolTooltip label={i18n.t("sidepanel.actions.newChat")}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="lexio-sider-tool-button"
+              aria-label="Start new chat"
+              onClick={onStartNewChat}
+              disabled={!isSignedIn}
+            >
+              <IconMessagePlus className="size-4" />
+            </Button>
+          </ComposerToolTooltip>
+          <ComposerToolTooltip label={i18n.t("sidepanel.actions.explainPage")}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="lexio-sider-tool-button"
+              aria-label="Summarize current page"
+              onClick={onSummarizeCurrentPage}
+              disabled={isSummarizingCurrentPage}
+            >
+              {isSummarizingCurrentPage
+                ? <IconLoader2 className="size-4 animate-spin" />
+                : <IconFileDescription className="size-4" />}
+            </Button>
+          </ComposerToolTooltip>
+          <ComposerToolTooltip label={i18n.t("sidepanel.actions.history")}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="lexio-sider-tool-button"
+              aria-label="Open chat history"
+              onClick={onOpenHistory}
+              disabled={!isSignedIn}
+            >
+              <IconClockHour4 className="size-4" />
+            </Button>
+          </ComposerToolTooltip>
+          <ComposerToolTooltip label={i18n.t("options.sidebar.settings")}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="lexio-sider-tool-button"
+              aria-label="Open full settings"
+              onClick={onOpenSettings}
+            >
+              <IconSettings className="size-4" />
+            </Button>
+          </ComposerToolTooltip>
+          <ComposerToolTooltip label={i18n.t("sidepanel.actions.account")}>
+            <PlatformQuickAccess
+              variant="menu"
+              size="sm"
+              className="lexio-sider-tool-button"
+            />
+          </ComposerToolTooltip>
         </div>
 
         <div className="lexio-sider-composer-actions">

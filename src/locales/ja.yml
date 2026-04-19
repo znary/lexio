@@ -58,6 +58,12 @@ platform:
       logOut: ログアウト
     toast:
       loggedOut: ログアウトしました
+sidepanel:
+  actions:
+    explainPage: ページ説明
+    newChat: 新しい会話
+    history: 履歴
+    account: アカウント
 errorRecovery:
   title: 問題が発生しました
   description: 復旧モードが有効です。現在の設定をバックアップとしてエクスポートし、設定をリセットして再試行してください。

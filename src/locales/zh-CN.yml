@@ -56,6 +56,12 @@ platform:
       logOut: 退出登录
     toast:
       loggedOut: 已退出登录
+sidepanel:
+  actions:
+    explainPage: 解释网页
+    newChat: 新对话
+    history: 历史对话
+    account: 账户
 errorRecovery:
   title: 应用发生异常
   description: 已进入恢复模式。你可以先导出当前设置作为备份，再重置设置后重试。

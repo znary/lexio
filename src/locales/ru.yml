@@ -58,6 +58,12 @@ platform:
       logOut: Выйти
     toast:
       loggedOut: Вы вышли из аккаунта
+sidepanel:
+  actions:
+    explainPage: Объяснить страницу
+    newChat: Новый чат
+    history: История
+    account: Аккаунт
 errorRecovery:
   title: Что-то пошло не так
   description: Активирован режим восстановления. Вы можете экспортировать текущие настройки как резервную копию, затем сбросить настройки и попробовать снова.
