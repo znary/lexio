@@ -1,12 +1,18 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
-import { atom } from "jotai"
+import { atom, createStore, Provider } from "jotai"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE } from "@/entrypoints/selection.content/overlay-layers"
+import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { CONTENT_WRAPPER_CLASS, INLINE_CONTENT_CLASS, NOTRANSLATE_CLASS } from "@/utils/constants/dom-labels"
 import { SelectionToolbar } from "../index"
 
 const MOCK_SELECTED_TEXT = "Selected Text"
+const sendMessageMock = vi.fn()
+
+vi.mock("@/utils/message", () => ({
+  sendMessage: (...args: unknown[]) => sendMessageMock(...args),
+}))
 
 // Mock child components
 vi.mock("../translate-button", () => ({
@@ -63,6 +69,7 @@ describe("selectionToolbar - isInputOrTextarea logic", () => {
 
     // Initialize mock selection text function
     mockSelectionToString = vi.fn(() => MOCK_SELECTED_TEXT)
+    sendMessageMock.mockResolvedValue(undefined)
 
     // Mock window.getSelection with dynamic text
     window.getSelection = vi.fn(() => ({
@@ -147,6 +154,54 @@ describe("selectionToolbar - isInputOrTextarea logic", () => {
 
     await triggerMouseUpWithSelection(screen.getByTestId("test-element"))
     await waitFor(expectToolbarVisible)
+  })
+
+  it("should still render Explain when explain toggle is false", async () => {
+    const store = createStore()
+    void store.set(configFieldsAtomMap.selectionToolbar, {
+      enabled: true,
+      disabledSelectionToolbarPatterns: [],
+      opacity: 100,
+      features: {
+        translate: { enabled: true, providerId: "microsoft-translate-default" },
+        speak: { enabled: true },
+        explain: { enabled: false, providerId: "microsoft-translate-default" },
+      },
+      customActions: [],
+    })
+
+    render(
+      <Provider store={store}>
+        <div>
+          <SelectionToolbar />
+          <div data-testid="test-element">{MOCK_SELECTED_TEXT}</div>
+        </div>
+      </Provider>,
+    )
+
+    await triggerMouseUpWithSelection(screen.getByTestId("test-element"))
+    await waitFor(expectToolbarVisible)
+    expect(screen.getByRole("button", { name: "Explain" })).toBeInTheDocument()
+  })
+
+  it("should notify background when selection state changes", async () => {
+    render(
+      <div>
+        <SelectionToolbar />
+        <div data-testid="test-element">{MOCK_SELECTED_TEXT}</div>
+      </div>,
+    )
+
+    await triggerMouseUpWithSelection(screen.getByTestId("test-element"))
+
+    expect(sendMessageMock).toHaveBeenCalledWith("notifySelectionContextMenuState", { hasSelection: true })
+
+    setMockSelectionText("")
+    await act(async () => {
+      document.dispatchEvent(new Event("selectionchange"))
+    })
+
+    expect(sendMessageMock).toHaveBeenCalledWith("notifySelectionContextMenuState", { hasSelection: false })
   })
 
   it("should show toolbar when selecting text in input and target equals activeElement", async () => {

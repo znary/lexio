@@ -1,23 +1,29 @@
 import type { MessageStatus, ThreadMessage, ThreadMessageLike } from "@assistant-ui/react"
 import type { AssistantMessageConfig, UserMessageConfig } from "@assistant-ui/react-ui"
-import type { ReactNode } from "react"
-import type { CurrentWebPageSummaryResult } from "./current-webpage-summary"
 import type { PlatformChatMessage, PlatformChatThreadSummary } from "@/utils/platform/api"
 import type { SidepanelChatSnapshot } from "@/utils/platform/chat-cache"
+import type { SidepanelChatRequest } from "@/utils/platform/sidepanel-chat-request"
 import { browser } from "#imports"
-import { AssistantRuntimeProvider, ComposerPrimitive, ThreadPrimitive, useLocalRuntime } from "@assistant-ui/react"
+import { AssistantRuntimeProvider, ComposerPrimitive, ThreadPrimitive, useLocalRuntime, useThreadRuntime } from "@assistant-ui/react"
 import { AssistantMessage, ThreadConfigProvider, UserMessage } from "@assistant-ui/react-ui"
 import { IconArrowUp, IconClockHour4, IconFileDescription, IconLoader2, IconMessagePlus, IconSettings } from "@tabler/icons-react"
 import { useAtomValue } from "jotai"
-import { createContext, use, useCallback, useEffect, useRef, useState } from "react"
+import { createContext, use, useCallback, useEffect, useReducer, useRef, useState } from "react"
 import { toast } from "sonner"
 import { PlatformQuickAccess } from "@/components/platform/platform-quick-access"
 import { Button } from "@/components/ui/base-ui/button"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { getRandomUUID } from "@/utils/crypto-polyfill"
+import { sendMessage } from "@/utils/message"
 import { createPlatformChatThread, deletePlatformChatThread, getPlatformChatThreadMessages, listPlatformChatThreads, streamPlatformChatThreadMessage } from "@/utils/platform/api"
 import { getSidepanelChatSnapshot, setSidepanelChatSnapshot } from "@/utils/platform/chat-cache"
-import { CurrentWebPageSummaryCard, generateCurrentWebPageSummary } from "./current-webpage-summary"
+import {
+  buildSidepanelChatRequestPrompt,
+  consumePendingSidepanelChatRequest,
+  createSidepanelChatRequest,
+  getPendingSidepanelChatRequests,
+  watchPendingSidepanelChatRequests,
+} from "@/utils/platform/sidepanel-chat-request"
 import { SIDEPANEL_MARKDOWN_TEXT } from "./sidepanel-markdown"
 import { ThreadHistorySheet } from "./thread-history-sheet"
 
@@ -26,6 +32,11 @@ interface ChatSessionState {
   threadId: string | null
   initialMessages: ThreadMessageLike[]
 }
+
+type PendingChatRequestsAction
+  = { type: "replace", requests: SidepanelChatRequest[] }
+    | { type: "enqueue", request: SidepanelChatRequest }
+    | { type: "consume", requestId: string }
 
 const COMPLETE_STATUS: MessageStatus = {
   type: "complete",
@@ -149,11 +160,7 @@ function SiderComposer() {
   )
 }
 
-function SidepanelThread({
-  summaryPanel,
-}: {
-  summaryPanel?: ReactNode
-}) {
+function SidepanelThread() {
   return (
     <ThreadConfigProvider
       config={{
@@ -172,7 +179,6 @@ function SidepanelThread({
     >
       <ThreadPrimitive.Root className="sidepanel-chat-shell">
         <ThreadPrimitive.Viewport className="sidepanel-chat-viewport">
-          {summaryPanel}
           <ThreadPrimitive.Messages
             components={{
               UserMessage,
@@ -192,6 +198,60 @@ function createEmptySession(): ChatSessionState {
     threadId: null,
     initialMessages: [],
   }
+}
+
+function pendingChatRequestsReducer(
+  state: SidepanelChatRequest[],
+  action: PendingChatRequestsAction,
+) {
+  if (action.type === "replace") {
+    return action.requests
+  }
+
+  if (action.type === "enqueue") {
+    return [...state, action.request]
+  }
+
+  return state.filter(request => request.id !== action.requestId)
+}
+
+function PendingSidepanelChatRequestSender({
+  request,
+  targetLanguageCode,
+  onHandled,
+}: {
+  request: SidepanelChatRequest | null
+  targetLanguageCode: Parameters<typeof buildSidepanelChatRequestPrompt>[1]
+  onHandled: (requestId: string) => void
+}) {
+  const thread = useThreadRuntime()
+  const handledRequestIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!request || handledRequestIdRef.current === request.id) {
+      return
+    }
+
+    handledRequestIdRef.current = request.id
+
+    try {
+      thread.append({
+        role: "user",
+        content: [{
+          type: "text",
+          text: buildSidepanelChatRequestPrompt(request.payload, targetLanguageCode),
+        }],
+        startRun: true,
+      })
+    }
+    catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to send the prepared chat request.")
+    }
+
+    onHandled(request.id)
+  }, [onHandled, request, targetLanguageCode, thread])
+
+  return null
 }
 
 function createThreadSession(threadId: string, messages: PlatformChatMessage[]): ChatSessionState {
@@ -291,8 +351,10 @@ function ChatRuntimePane({
   onOpenSettings,
   onStartNewChat,
   onSummarizeCurrentPage,
+  pendingChatRequest,
+  onPendingChatRequestHandled,
   session,
-  summaryPanel,
+  targetLanguageCode,
   onRunCommitted,
 }: {
   isSignedIn: boolean
@@ -301,8 +363,10 @@ function ChatRuntimePane({
   onOpenSettings: () => void
   onStartNewChat: () => void
   onSummarizeCurrentPage: () => void
+  pendingChatRequest: SidepanelChatRequest | null
+  onPendingChatRequestHandled: (requestId: string) => void
   session: ChatSessionState
-  summaryPanel?: ReactNode
+  targetLanguageCode: Parameters<typeof buildSidepanelChatRequestPrompt>[1]
   onRunCommitted: (threadId: string) => void
 }) {
   const threadIdRef = useRef(session.threadId)
@@ -351,7 +415,12 @@ function ChatRuntimePane({
         }}
       >
         <div className="sidepanel-chat-thread flex h-full min-h-0 flex-col">
-          <SidepanelThread summaryPanel={summaryPanel} />
+          <PendingSidepanelChatRequestSender
+            request={pendingChatRequest}
+            targetLanguageCode={targetLanguageCode}
+            onHandled={onPendingChatRequestHandled}
+          />
+          <SidepanelThread />
         </div>
       </ComposerControlsContext>
     </AssistantRuntimeProvider>
@@ -367,16 +436,20 @@ export function ChatWorkspace({
   isSessionLoading: boolean
   sessionAccountKey: string | null
 }) {
-  const providersConfig = useAtomValue(configFieldsAtomMap.providersConfig)
-  const translateConfig = useAtomValue(configFieldsAtomMap.translate)
+  const language = useAtomValue(configFieldsAtomMap.language)
   const [threads, setThreads] = useState<PlatformChatThreadSummary[]>([])
   const [session, setSession] = useState<ChatSessionState>(() => createEmptySession())
-  const [currentWebPageSummary, setCurrentWebPageSummary] = useState<CurrentWebPageSummaryResult | null>(null)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [isSummarizingCurrentPage, setIsSummarizingCurrentPage] = useState(false)
   const [isLoadingThread, setIsLoadingThread] = useState(false)
   const [isRefreshingThreads, setIsRefreshingThreads] = useState(false)
+  const [currentWindowId, setCurrentWindowId] = useState<number | null>(null)
+  const [pendingChatRequests, dispatchPendingChatRequests] = useReducer(pendingChatRequestsReducer, [])
+  const [isChatBootstrapReady, setIsChatBootstrapReady] = useState(false)
   const snapshotRef = useRef<SidepanelChatSnapshot | null>(null)
+  const replacePendingChatRequests = useCallback((requests: SidepanelChatRequest[]) => {
+    dispatchPendingChatRequests({ type: "replace", requests })
+  }, [])
 
   const persistSnapshot = useCallback(async (snapshot: SidepanelChatSnapshot) => {
     snapshotRef.current = snapshot
@@ -392,12 +465,17 @@ export function ChatWorkspace({
     let isDisposed = false
 
     async function bootstrapChat() {
+      if (!isDisposed) {
+        setIsChatBootstrapReady(false)
+      }
+
       if (!isSignedIn || !sessionAccountKey) {
         if (!isDisposed) {
           snapshotRef.current = null
           setThreads([])
           setSession(createEmptySession())
           setIsRefreshingThreads(false)
+          setIsChatBootstrapReady(true)
         }
         return
       }
@@ -481,6 +559,7 @@ export function ChatWorkspace({
       finally {
         if (!isDisposed) {
           setIsRefreshingThreads(false)
+          setIsChatBootstrapReady(true)
         }
       }
     }
@@ -491,6 +570,49 @@ export function ChatWorkspace({
       isDisposed = true
     }
   }, [isSignedIn, sessionAccountKey, persistSnapshot])
+
+  useEffect(() => {
+    let isDisposed = false
+
+    void browser.tabs.query({
+      active: true,
+      currentWindow: true,
+    }).then(([activeTab]) => {
+      if (!isDisposed) {
+        setCurrentWindowId(activeTab?.windowId ?? null)
+      }
+    })
+
+    return () => {
+      isDisposed = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!currentWindowId) {
+      replacePendingChatRequests([])
+      return
+    }
+
+    let isDisposed = false
+
+    void getPendingSidepanelChatRequests(currentWindowId).then((requests) => {
+      if (!isDisposed) {
+        replacePendingChatRequests(requests)
+      }
+    })
+
+    const unwatch = watchPendingSidepanelChatRequests(currentWindowId, (requests) => {
+      if (!isDisposed) {
+        replacePendingChatRequests(requests)
+      }
+    })
+
+    return () => {
+      isDisposed = true
+      unwatch()
+    }
+  }, [currentWindowId, replacePendingChatRequests])
 
   async function refreshThreads(keepThreadId: string | null, options?: { showErrorToast?: boolean }) {
     setIsRefreshingThreads(true)
@@ -618,6 +740,16 @@ export function ChatWorkspace({
     }
   }
 
+  const handlePendingChatRequestHandled = useCallback((requestId: string) => {
+    dispatchPendingChatRequests({ type: "consume", requestId })
+
+    if (!currentWindowId) {
+      return
+    }
+
+    void consumePendingSidepanelChatRequest(currentWindowId, requestId)
+  }, [currentWindowId])
+
   function handleStartNewChat() {
     setSession(createEmptySession())
     setIsHistoryOpen(false)
@@ -626,11 +758,29 @@ export function ChatWorkspace({
   const summarizeCurrentPage = useCallback(async () => {
     setIsSummarizingCurrentPage(true)
     try {
-      const summary = await generateCurrentWebPageSummary({
-        providersConfig,
-        translate: translateConfig,
+      const [activeTab] = await browser.tabs.query({
+        active: true,
+        currentWindow: true,
       })
-      setCurrentWebPageSummary(summary)
+      if (!activeTab?.id) {
+        throw new Error("Current page is unavailable on this tab.")
+      }
+
+      const webPageContext = await sendMessage("getCurrentWebPageContext", undefined, activeTab.id)
+      const pageUrl = webPageContext?.url?.trim() ?? activeTab.url?.trim()
+      if (!pageUrl) {
+        throw new Error("Current page URL is unavailable on this tab.")
+      }
+
+      dispatchPendingChatRequests({
+        type: "enqueue",
+        request: createSidepanelChatRequest({
+          type: "current-webpage-summary",
+          pageTitle: webPageContext?.webTitle.trim() || activeTab.title?.trim() || undefined,
+          pageUrl,
+          pageContent: webPageContext?.webContent.trim() || undefined,
+        }),
+      })
     }
     catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to summarize the current page.")
@@ -638,7 +788,7 @@ export function ChatWorkspace({
     finally {
       setIsSummarizingCurrentPage(false)
     }
-  }, [providersConfig, translateConfig])
+  }, [])
 
   const isWorkspaceLoading = isSessionLoading
   const isBusy = isWorkspaceLoading || isLoadingThread
@@ -683,8 +833,10 @@ export function ChatWorkspace({
             onSummarizeCurrentPage={() => {
               void summarizeCurrentPage()
             }}
+            pendingChatRequest={isChatBootstrapReady ? (pendingChatRequests[0] ?? null) : null}
+            onPendingChatRequestHandled={handlePendingChatRequestHandled}
             session={session}
-            summaryPanel={currentWebPageSummary ? <CurrentWebPageSummaryCard summary={currentWebPageSummary} /> : null}
+            targetLanguageCode={language.targetCode}
             onRunCommitted={(threadId) => {
               setSession(current => current.sessionKey === session.sessionKey
                 ? {

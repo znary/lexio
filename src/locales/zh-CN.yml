@@ -6,8 +6,10 @@ dataTypes:
   string: 文本
   number: 数字
 contextMenu:
-  translate: 翻译
-  translateSelection: 翻译“%s”
+  translate: 翻译此网页
+  summarizeCurrentPage: 总结此网页
+  translateSelection: 翻译选中文本
+  explainSelection: 解释选中文本
   showOriginal: 显示原文
 popup:
   theme: 主题

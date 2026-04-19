@@ -10,7 +10,7 @@ import { setupAnalyticsMessageHandlers } from "./analytics"
 import { dispatchBackgroundStreamPort } from "./background-stream"
 import { ensureInitializedConfig } from "./config"
 import { setUpConfigBackup } from "./config-backup"
-import { initializeContextMenu, registerContextMenuListeners } from "./context-menu"
+import { clearSelectionContextMenuState, initializeContextMenu, registerContextMenuListeners, setSelectionContextMenuState } from "./context-menu"
 import { cleanupAllAiSegmentationCache, cleanupAllSummaryCache, cleanupAllTranslationCache, setUpDatabaseCleanup } from "./db-cleanup"
 import { setupEdgeTTSMessageHandlers } from "./edge-tts"
 import { setupIframeInjection } from "./iframe-injection"
@@ -19,7 +19,7 @@ import { initMockData } from "./mock-data"
 import { newUserGuide } from "./new-user-guide"
 import { handlePlatformAuthExternalMessage } from "./platform-auth"
 import { proxyFetch } from "./proxy-fetch"
-import { openSidePanelInActiveWindow, setUpSidePanelBehavior } from "./sidepanel"
+import { openSidePanelForChatRequest, openSidePanelInActiveWindow, openSidePanelInWindow, setUpSidePanelBehavior } from "./sidepanel"
 import { setUpSubtitlesTranslationQueue, setUpWebPageTranslationQueue } from "./translation-queues"
 import { translationMessage } from "./translation-signal"
 import { setupTTSPlaybackMessageHandlers } from "./tts-playback"
@@ -68,9 +68,37 @@ export default defineBackground({
       void browser.runtime.openOptionsPage()
     })
 
-    onMessage("openSidePanel", async () => {
+    onMessage("openSidePanel", async (message) => {
       logger.info("openSidePanel")
+      const senderWindowId = message.sender?.tab?.windowId
+      if (senderWindowId) {
+        return await openSidePanelInWindow(senderWindowId)
+      }
       return await openSidePanelInActiveWindow()
+    })
+
+    onMessage("openSidePanelChatRequest", async (message) => {
+      logger.info("openSidePanelChatRequest", { type: message.data.type })
+      const senderWindowId = message.sender?.tab?.windowId
+      if (!senderWindowId) {
+        return false
+      }
+
+      return await openSidePanelForChatRequest(message.data, senderWindowId)
+    })
+
+    onMessage("notifySelectionContextMenuState", async (message) => {
+      const senderTabId = message.sender?.tab?.id
+      if (!senderTabId) {
+        return
+      }
+
+      if (message.data.hasSelection) {
+        await setSelectionContextMenuState(senderTabId, true)
+        return
+      }
+
+      await clearSelectionContextMenuState(senderTabId)
     })
 
     browser.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {

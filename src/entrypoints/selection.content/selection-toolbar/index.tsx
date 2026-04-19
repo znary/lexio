@@ -5,9 +5,9 @@ import {
   SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE,
 } from "@/entrypoints/selection.content/overlay-layers"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
-import { isSelectionToolbarInternalAction } from "@/utils/constants/custom-action"
 import { CONTENT_WRAPPER_CLASS, NOTRANSLATE_CLASS } from "@/utils/constants/dom-labels"
 import { MARGIN } from "@/utils/constants/selection"
+import { sendMessage } from "@/utils/message"
 import { cn } from "@/utils/styles/utils"
 import { matchDomainPattern } from "@/utils/url"
 import { buildContextSnapshot, readSelectionSnapshot } from "../utils"
@@ -286,6 +286,7 @@ export function SelectionToolbar() {
   const selectionDirectionRef = useRef<SelectionDirection>(SelectionDirection.BOTTOM_RIGHT) // store selection direction
   const isPointerDownInsideOverlayRef = useRef(false)
   const preserveSelectionStateRef = useRef(false)
+  const lastContextMenuSelectionStateRef = useRef<boolean | null>(null)
   const [isSelectionToolbarVisible, setIsSelectionToolbarVisible] = useAtom(isSelectionToolbarVisibleAtom)
   const setSelectionToolbarRect = useSetAtom(selectionToolbarRectAtom)
   const setSelectionState = useSetAtom(setSelectionStateAtom)
@@ -336,6 +337,15 @@ export function SelectionToolbar() {
       height: tooltipHeight,
     })
   }, [isSelectionToolbarVisible, setSelectionToolbarRect])
+
+  const notifySelectionContextMenuState = useCallback((hasSelection: boolean) => {
+    if (lastContextMenuSelectionStateRef.current === hasSelection) {
+      return
+    }
+
+    lastContextMenuSelectionStateRef.current = hasSelection
+    void sendMessage("notifySelectionContextMenuState", { hasSelection })
+  }, [])
 
   useLayoutEffect(() => {
     updatePosition()
@@ -390,6 +400,7 @@ export function SelectionToolbar() {
             selection: selectionSnapshot,
             context: buildContextSnapshot(selectionSnapshot),
           })
+          notifySelectionContextMenuState(true)
           // calculate the position relative to the document
           const scrollY = window.scrollY
           const scrollX = window.scrollX
@@ -443,6 +454,7 @@ export function SelectionToolbar() {
       clearSelectionState()
       setSelectionToolbarRect(null)
       setIsSelectionToolbarVisible(false)
+      notifySelectionContextMenuState(false)
     }
 
     const handleSelectionChange = () => {
@@ -466,6 +478,7 @@ export function SelectionToolbar() {
         // (Firefox clears selection when dropdown gains focus)
         if (!dropdownOpenRef.current)
           setIsSelectionToolbarVisible(false)
+        notifySelectionContextMenuState(false)
       }
     }
 
@@ -493,13 +506,14 @@ export function SelectionToolbar() {
         cancelAnimationFrame(animationFrameId)
       }
     }
-  }, [clearSelectionState, isSelectionToolbarVisible, setIsSelectionToolbarVisible, setSelectionState, setSelectionToolbarRect, updatePosition])
+  }, [clearSelectionState, isSelectionToolbarVisible, notifySelectionContextMenuState, setIsSelectionToolbarVisible, setSelectionState, setSelectionToolbarRect, updatePosition])
 
   useEffect(() => {
     return () => {
       setSelectionToolbarRect(null)
+      notifySelectionContextMenuState(false)
     }
-  }, [setSelectionToolbarRect])
+  }, [notifySelectionContextMenuState, setSelectionToolbarRect])
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -515,13 +529,6 @@ export function SelectionToolbar() {
   )
 
   const { features } = selectionToolbar
-  const hasAnyEnabledFeature
-    = features.translate.enabled
-      || features.explain.enabled
-      || (!isFirefox && features.speak.enabled)
-      || selectionToolbar.customActions.some(action =>
-        action.enabled !== false && !isSelectionToolbarInternalAction(action),
-      )
 
   return (
     <div
@@ -529,7 +536,7 @@ export function SelectionToolbar() {
       className={NOTRANSLATE_CLASS}
       {...{ [SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE]: "" }}
     >
-      {selectionToolbar.enabled && !isSiteDisabled && hasAnyEnabledFeature && (
+      {selectionToolbar.enabled && !isSiteDisabled && (
         <div
           ref={tooltipRef}
           inert={!isSelectionToolbarVisible}
@@ -540,7 +547,7 @@ export function SelectionToolbar() {
         >
           <div className="flex items-center overflow-x-auto overflow-y-hidden rounded-sm max-w-105 no-scrollbar">
             {features.translate.enabled && <TranslateButton />}
-            {features.explain.enabled && <ExplainButton />}
+            <ExplainButton />
             {!isFirefox && features.speak.enabled && <SpeakButton />}
             <SelectionToolbarCustomActionButtons />
           </div>

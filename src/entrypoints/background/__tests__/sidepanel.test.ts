@@ -1,6 +1,11 @@
 import { browser } from "#imports"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+vi.mock("@/utils/platform/sidepanel-chat-request", () => ({
+  createSidepanelChatRequest: vi.fn((payload: unknown) => ({ id: "request-1", payload })),
+  enqueuePendingSidepanelChatRequest: vi.fn(),
+}))
+
 describe("background sidepanel helpers", () => {
   beforeEach(() => {
     vi.resetModules()
@@ -56,6 +61,22 @@ describe("background sidepanel helpers", () => {
     })
     expect(sidePanel.open).toHaveBeenCalledWith({
       windowId: 7,
+    })
+  })
+
+  it("opens the side panel for a known window without querying tabs first", async () => {
+    const { openSidePanelInWindow } = await import("../sidepanel")
+    const sidePanel = (browser as typeof browser & {
+      sidePanel: {
+        open: ReturnType<typeof vi.fn>
+      }
+    }).sidePanel
+
+    await openSidePanelInWindow(9)
+
+    expect(browser.tabs.query).not.toHaveBeenCalled()
+    expect(sidePanel.open).toHaveBeenCalledWith({
+      windowId: 9,
     })
   })
 

@@ -5,23 +5,29 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { ChatWorkspace } from "../chat-workspace"
 
 const {
+  consumePendingSidepanelChatRequestMock,
   createPlatformChatThreadMock,
   deletePlatformChatThreadMock,
+  getPendingSidepanelChatRequestsMock,
   getSidepanelChatSnapshotMock,
   getPlatformChatThreadMessagesMock,
   listPlatformChatThreadsMock,
   sendMessageMock,
   setSidepanelChatSnapshotMock,
   streamPlatformChatThreadMessageMock,
+  watchPendingSidepanelChatRequestMock,
 } = vi.hoisted(() => ({
+  consumePendingSidepanelChatRequestMock: vi.fn(),
   createPlatformChatThreadMock: vi.fn(),
   deletePlatformChatThreadMock: vi.fn(),
+  getPendingSidepanelChatRequestsMock: vi.fn(),
   getSidepanelChatSnapshotMock: vi.fn(),
   getPlatformChatThreadMessagesMock: vi.fn(),
   listPlatformChatThreadsMock: vi.fn(),
   sendMessageMock: vi.fn(),
   setSidepanelChatSnapshotMock: vi.fn(),
   streamPlatformChatThreadMessageMock: vi.fn(),
+  watchPendingSidepanelChatRequestMock: vi.fn(),
 }))
 
 vi.mock("@/utils/platform/api", () => ({
@@ -35,6 +41,17 @@ vi.mock("@/utils/platform/api", () => ({
 vi.mock("@/utils/platform/chat-cache", () => ({
   getSidepanelChatSnapshot: (...args: unknown[]) => getSidepanelChatSnapshotMock(...args),
   setSidepanelChatSnapshot: (...args: unknown[]) => setSidepanelChatSnapshotMock(...args),
+}))
+
+vi.mock("@/utils/platform/sidepanel-chat-request", () => ({
+  buildSidepanelChatRequestPrompt: (payload: { type: string }) => `prepared:${payload.type}`,
+  createSidepanelChatRequest: vi.fn((payload: unknown) => ({
+    id: "local-request-1",
+    payload,
+  })),
+  consumePendingSidepanelChatRequest: (...args: unknown[]) => consumePendingSidepanelChatRequestMock(...args),
+  getPendingSidepanelChatRequests: (...args: unknown[]) => getPendingSidepanelChatRequestsMock(...args),
+  watchPendingSidepanelChatRequests: (...args: unknown[]) => watchPendingSidepanelChatRequestMock(...args),
 }))
 
 vi.mock("@/utils/message", () => ({
@@ -115,11 +132,15 @@ describe("chatWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal("confirm", vi.fn(() => true))
-    browser.tabs.query = vi.fn().mockResolvedValue([{ id: 7 }])
+    browser.tabs.query = vi.fn().mockResolvedValue([{ id: 7, windowId: 1 }])
+    consumePendingSidepanelChatRequestMock.mockResolvedValue(undefined)
+    getPendingSidepanelChatRequestsMock.mockResolvedValue([])
     getSidepanelChatSnapshotMock.mockResolvedValue(null)
     listPlatformChatThreadsMock.mockResolvedValue([])
     sendMessageMock.mockReset()
+    sendMessageMock.mockResolvedValue(true)
     setSidepanelChatSnapshotMock.mockResolvedValue(undefined)
+    watchPendingSidepanelChatRequestMock.mockImplementation(() => () => {})
   })
 
   it("renders a fresh chat session without crashing", async () => {
@@ -315,14 +336,97 @@ describe("chatWorkspace", () => {
     }))
   })
 
-  it("summarizes the current page inside the sidepanel", async () => {
-    sendMessageMock
-      .mockResolvedValueOnce({
-        url: "https://example.com/article",
-        webTitle: "Example article",
-        webContent: "A detailed article body.",
-      })
-      .mockResolvedValueOnce("Short summary for the current page.")
+  it("auto-sends a pending sidepanel chat request when the workspace opens", async () => {
+    const committedThread = createThread({
+      id: "thread-new",
+      title: "New thread",
+      updatedAt: "2026-04-19T12:10:00.000Z",
+      lastMessageAt: "2026-04-19T12:10:00.000Z",
+    })
+    createPlatformChatThreadMock.mockResolvedValue(committedThread)
+    getPendingSidepanelChatRequestsMock.mockResolvedValue([{
+      id: "request-1",
+      payload: {
+        type: "selection-explain",
+        selectionText: "Selected text",
+      },
+    }])
+    listPlatformChatThreadsMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([committedThread])
+    streamPlatformChatThreadMessageMock.mockImplementation(async function* () {
+      yield "Draft reply"
+    })
+    getPlatformChatThreadMessagesMock.mockResolvedValue({
+      thread: committedThread,
+      messages: [
+        createMessage({
+          id: "message-user",
+          role: "user",
+          contentText: "prepared:selection-explain",
+        }),
+        createMessage({
+          id: "message-assistant",
+          role: "assistant",
+          contentText: "Draft reply",
+        }),
+      ],
+    })
+
+    render(<ChatWorkspace isSignedIn isSessionLoading={false} sessionAccountKey="user-1" />)
+
+    await screen.findByText("Draft reply")
+
+    expect(streamPlatformChatThreadMessageMock).toHaveBeenCalledWith(
+      "thread-new",
+      "prepared:selection-explain",
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }),
+    )
+    expect(consumePendingSidepanelChatRequestMock).toHaveBeenCalledWith(1, "request-1")
+  })
+
+  it("sends the current page summary request into sidepanel chat", async () => {
+    const committedThread = createThread({
+      id: "thread-new",
+      title: "New thread",
+      updatedAt: "2026-04-19T12:10:00.000Z",
+      lastMessageAt: "2026-04-19T12:10:00.000Z",
+    })
+    createPlatformChatThreadMock.mockResolvedValue(committedThread)
+    listPlatformChatThreadsMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([committedThread])
+    streamPlatformChatThreadMessageMock.mockImplementation(async function* () {
+      yield "Draft reply"
+    })
+    getPlatformChatThreadMessagesMock.mockResolvedValue({
+      thread: committedThread,
+      messages: [
+        createMessage({
+          id: "message-user",
+          role: "user",
+          contentText: "prepared:current-webpage-summary",
+        }),
+        createMessage({
+          id: "message-assistant",
+          role: "assistant",
+          contentText: "Draft reply",
+        }),
+      ],
+    })
+    browser.tabs.query = vi.fn().mockResolvedValue([{
+      id: 7,
+      windowId: 1,
+      title: "Example article",
+      url: "https://example.com/article",
+    }])
+    sendMessageMock.mockResolvedValue({
+      url: "https://example.com/article",
+      webTitle: "Example article",
+      webContent: "A detailed article body.",
+    })
 
     render(<ChatWorkspace isSignedIn isSessionLoading={false} sessionAccountKey="user-1" />)
 
@@ -330,20 +434,19 @@ describe("chatWorkspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Summarize current page" }))
 
-    expect(await screen.findByLabelText("Current page summary")).toBeInTheDocument()
-    expect(screen.getByText("Example article")).toBeInTheDocument()
-    expect(screen.getByText("Short summary for the current page.")).toBeInTheDocument()
-    expect(browser.tabs.query).toHaveBeenCalledWith({
-      active: true,
-      currentWindow: true,
+    await screen.findByText("Draft reply")
+
+    await waitFor(() => {
+      expect(streamPlatformChatThreadMessageMock).toHaveBeenCalledWith(
+        "thread-new",
+        "prepared:current-webpage-summary",
+        expect.objectContaining({
+          signal: expect.any(AbortSignal),
+        }),
+      )
     })
-    expect(sendMessageMock).toHaveBeenNthCalledWith(1, "getCurrentWebPageContext", undefined, 7)
-    expect(sendMessageMock).toHaveBeenNthCalledWith(2, "getOrGenerateWebPageSummary", expect.objectContaining({
-      webTitle: "Example article",
-      webContent: "A detailed article body.",
-      providerConfig: expect.objectContaining({
-        id: expect.any(String),
-      }),
-    }))
+
+    expect(sendMessageMock).toHaveBeenCalledTimes(1)
+    expect(sendMessageMock).toHaveBeenCalledWith("getCurrentWebPageContext", undefined, 7)
   })
 })

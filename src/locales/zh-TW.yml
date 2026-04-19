@@ -6,8 +6,10 @@ dataTypes:
   string: 文字
   number: 數字
 contextMenu:
-  translate: 翻譯
-  translateSelection: 翻譯「%s」
+  translate: 翻譯此網頁
+  summarizeCurrentPage: 總結此網頁
+  translateSelection: 翻譯選取文字
+  explainSelection: 解釋選取文字
   showOriginal: 顯示原文
 popup:
   theme: 主題

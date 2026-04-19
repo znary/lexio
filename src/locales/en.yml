@@ -6,9 +6,10 @@ dataTypes:
   string: Text
   number: Number
 contextMenu:
-  translate: Translate
-  translateSelection: Translate "%s"
-  explainSelection: Explain "%s"
+  translate: Translate this page
+  summarizeCurrentPage: Summarize this page
+  translateSelection: Translate selected text
+  explainSelection: Explain selected text
   showOriginal: Show Original
 popup:
   theme: Theme

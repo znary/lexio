@@ -19,6 +19,7 @@ import type {
   TTSPlaybackStartResponse,
   TTSPlaybackStopRequest,
 } from "@/types/tts-playback"
+import type { SidepanelChatRequestPayload } from "@/utils/platform/sidepanel-chat-request"
 import type { EdgeTTSVoice } from "@/utils/server/edge-tts/types"
 import { defineExtensionMessaging } from "@webext-core/messaging"
 
@@ -27,6 +28,7 @@ interface ProtocolMap {
   openPage: (data: { url: string, active?: boolean }) => void
   openOptionsPage: () => void
   openSidePanel: () => Promise<boolean>
+  openSidePanelChatRequest: (data: SidepanelChatRequestPayload) => Promise<boolean>
   // config
   getInitialConfig: () => Config | null
   // translation state
@@ -48,6 +50,7 @@ interface ProtocolMap {
   openSelectionTranslationFromContextMenu: (data: { selectionText: string }) => void
   openSelectionExplainFromContextMenu: (data: { selectionText: string }) => void
   openSelectionCustomActionFromContextMenu: (data: { actionId: string, selectionText: string }) => void
+  notifySelectionContextMenuState: (data: { hasSelection: boolean }) => void
   // analytics
   trackFeatureUsedEvent: (data: FeatureUsedEventProperties) => void
   // user guide

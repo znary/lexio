@@ -8,14 +8,83 @@ import { isSelectionToolbarInternalAction } from "@/utils/constants/custom-actio
 import { getTranslationStateKey, TRANSLATION_STATE_KEY_PREFIX } from "@/utils/constants/storage-keys"
 import { sendMessage } from "@/utils/message"
 import { ensureInitializedConfig } from "./config"
+import { openSidePanelInWindow, queueSidePanelChatRequest } from "./sidepanel"
 
+export const MENU_ID_ROOT = "read-frog-root"
 export const MENU_ID_TRANSLATE = "read-frog-translate"
+export const MENU_ID_SUMMARIZE_CURRENT_PAGE = "read-frog-summarize-current-page"
 export const MENU_ID_SELECTION_TRANSLATE = "read-frog-selection-translate"
 export const MENU_ID_SELECTION_EXPLAIN = "read-frog-selection-explain"
 export const MENU_ID_SELECTION_CUSTOM_ACTION_PREFIX = "read-frog-selection-custom-action:"
+const PAGE_AND_SELECTION_CONTEXTS: ["page", "selection"] = ["page", "selection"]
+const selectionContextMenuStateByTabId = new Map<number, boolean>()
 
 function getSelectionCustomActionMenuId(actionId: string) {
   return `${MENU_ID_SELECTION_CUSTOM_ACTION_PREFIX}${actionId}`
+}
+
+function getEnabledCustomActions(config: Config) {
+  return config.selectionToolbar.customActions
+    .filter(action => action.enabled !== false && !isSelectionToolbarInternalAction(action))
+}
+
+function getContextMenuSelectionState(tabId: number) {
+  return selectionContextMenuStateByTabId.get(tabId) ?? false
+}
+
+async function updateSelectionSubmenuVisibility(config: Config, hasSelection: boolean) {
+  const enabledCustomActions = getEnabledCustomActions(config)
+
+  await browser.contextMenus.update(MENU_ID_TRANSLATE, {
+    visible: true,
+  })
+  await browser.contextMenus.update(MENU_ID_SUMMARIZE_CURRENT_PAGE, {
+    visible: true,
+  })
+  await browser.contextMenus.update(MENU_ID_SELECTION_TRANSLATE, {
+    visible: hasSelection,
+  })
+
+  await browser.contextMenus.update(MENU_ID_SELECTION_EXPLAIN, {
+    visible: hasSelection,
+  })
+
+  await Promise.all(enabledCustomActions.map(async (action) => {
+    await browser.contextMenus.update(getSelectionCustomActionMenuId(action.id), {
+      visible: hasSelection,
+    })
+  }))
+}
+
+async function syncSelectionContextMenuStateForTab(tabId: number, config?: Config | null) {
+  const resolvedConfig = config ?? await ensureInitializedConfig()
+  if (!resolvedConfig?.contextMenu.enabled) {
+    return
+  }
+
+  await updateSelectionSubmenuVisibility(resolvedConfig, getContextMenuSelectionState(tabId))
+}
+
+export async function setSelectionContextMenuState(tabId: number, hasSelection: boolean) {
+  selectionContextMenuStateByTabId.set(tabId, hasSelection)
+
+  const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true })
+  if (activeTab?.id !== tabId) {
+    return
+  }
+
+  await syncSelectionContextMenuStateForTab(tabId)
+}
+
+export async function clearSelectionContextMenuState(tabId: number) {
+  selectionContextMenuStateByTabId.delete(tabId)
+
+  const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true })
+  if (activeTab?.id !== tabId) {
+    return
+  }
+
+  await syncSelectionContextMenuStateForTab(tabId)
 }
 
 /**
@@ -34,12 +103,15 @@ export function registerContextMenuListeners() {
   // Listen for tab activation to update menu title
   browser.tabs.onActivated.addListener(async (activeInfo) => {
     await updateTranslateMenuTitle(activeInfo.tabId)
+    await syncSelectionContextMenuStateForTab(activeInfo.tabId)
   })
 
   // Listen for tab updates (e.g., navigation)
   browser.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
     if (changeInfo.status === "complete") {
+      selectionContextMenuStateByTabId.delete(tabId)
       await updateTranslateMenuTitle(tabId)
+      await syncSelectionContextMenuStateForTab(tabId)
     }
   })
 
@@ -93,29 +165,47 @@ async function updateContextMenuItems(config: Config) {
   await browser.contextMenus.removeAll()
 
   const { enabled: contextMenuEnabled } = config.contextMenu
-  const { explain: explainFeature } = config.selectionToolbar.features
-  const enabledCustomActions = config.selectionToolbar.customActions
-    .filter(action => action.enabled !== false && !isSelectionToolbarInternalAction(action))
+  const enabledCustomActions = getEnabledCustomActions(config)
 
   if (contextMenuEnabled) {
     browser.contextMenus.create({
+      id: MENU_ID_ROOT,
+      title: i18n.t("name"),
+      contexts: PAGE_AND_SELECTION_CONTEXTS,
+    })
+
+    browser.contextMenus.create({
       id: MENU_ID_TRANSLATE,
       title: i18n.t("contextMenu.translate"),
-      contexts: ["page"],
+      contexts: PAGE_AND_SELECTION_CONTEXTS,
+      parentId: MENU_ID_ROOT,
+      visible: true,
+    })
+
+    browser.contextMenus.create({
+      id: MENU_ID_SUMMARIZE_CURRENT_PAGE,
+      title: i18n.t("contextMenu.summarizeCurrentPage"),
+      contexts: PAGE_AND_SELECTION_CONTEXTS,
+      parentId: MENU_ID_ROOT,
+      visible: true,
     })
 
     browser.contextMenus.create({
       id: MENU_ID_SELECTION_TRANSLATE,
       title: i18n.t("contextMenu.translateSelection"),
-      contexts: ["selection"],
+      contexts: PAGE_AND_SELECTION_CONTEXTS,
+      parentId: MENU_ID_ROOT,
+      visible: false,
     })
   }
 
-  if (contextMenuEnabled && explainFeature.enabled) {
+  if (contextMenuEnabled) {
     browser.contextMenus.create({
       id: MENU_ID_SELECTION_EXPLAIN,
       title: i18n.t("contextMenu.explainSelection"),
-      contexts: ["selection"],
+      contexts: PAGE_AND_SELECTION_CONTEXTS,
+      parentId: MENU_ID_ROOT,
+      visible: false,
     })
   }
 
@@ -124,7 +214,9 @@ async function updateContextMenuItems(config: Config) {
       browser.contextMenus.create({
         id: getSelectionCustomActionMenuId(action.id),
         title: action.name,
-        contexts: ["selection"],
+        contexts: PAGE_AND_SELECTION_CONTEXTS,
+        parentId: MENU_ID_ROOT,
+        visible: false,
       })
     })
   }
@@ -133,6 +225,7 @@ async function updateContextMenuItems(config: Config) {
   const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true })
   if (activeTab?.id) {
     await updateTranslateMenuTitle(activeTab.id)
+    await syncSelectionContextMenuStateForTab(activeTab.id, config)
   }
 }
 
@@ -183,6 +276,11 @@ async function handleContextMenuClick(
 
   if (info.menuItemId === MENU_ID_TRANSLATE) {
     await handleTranslateClick(tab.id)
+    return
+  }
+
+  if (info.menuItemId === MENU_ID_SUMMARIZE_CURRENT_PAGE) {
+    await handleCurrentWebPageSummaryClick(tab)
     return
   }
 
@@ -285,4 +383,28 @@ async function handleSelectionCustomActionClick(
     actionId,
     selectionText,
   }, target)
+}
+
+async function handleCurrentWebPageSummaryClick(tab: Browser.tabs.Tab) {
+  if (!tab.id || tab.windowId == null) {
+    return
+  }
+
+  const opened = await openSidePanelInWindow(tab.windowId)
+  if (!opened) {
+    return
+  }
+
+  const webPageContext = await sendMessage("getCurrentWebPageContext", undefined, tab.id)
+  const pageUrl = webPageContext?.url?.trim() || tab.url?.trim()
+  if (!pageUrl) {
+    return
+  }
+
+  await queueSidePanelChatRequest({
+    type: "current-webpage-summary",
+    pageTitle: webPageContext?.webTitle.trim() || tab.title?.trim() || undefined,
+    pageUrl,
+    pageContent: webPageContext?.webContent.trim() || undefined,
+  }, tab.windowId)
 }
