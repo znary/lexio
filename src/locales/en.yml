@@ -921,7 +921,7 @@ options:
       searchPlaceholder: Search saved words or translations
       export: Export JSON
       clear: Clear all
-      selectAll: Select all visible items
+      selectAll: Select all
       selectItem: Select
       deleteSelected: Delete selected
       selectedCount: $1 selected

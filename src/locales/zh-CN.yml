@@ -914,7 +914,7 @@ options:
       searchPlaceholder: 搜索已收藏的原文或译文
       export: 导出 JSON
       clear: 清空全部
-      selectAll: 选择当前可见项
+      selectAll: 全选
       selectItem: 选择
       deleteSelected: 删除所选
       selectedCount: $1 项已选择
