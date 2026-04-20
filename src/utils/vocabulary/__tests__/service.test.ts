@@ -667,7 +667,7 @@ describe("vocabulary service", () => {
       },
     ])
 
-    let resolveFirstDelete: ((value: { ok: true }) => void) | null = null
+    let resolveFirstDelete: ((value: { ok: true }) => void) | undefined
     apiDeleteVocabularyItemMock
       .mockImplementationOnce(() => new Promise((resolve) => {
         resolveFirstDelete = resolve
@@ -683,7 +683,7 @@ describe("vocabulary service", () => {
     })
 
     await vi.waitFor(() => {
-      expect(resolveFirstDelete).not.toBeNull()
+      expect(resolveFirstDelete).toBeDefined()
     })
 
     resolveFirstDelete?.({ ok: true })

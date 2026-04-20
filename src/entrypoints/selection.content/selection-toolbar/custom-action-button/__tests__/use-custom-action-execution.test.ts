@@ -100,6 +100,7 @@ describe("useCustomActionWebPageContext", () => {
         url: "https://example.com/first",
         webTitle: "First page",
         webContent: "First content",
+        webContextContent: "First context content",
       })
       await Promise.resolve()
     })
@@ -111,6 +112,7 @@ describe("useCustomActionWebPageContext", () => {
         url: "https://example.com/second",
         webTitle: "Second page",
         webContent: "Second content",
+        webContextContent: "Second context content",
       })
       await Promise.resolve()
     })
@@ -135,6 +137,7 @@ describe("useCustomActionWebPageContext", () => {
         url: "https://example.com/first",
         webTitle: "First page",
         webContent: "First content",
+        webContextContent: "First context content",
       })
       await Promise.resolve()
     })
@@ -153,6 +156,7 @@ describe("useCustomActionWebPageContext", () => {
         url: "https://example.com/second",
         webTitle: "Second page",
         webContent: "Second content",
+        webContextContent: "Second context content",
       })
       await Promise.resolve()
     })
@@ -170,6 +174,7 @@ describe("buildCustomActionExecutionPlan", () => {
       url: "https://example.com/article",
       webTitle: "Example page",
       webContent: "y".repeat(CUSTOM_ACTION_CONTEXT_CHAR_LIMIT),
+      webContextContent: "z".repeat(CUSTOM_ACTION_CONTEXT_CHAR_LIMIT),
     }
     const plan = buildCustomActionExecutionPlan(
       createCustomActionRequest(),
