@@ -4,11 +4,9 @@ import type { ReactNode } from "react"
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { createContext, use, useState } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { VocabularySheet } from "../vocabulary-sheet"
 
-import { VocabularyLibraryCard } from "../vocabulary-library"
-
-const { invalidateMock, removeVocabularyItemsMock } = vi.hoisted(() => ({
-  invalidateMock: vi.fn(),
+const { removeVocabularyItemsMock } = vi.hoisted(() => ({
   removeVocabularyItemsMock: vi.fn(),
 }))
 
@@ -16,6 +14,11 @@ vi.mock("#imports", () => ({
   i18n: {
     t: (key: string) => {
       const messages: Record<string, string> = {
+        "options.vocabulary.library.title": "Vocabulary Library",
+        "options.vocabulary.library.description": "Search, remove, clear, and export saved words.",
+        "options.vocabulary.library.export": "Export",
+        "options.vocabulary.library.clear": "Clear",
+        "options.vocabulary.library.searchPlaceholder": "Search saved words or translations",
         "options.vocabulary.library.deleteSelected": "Delete selected",
         "options.vocabulary.library.selectedCount": "$1 selected",
         "options.vocabulary.library.deleteSelectedDialog.title": "Delete $1 selected items?",
@@ -37,22 +40,36 @@ vi.mock("@/hooks/use-vocabulary-items", () => ({
         {
           id: "voc_delete",
           sourceText: "hello",
+          normalizedText: "hello",
           translatedText: "你好",
           kind: "word",
+          sourceLang: "en",
+          targetLang: "zh-CN",
+          wordCount: 1,
           hitCount: 3,
+          createdAt: 1700000000000,
+          updatedAt: 1700000000000,
           lastSeenAt: 1700000000000,
+          deletedAt: null,
         },
         {
           id: "voc_delete_2",
           sourceText: "world",
+          normalizedText: "world",
           translatedText: "世界",
           kind: "word",
+          sourceLang: "en",
+          targetLang: "zh-CN",
+          wordCount: 1,
           hitCount: 2,
+          createdAt: 1700000100000,
+          updatedAt: 1700000100000,
           lastSeenAt: 1700000100000,
+          deletedAt: null,
         },
       ],
+      isPending: false,
     },
-    invalidate: invalidateMock,
   }),
 }))
 
@@ -63,6 +80,40 @@ vi.mock("@/utils/vocabulary/service", () => ({
 
 vi.mock("file-saver", () => ({
   saveAs: vi.fn(),
+}))
+
+vi.mock("@/components/ui/base-ui/sheet", () => ({
+  Sheet: ({ open, children }: { open: boolean, children: ReactNode }) => (open ? <div>{children}</div> : null),
+  SheetContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  SheetHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  SheetTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
+  SheetDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
+}))
+
+vi.mock("@/components/ui/base-ui/scroll-area", () => ({
+  ScrollArea: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+}))
+
+vi.mock("@/components/ui/base-ui/badge", () => ({
+  Badge: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+}))
+
+vi.mock("@/components/ui/base-ui/checkbox", () => ({
+  Checkbox: ({
+    checked,
+    onCheckedChange,
+    ...props
+  }: React.ComponentProps<"input"> & {
+    checked?: boolean
+    onCheckedChange?: (checked: boolean) => void
+  }) => (
+    <input
+      type="checkbox"
+      checked={Boolean(checked)}
+      onChange={event => onCheckedChange?.(event.target.checked)}
+      {...props}
+    />
+  ),
 }))
 
 vi.mock("@/components/ui/base-ui/alert-dialog", async () => {
@@ -113,7 +164,7 @@ vi.mock("@/components/ui/base-ui/alert-dialog", async () => {
   }
 
   function AlertDialogTitle({ children }: { children: ReactNode }) {
-    return <h2>{children}</h2>
+    return <h3>{children}</h3>
   }
 
   function AlertDialogDescription({ children }: { children: ReactNode }) {
@@ -160,23 +211,22 @@ vi.mock("@/components/ui/base-ui/alert-dialog", async () => {
   }
 })
 
-describe("vocabulary library card", () => {
+describe("vocabulary sheet", () => {
   beforeEach(() => {
-    invalidateMock.mockReset()
     removeVocabularyItemsMock.mockReset()
   })
 
   it("asks for confirmation before deleting selected items", () => {
-    render(<VocabularyLibraryCard />)
+    render(<VocabularySheet open onOpenChange={vi.fn()} />)
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select hello" }))
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select world" }))
-    fireEvent.click(screen.getByRole("button", { name: "Delete selected (2)" }))
+    fireEvent.click(screen.getByRole("checkbox", { name: "options.vocabulary.library.selectItem hello" }))
+    fireEvent.click(screen.getByRole("checkbox", { name: "options.vocabulary.library.selectItem world" }))
+    fireEvent.click(screen.getByRole("button", { name: "options.vocabulary.library.deleteSelected (2)" }))
 
     expect(removeVocabularyItemsMock).not.toHaveBeenCalled()
-    expect(screen.getByText("Delete 2 selected items?")).toBeInTheDocument()
-    expect(screen.getByText("This action cannot be undone. Selected items will be removed from your library.")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Delete selected items" })).toBeInTheDocument()
+    expect(screen.getByText("options.vocabulary.library.deleteSelectedDialog.title")).toBeInTheDocument()
+    expect(screen.getByText("options.vocabulary.library.deleteSelectedDialog.description")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "options.vocabulary.library.deleteSelectedDialog.confirm" })).toBeInTheDocument()
   })
 
   it("locks the confirm action while deleting and avoids duplicate submits", async () => {
@@ -185,12 +235,12 @@ describe("vocabulary library card", () => {
       resolveDelete = resolve
     }))
 
-    render(<VocabularyLibraryCard />)
+    render(<VocabularySheet open onOpenChange={vi.fn()} />)
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select hello" }))
-    fireEvent.click(screen.getByRole("button", { name: "Delete selected (1)" }))
+    fireEvent.click(screen.getByRole("checkbox", { name: "options.vocabulary.library.selectItem hello" }))
+    fireEvent.click(screen.getByRole("button", { name: "options.vocabulary.library.deleteSelected (1)" }))
 
-    const confirmButton = screen.getByRole("button", { name: "Delete selected items" })
+    const confirmButton = screen.getByRole("button", { name: "options.vocabulary.library.deleteSelectedDialog.confirm" })
     fireEvent.click(confirmButton)
 
     expect(removeVocabularyItemsMock).toHaveBeenCalledTimes(1)
@@ -208,7 +258,7 @@ describe("vocabulary library card", () => {
     finishDelete()
 
     await waitFor(() => {
-      expect(invalidateMock).not.toHaveBeenCalled()
+      expect(confirmButton).not.toBeInTheDocument()
     })
   })
 })

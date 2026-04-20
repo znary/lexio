@@ -50,7 +50,7 @@ vi.mock("../search-items", () => ({
     },
     {
       sectionId: "vocabulary-settings",
-      route: "/vocabulary",
+      route: "/",
       titleKey: "vocabulary-title",
       pageKey: "vocabulary-page",
     },
@@ -114,14 +114,14 @@ describe("settings search navigation", () => {
     expect(mockedSectionScroll.scrollToSectionWhenReady).not.toHaveBeenCalled()
   })
 
-  it("navigates to the vocabulary page when the selected item is on a different route", () => {
+  it("navigates to the general page when the vocabulary settings item is selected", () => {
     renderSettingsSearch()
 
     fireEvent.click(screen.getByRole("button", { name: "vocabulary-title" }))
 
     expect(mockedSectionScroll.buildSectionSearch).toHaveBeenCalledWith("vocabulary-settings")
     expect(mockedRouter.navigate).toHaveBeenCalledWith({
-      pathname: "/vocabulary",
+      pathname: "/",
       search: "?section=vocabulary-settings",
     })
     expect(mockedSectionScroll.scrollToSectionWhenReady).not.toHaveBeenCalled()

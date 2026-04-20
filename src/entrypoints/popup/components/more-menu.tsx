@@ -10,7 +10,7 @@ import { buildSectionSearch } from "@/entrypoints/options/command-palette/sectio
 import { buildPlatformSignInUrl } from "@/utils/platform/website"
 
 export function MoreMenu() {
-  const vocabularyUrl = browser.runtime.getURL(`/options.html#/vocabulary${buildSectionSearch("vocabulary-library")}`)
+  const vocabularyUrl = browser.runtime.getURL(`/options.html#/${buildSectionSearch("vocabulary-settings")}`)
 
   return (
     <DropdownMenu>

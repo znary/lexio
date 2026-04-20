@@ -30,6 +30,10 @@ vi.mock("../../../../popup/components/ai-smart-context", () => ({
   AISmartContext: () => <div>AI smart context</div>,
 }))
 
+vi.mock("../../config/vocabulary-settings", () => ({
+  VocabularySettingsCard: () => <div data-testid="vocabulary-settings">Vocabulary settings</div>,
+}))
+
 vi.mock("../site-control-mode", () => ({
   default: () => <div data-testid="site-control-mode">Site control mode</div>,
 }))

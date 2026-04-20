@@ -9,4 +9,8 @@ describe("route defs", () => {
   it("does not expose the config settings route", () => {
     expect(ROUTE_DEFS.map(route => route.path)).not.toContain("/config")
   })
+
+  it("does not expose the vocabulary settings route", () => {
+    expect(ROUTE_DEFS.map(route => route.path)).not.toContain("/vocabulary")
+  })
 })

@@ -7,7 +7,7 @@ import type { SidepanelChatRequest } from "@/utils/platform/sidepanel-chat-reque
 import { browser, i18n } from "#imports"
 import { AssistantRuntimeProvider, ComposerPrimitive, ThreadPrimitive, useLocalRuntime, useThreadRuntime } from "@assistant-ui/react"
 import { AssistantMessage, ThreadConfigProvider, UserMessage } from "@assistant-ui/react-ui"
-import { IconArrowUp, IconClockHour4, IconFileDescription, IconLoader2, IconMessagePlus, IconSettings } from "@tabler/icons-react"
+import { IconArrowUp, IconBook2, IconClockHour4, IconFileDescription, IconLoader2, IconMessagePlus, IconSettings } from "@tabler/icons-react"
 import { useAtomValue } from "jotai"
 import { createContext, use, useCallback, useEffect, useReducer, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -31,6 +31,7 @@ import {
 } from "@/utils/platform/sidepanel-chat-request"
 import { SIDEPANEL_MARKDOWN_TEXT } from "./sidepanel-markdown"
 import { ThreadHistorySheet } from "./thread-history-sheet"
+import { VocabularySheet } from "./vocabulary-sheet"
 
 interface ChatSessionState {
   sessionKey: string
@@ -68,6 +69,7 @@ interface ComposerControlsContextValue {
   isSummarizingCurrentPage: boolean
   onOpenHistory: () => void
   onOpenSettings: () => void
+  onOpenVocabulary: () => void
   onStartNewChat: () => void
   onSummarizeCurrentPage: () => void
 }
@@ -106,6 +108,7 @@ function SiderComposer() {
     isSummarizingCurrentPage,
     onOpenHistory,
     onOpenSettings,
+    onOpenVocabulary,
     onStartNewChat,
     onSummarizeCurrentPage,
   } = useComposerControls()
@@ -180,6 +183,18 @@ function SiderComposer() {
               size="sm"
               className="lexio-sider-tool-button"
             />
+          </ComposerToolTooltip>
+          <ComposerToolTooltip label={i18n.t("options.vocabulary.title")}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="lexio-sider-tool-button"
+              aria-label="Open vocabulary"
+              onClick={onOpenVocabulary}
+            >
+              <IconBook2 className="size-4" />
+            </Button>
           </ComposerToolTooltip>
         </div>
 
@@ -406,6 +421,7 @@ function ChatRuntimePane({
   isSummarizingCurrentPage,
   onOpenHistory,
   onOpenSettings,
+  onOpenVocabulary,
   onStartNewChat,
   onSummarizeCurrentPage,
   pendingChatRequest,
@@ -418,6 +434,7 @@ function ChatRuntimePane({
   isSummarizingCurrentPage: boolean
   onOpenHistory: () => void
   onOpenSettings: () => void
+  onOpenVocabulary: () => void
   onStartNewChat: () => void
   onSummarizeCurrentPage: () => void
   pendingChatRequest: SidepanelChatRequest | null
@@ -471,6 +488,7 @@ function ChatRuntimePane({
           isSummarizingCurrentPage,
           onOpenHistory,
           onOpenSettings,
+          onOpenVocabulary,
           onStartNewChat,
           onSummarizeCurrentPage,
         }}
@@ -505,6 +523,7 @@ export function ChatWorkspace({
   const [session, setSession] = useState<ChatSessionState>(() => createEmptySession())
   const [draftSession, setDraftSession] = useState<SidepanelChatDraft | null>(null)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+  const [isVocabularyOpen, setIsVocabularyOpen] = useState(false)
   const [isSummarizingCurrentPage, setIsSummarizingCurrentPage] = useState(false)
   const [isLoadingThread, setIsLoadingThread] = useState(false)
   const [isRefreshingThreads, setIsRefreshingThreads] = useState(false)
@@ -936,8 +955,15 @@ export function ChatWorkspace({
             key={session.sessionKey}
             isSignedIn={isSignedIn}
             isSummarizingCurrentPage={isSummarizingCurrentPage}
-            onOpenHistory={() => setIsHistoryOpen(true)}
+            onOpenHistory={() => {
+              setIsVocabularyOpen(false)
+              setIsHistoryOpen(true)
+            }}
             onOpenSettings={() => void browser.runtime.openOptionsPage()}
+            onOpenVocabulary={() => {
+              setIsHistoryOpen(false)
+              setIsVocabularyOpen(true)
+            }}
             onStartNewChat={handleStartNewChat}
             onSummarizeCurrentPage={() => {
               void summarizeCurrentPage()
@@ -991,6 +1017,11 @@ export function ChatWorkspace({
           await handleDeleteThread(threadId)
         }}
         threads={threads}
+      />
+
+      <VocabularySheet
+        open={isVocabularyOpen}
+        onOpenChange={setIsVocabularyOpen}
       />
     </div>
   )

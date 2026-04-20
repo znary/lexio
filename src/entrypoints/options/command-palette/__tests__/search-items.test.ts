@@ -10,6 +10,7 @@ describe("search items", () => {
     expect(sectionIds).not.toContain("subtitles-request-rate")
     expect(sectionIds).not.toContain("personalized-prompts")
     expect(routes).not.toContain("/config")
+    expect(routes).not.toContain("/vocabulary")
   })
 
   it("points the page language recognition entry to the translation page", () => {
@@ -18,6 +19,15 @@ describe("search items", () => {
     expect(languageDetection).toMatchObject({
       route: "/translation",
       pageKey: "options.translation.title",
+    })
+  })
+
+  it("points vocabulary settings search to the general page", () => {
+    const vocabularySettings = SEARCH_ITEMS.find(item => item.sectionId === "vocabulary-settings")
+
+    expect(vocabularySettings).toMatchObject({
+      route: "/",
+      pageKey: "options.general.title",
     })
   })
 })

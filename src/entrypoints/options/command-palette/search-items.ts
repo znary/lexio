@@ -31,17 +31,10 @@ const TTS_SEARCH_ITEMS: SearchItemDefinition[] = !IS_FIREFOX
 const VOCABULARY_SEARCH_ITEMS = [
   {
     sectionId: "vocabulary-settings",
-    route: "/vocabulary",
+    route: "/",
     titleKey: "options.vocabulary.title",
     descriptionKey: "options.vocabulary.description",
-    pageKey: "options.vocabulary.title",
-  },
-  {
-    sectionId: "vocabulary-library",
-    route: "/vocabulary",
-    titleKey: "options.vocabulary.library.title",
-    descriptionKey: "options.vocabulary.library.description",
-    pageKey: "options.vocabulary.title",
+    pageKey: "options.general.title",
   },
 ] satisfies SearchItemDefinition[]
 

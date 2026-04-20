@@ -120,6 +120,10 @@ vi.mock("@/components/platform/platform-quick-access", () => ({
   PlatformQuickAccess: () => <button type="button" aria-label="Open account menu">Account</button>,
 }))
 
+vi.mock("../vocabulary-sheet", () => ({
+  VocabularySheet: ({ open }: { open: boolean }) => (open ? <div>Vocabulary sheet</div> : null),
+}))
+
 function createThread(overrides: Partial<{
   id: string
   title: string
@@ -225,11 +229,12 @@ describe("chatWorkspace", () => {
     expect(screen.getByRole("button", { name: "Open chat history" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Open full settings" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Open account menu" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Open vocabulary" })).toBeInTheDocument()
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument()
     expect(listPlatformChatThreadsMock).toHaveBeenCalledTimes(1)
   })
 
-  it("keeps new chat as the first composer tool and moves page explain behind it", async () => {
+  it("keeps the vocabulary button as the rightmost composer tool", async () => {
     const { container } = render(<ChatWorkspace isSignedIn isSessionLoading={false} sessionAccountKey="user-1" />)
 
     await screen.findByPlaceholderText("问任何问题")
@@ -244,6 +249,7 @@ describe("chatWorkspace", () => {
       "Open chat history",
       "Open full settings",
       "Open account menu",
+      "Open vocabulary",
     ])
   })
 
@@ -257,12 +263,14 @@ describe("chatWorkspace", () => {
     const historyTrigger = screen.getByRole("button", { name: "Open chat history" }).closest("[data-slot='tooltip-trigger']")
     const settingsTrigger = screen.getByRole("button", { name: "Open full settings" }).closest("[data-slot='tooltip-trigger']")
     const accountTrigger = screen.getByRole("button", { name: "Open account menu" }).closest("[data-slot='tooltip-trigger']")
+    const vocabularyTrigger = screen.getByRole("button", { name: "Open vocabulary" }).closest("[data-slot='tooltip-trigger']")
 
     expect(newChatTrigger).toBeTruthy()
     expect(summarizeTrigger).toBeTruthy()
     expect(historyTrigger).toBeTruthy()
     expect(settingsTrigger).toBeTruthy()
     expect(accountTrigger).toBeTruthy()
+    expect(vocabularyTrigger).toBeTruthy()
 
     expect(await openTooltip(newChatTrigger!)).toHaveTextContent("sidepanel.actions.newChat")
     fireEvent.mouseLeave(newChatTrigger!)
@@ -277,6 +285,19 @@ describe("chatWorkspace", () => {
     fireEvent.mouseLeave(settingsTrigger!)
 
     expect(await openTooltip(accountTrigger!)).toHaveTextContent("sidepanel.actions.account")
+    fireEvent.mouseLeave(accountTrigger!)
+
+    expect(await openTooltip(vocabularyTrigger!)).toHaveTextContent("options.vocabulary.title")
+  })
+
+  it("opens the vocabulary sheet from the composer tools", async () => {
+    render(<ChatWorkspace isSignedIn isSessionLoading={false} sessionAccountKey="user-1" />)
+
+    await screen.findByPlaceholderText("问任何问题")
+
+    fireEvent.click(screen.getByRole("button", { name: "Open vocabulary" }))
+
+    expect(screen.getByText("Vocabulary sheet")).toBeInTheDocument()
   })
 
   it("shows a cached thread immediately while refreshing history in the background", async () => {

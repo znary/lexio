@@ -122,14 +122,14 @@ describe("more menu", () => {
     openMock.mockReset()
   })
 
-  it("opens the vocabulary page at the library section", () => {
+  it("opens the vocabulary settings section on the general page", () => {
     render(<MoreMenu />)
 
     fireEvent.click(screen.getByRole("button", { name: "popup.more.title" }))
     fireEvent.click(screen.getByRole("button", { name: "popup.more.vocabulary" }))
 
     expect(tabsCreateMock).toHaveBeenCalledWith({
-      url: "chrome-extension://test/options.html#/vocabulary?section=vocabulary-library",
+      url: "chrome-extension://test/options.html#/?section=vocabulary-settings",
     })
   })
 
