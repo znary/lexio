@@ -212,8 +212,8 @@ options:
         title: Lexio Cloud
         description: 在开始聊天前管理你的云账户和套餐。
       reading:
-        title: 阅读
-        description: 调整你最常用的翻译控制项。
+        title: 常用翻译设置
+        description: 调整源语言、目标语言、翻译模式和 AI 翻译风格。
       shortcuts:
         title: 快捷操作
         description: 不离开设置页也能调整快捷操作和 AI 上下文。
@@ -579,6 +579,19 @@ options:
         description: 在浏览器右键菜单中添加翻译选项，快速翻译页面或所选文本
   translation:
     title: 翻译
+    pageLanguageDetection:
+      title: 页面语言识别
+      description: 在翻译当前网页前，选择 Lexio 识别页面语言的方式。
+      mode:
+        basic: 基础
+        llm: LLM
+      provider:
+        label: 检测提供商
+        placeholder: 选择提供商
+      status:
+        noProviders: 请先配置 LLM 提供商
+        basicRecommend: 建议启用 LLM
+        llmEnabled: LLM 检测已启用
     requestQueueConfig:
       title: 翻译速率
       firstOnDescription: 调整翻译请求的处理速度，使用
@@ -901,6 +914,15 @@ options:
       searchPlaceholder: 搜索已收藏的原文或译文
       export: 导出 JSON
       clear: 清空全部
+      selectAll: 选择当前可见项
+      selectItem: 选择
+      deleteSelected: 删除所选
+      selectedCount: $1 项已选择
+      deleteSelectedDialog:
+        title: 删除这 $1 项？
+        description: 此操作无法撤销。所选内容会从单词本中移除。
+        confirm: 删除所选项
+        cancel: 取消
       empty: 还没有收藏内容。先翻译一个单词或短句，单词本就会开始积累。
       noResults: 当前搜索没有匹配结果。
       columns:
@@ -910,6 +932,12 @@ options:
         hitCount: 命中次数
         lastSeenAt: 最近出现
         actions: 操作
+    hoverCard:
+      source: 原文
+      root: 词根
+      meaning: 释义
+      translation: 译文
+      details: 信息
   videoSubtitles:
     title: 视频字幕
     description: 当前仅支持 YouTube 视频字幕

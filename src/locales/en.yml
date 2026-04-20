@@ -212,8 +212,8 @@ options:
         title: Lexio Cloud
         description: Manage your cloud account and plan before you start chatting.
       reading:
-        title: Reading
-        description: Change the translation controls you use most often.
+        title: Common Translation Settings
+        description: Adjust the source language, target language, translation mode, and AI translation style.
       shortcuts:
         title: Shortcuts
         description: Adjust quick actions and AI context without leaving settings.
@@ -586,6 +586,19 @@ options:
         description: Add translate options to the browser right-click menu for quick page and selection translation
   translation:
     title: Translation
+    pageLanguageDetection:
+      title: Page Language Recognition
+      description: Choose how Lexio recognizes the language of the current page before translating it.
+      mode:
+        basic: Basic
+        llm: LLM
+      provider:
+        label: Detection Provider
+        placeholder: Select a provider
+      status:
+        noProviders: Configure an LLM provider first
+        basicRecommend: Recommend enabling LLM
+        llmEnabled: LLM detection enabled
     requestQueueConfig:
       title: Translation Rate
       firstOnDescription: Adjust the processing speed of translation requests using the
@@ -908,6 +921,15 @@ options:
       searchPlaceholder: Search saved words or translations
       export: Export JSON
       clear: Clear all
+      selectAll: Select all visible items
+      selectItem: Select
+      deleteSelected: Delete selected
+      selectedCount: $1 selected
+      deleteSelectedDialog:
+        title: Delete $1 selected items?
+        description: This action cannot be undone. Selected items will be removed from your library.
+        confirm: Delete selected items
+        cancel: Cancel
       empty: No saved words yet. Translate a word or short phrase to start building your vocabulary list.
       noResults: No saved words match the current search.
       columns:
@@ -917,6 +939,12 @@ options:
         hitCount: Hits
         lastSeenAt: Last seen
         actions: Actions
+    hoverCard:
+      source: Source
+      root: Root
+      meaning: Meaning
+      translation: Translation
+      details: Details
   videoSubtitles:
     title: Video Subtitles
     description: Currently only supports YouTube video subtitles
