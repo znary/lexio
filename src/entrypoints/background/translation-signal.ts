@@ -8,6 +8,7 @@ import { getTranslationStateKey } from "@/utils/constants/storage-keys"
 import { shouldEnableAutoTranslation } from "@/utils/host/translate/auto-translation"
 import { logger } from "@/utils/logger"
 import { onMessage, sendMessage } from "@/utils/message"
+import { fireAndForgetTabMessage, requestTabMessageOrNull } from "./tab-message"
 
 export function translationMessage() {
   onMessage("getEnablePageTranslationByTabId", async (msg) => {
@@ -26,7 +27,10 @@ export function translationMessage() {
 
   onMessage("tryToSetEnablePageTranslationByTabId", async (msg) => {
     const { tabId, enabled, analyticsContext } = msg.data
-    void sendMessage("askManagerToTogglePageTranslation", { enabled, analyticsContext }, tabId)
+    fireAndForgetTabMessage(
+      sendMessage("askManagerToTogglePageTranslation", { enabled, analyticsContext }, tabId),
+      "askManagerToTogglePageTranslation",
+    )
   })
 
   onMessage("tryToSetEnablePageTranslationOnContentScript", async (msg) => {
@@ -34,7 +38,10 @@ export function translationMessage() {
     const { enabled, analyticsContext } = msg.data
     if (typeof tabId === "number") {
       logger.info("sending tryToSetEnablePageTranslationOnContentScript to manager", { enabled, tabId })
-      await sendMessage("askManagerToTogglePageTranslation", { enabled, analyticsContext }, tabId)
+      await requestTabMessageOrNull(
+        sendMessage("askManagerToTogglePageTranslation", { enabled, analyticsContext }, tabId),
+        "askManagerToTogglePageTranslation",
+      )
     }
     else {
       logger.error("tabId is not a number", msg)
@@ -50,10 +57,13 @@ export function translationMessage() {
         return
       const shouldEnable = await shouldEnableAutoTranslation(url, detectedCodeOrUnd, config)
       if (shouldEnable) {
-        void sendMessage("askManagerToTogglePageTranslation", {
-          enabled: true,
-          analyticsContext: createFeatureUsageContext(ANALYTICS_FEATURE.PAGE_TRANSLATION, ANALYTICS_SURFACE.PAGE_AUTO),
-        }, tabId)
+        fireAndForgetTabMessage(
+          sendMessage("askManagerToTogglePageTranslation", {
+            enabled: true,
+            analyticsContext: createFeatureUsageContext(ANALYTICS_FEATURE.PAGE_TRANSLATION, ANALYTICS_SURFACE.PAGE_AUTO),
+          }, tabId),
+          "askManagerToTogglePageTranslation",
+        )
       }
     }
   })
@@ -66,7 +76,10 @@ export function translationMessage() {
         getTranslationStateKey(tabId),
         { enabled },
       )
-      void sendMessage("notifyTranslationStateChanged", { enabled }, tabId)
+      fireAndForgetTabMessage(
+        sendMessage("notifyTranslationStateChanged", { enabled }, tabId),
+        "notifyTranslationStateChanged",
+      )
     }
     else {
       logger.error("tabId is not a number", msg)
@@ -93,6 +106,9 @@ export function translationMessage() {
       return
 
     await storage.removeItem(getTranslationStateKey(details.tabId))
-    void sendMessage("notifyTranslationStateChanged", { enabled: false }, details.tabId)
+    fireAndForgetTabMessage(
+      sendMessage("notifyTranslationStateChanged", { enabled: false }, details.tabId),
+      "notifyTranslationStateChanged",
+    )
   })
 }

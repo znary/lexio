@@ -21,6 +21,8 @@ import { createPlatformChatThread, deletePlatformChatThread, getPlatformChatThre
 import { getSidepanelChatSnapshot, setSidepanelChatSnapshot } from "@/utils/platform/chat-cache"
 import { clearSidepanelChatDraft, getSidepanelChatDraft, setSidepanelChatDraft } from "@/utils/platform/sidepanel-chat-draft"
 import {
+  buildCurrentWebPageSummaryRequestPayload,
+  buildSidepanelChatRequestHiddenContext,
   buildSidepanelChatRequestPrompt,
   consumePendingSidepanelChatRequest,
   createSidepanelChatRequest,
@@ -258,10 +260,12 @@ function PendingSidepanelChatRequestSender({
   request,
   targetLanguageCode,
   onHandled,
+  onPrepare,
 }: {
   request: SidepanelChatRequest | null
   targetLanguageCode: Parameters<typeof buildSidepanelChatRequestPrompt>[1]
   onHandled: (requestId: string) => void
+  onPrepare: (request: SidepanelChatRequest) => void
 }) {
   const thread = useThreadRuntime()
   const handledRequestIdRef = useRef<string | null>(null)
@@ -274,6 +278,7 @@ function PendingSidepanelChatRequestSender({
     handledRequestIdRef.current = request.id
 
     try {
+      onPrepare(request)
       thread.append({
         role: "user",
         content: [{
@@ -282,13 +287,13 @@ function PendingSidepanelChatRequestSender({
         }],
         startRun: true,
       })
+      onHandled(request.id)
     }
     catch (error) {
+      handledRequestIdRef.current = null
       toast.error(error instanceof Error ? error.message : "Failed to send the prepared chat request.")
     }
-
-    onHandled(request.id)
-  }, [onHandled, request, targetLanguageCode, thread])
+  }, [onHandled, onPrepare, request, targetLanguageCode, thread])
 
   return null
 }
@@ -422,11 +427,14 @@ function ChatRuntimePane({
   onRunCommitted: (threadId: string) => void
 }) {
   const threadIdRef = useRef(session.threadId)
+  const pendingRequestContextRef = useRef<ReturnType<typeof buildSidepanelChatRequestHiddenContext> | null>(null)
 
   const runtime = useLocalRuntime({
     async* run({ messages, abortSignal }) {
       let threadId = threadIdRef.current
       const content = extractLatestUserText(messages)
+      const requestContext = pendingRequestContextRef.current
+      pendingRequestContextRef.current = null
 
       if (!threadId) {
         const createdThread = await createPlatformChatThread()
@@ -436,6 +444,7 @@ function ChatRuntimePane({
 
       let assistantText = ""
       for await (const nextText of streamPlatformChatThreadMessage(threadId, content, {
+        context: requestContext ?? undefined,
         signal: abortSignal,
       })) {
         assistantText = nextText
@@ -471,6 +480,9 @@ function ChatRuntimePane({
             request={pendingChatRequest}
             targetLanguageCode={targetLanguageCode}
             onHandled={onPendingChatRequestHandled}
+            onPrepare={(request) => {
+              pendingRequestContextRef.current = buildSidepanelChatRequestHiddenContext(request.payload)
+            }}
           />
           <SidepanelThread />
         </div>
@@ -865,14 +877,18 @@ export function ChatWorkspace({
         throw new Error("Current page URL is unavailable on this tab.")
       }
 
+      const requestPayload = buildCurrentWebPageSummaryRequestPayload({
+        fallbackPageTitle: activeTab.title,
+        fallbackPageUrl: pageUrl,
+        webPageContext,
+      })
+      if (!requestPayload) {
+        throw new Error("Current page URL is unavailable on this tab.")
+      }
+
       dispatchPendingChatRequests({
         type: "enqueue",
-        request: createSidepanelChatRequest({
-          type: "current-webpage-summary",
-          pageTitle: webPageContext?.webTitle.trim() || activeTab.title?.trim() || undefined,
-          pageUrl,
-          pageContent: webPageContext?.webContent.trim() || undefined,
-        }),
+        request: createSidepanelChatRequest(requestPayload),
       })
     }
     catch (error) {

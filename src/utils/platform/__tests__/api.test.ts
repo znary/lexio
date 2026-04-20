@@ -350,14 +350,29 @@ describe("platform api helpers", () => {
     vi.stubGlobal("fetch", fetchMock)
 
     const snapshots: string[] = []
-    for await (const snapshot of streamPlatformChatThreadMessage("thread_1", "hello")) {
+    for await (const snapshot of streamPlatformChatThreadMessage("thread_1", "hello", {
+      context: {
+        requestType: "current-webpage-summary",
+        pageTitle: "Example article",
+        pageUrl: "https://example.com/article",
+        pageContent: "Fresh page content",
+      },
+    })) {
       snapshots.push(snapshot)
     }
 
     expect(snapshots).toEqual(["Hel", "Hello"])
     expect(fetchMock).toHaveBeenCalledWith("https://platform.example.com/v1/chat/threads/thread_1/messages/stream", expect.objectContaining({
       method: "POST",
-      body: JSON.stringify({ content: "hello" }),
+      body: JSON.stringify({
+        content: "hello",
+        context: {
+          requestType: "current-webpage-summary",
+          pageTitle: "Example article",
+          pageUrl: "https://example.com/article",
+          pageContent: "Fresh page content",
+        },
+      }),
     }))
   })
 

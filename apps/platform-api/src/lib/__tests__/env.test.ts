@@ -1,18 +1,20 @@
 import { describe, expect, it } from "vitest"
-import { buildEntitlements, UNLIMITED_ENTITLEMENT_VALUE } from "../env"
+import { isPlatformChatWebFetchEnabled } from "../env"
 
-describe("buildEntitlements", () => {
-  it("returns the same unlimited entitlements for every plan", () => {
-    expect(buildEntitlements("free")).toMatchObject({
-      monthlyRequestLimit: UNLIMITED_ENTITLEMENT_VALUE,
-      monthlyTokenLimit: UNLIMITED_ENTITLEMENT_VALUE,
-      concurrentRequestLimit: UNLIMITED_ENTITLEMENT_VALUE,
-    })
+describe("platform env helpers", () => {
+  it("enables platform chat webpage fetching by default", () => {
+    expect(isPlatformChatWebFetchEnabled({})).toBe(true)
+  })
 
-    expect(buildEntitlements("pro")).toMatchObject({
-      monthlyRequestLimit: UNLIMITED_ENTITLEMENT_VALUE,
-      monthlyTokenLimit: UNLIMITED_ENTITLEMENT_VALUE,
-      concurrentRequestLimit: UNLIMITED_ENTITLEMENT_VALUE,
-    })
+  it("allows platform chat webpage fetching to be disabled explicitly", () => {
+    expect(isPlatformChatWebFetchEnabled({
+      PLATFORM_CHAT_WEB_FETCH_ENABLED: "false",
+    })).toBe(false)
+  })
+
+  it("keeps platform chat webpage fetching enabled for truthy values", () => {
+    expect(isPlatformChatWebFetchEnabled({
+      PLATFORM_CHAT_WEB_FETCH_ENABLED: "true",
+    })).toBe(true)
   })
 })

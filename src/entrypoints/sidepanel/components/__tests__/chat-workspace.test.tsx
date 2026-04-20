@@ -56,6 +56,38 @@ vi.mock("@/utils/platform/sidepanel-chat-draft", () => ({
 }))
 
 vi.mock("@/utils/platform/sidepanel-chat-request", () => ({
+  buildCurrentWebPageSummaryRequestPayload: ({
+    fallbackPageTitle,
+    fallbackPageUrl,
+    webPageContext,
+  }: {
+    fallbackPageTitle?: string
+    fallbackPageUrl?: string
+    webPageContext?: {
+      url?: string
+      webTitle?: string
+      webContent?: string
+      webContextContent?: string
+    }
+  }) => {
+    const pageUrl = webPageContext?.url ?? fallbackPageUrl
+    if (!pageUrl) {
+      return null
+    }
+
+    return {
+      type: "current-webpage-summary",
+      pageTitle: webPageContext?.webTitle ?? fallbackPageTitle,
+      pageUrl,
+      pageContent: webPageContext?.webContextContent ?? webPageContext?.webContent,
+    }
+  },
+  buildSidepanelChatRequestHiddenContext: (payload: Record<string, unknown>) => ({
+    requestType: payload.type,
+    ...(payload.pageTitle ? { pageTitle: payload.pageTitle } : {}),
+    ...(payload.pageUrl ? { pageUrl: payload.pageUrl } : {}),
+    ...(payload.pageContent ? { pageContent: payload.pageContent } : {}),
+  }),
   buildSidepanelChatRequestPrompt: (payload: { type: string }) => `prepared:${payload.type}`,
   createSidepanelChatRequest: vi.fn((payload: unknown) => ({
     id: "local-request-1",
@@ -545,6 +577,9 @@ describe("chatWorkspace", () => {
       "thread-new",
       "prepared:selection-explain",
       expect.objectContaining({
+        context: {
+          requestType: "selection-explain",
+        },
         signal: expect.any(AbortSignal),
       }),
     )
@@ -605,6 +640,12 @@ describe("chatWorkspace", () => {
         "thread-new",
         "prepared:current-webpage-summary",
         expect.objectContaining({
+          context: {
+            requestType: "current-webpage-summary",
+            pageTitle: "Example article",
+            pageUrl: "https://example.com/article",
+            pageContent: "A detailed article body.",
+          },
           signal: expect.any(AbortSignal),
         }),
       )

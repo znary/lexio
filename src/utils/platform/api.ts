@@ -1,3 +1,4 @@
+import type { SidepanelChatRequestHiddenContext } from "./sidepanel-chat-request"
 import type { BackgroundTextStreamSnapshot, ThinkingSnapshot } from "@/types/background-stream"
 import type { Config } from "@/types/config/config"
 import type { VocabularyItem } from "@/types/vocabulary"
@@ -888,6 +889,7 @@ export async function* streamPlatformChatThreadMessage(
   threadId: string,
   content: string,
   options: {
+    context?: SidepanelChatRequestHiddenContext
     signal?: AbortSignal
   } = {},
 ): AsyncGenerator<string, string, void> {
@@ -896,7 +898,10 @@ export async function* streamPlatformChatThreadMessage(
     headers: {
       "Content-Type": "application/json; charset=utf-8",
     },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({
+      content,
+      ...(options.context ? { context: options.context } : {}),
+    }),
     signal: options.signal,
   })
 

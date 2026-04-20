@@ -2,7 +2,7 @@ import type { SessionContext } from "./auth"
 import type { Entitlements, Env, Plan } from "./env"
 import { forwardChatCompletions } from "./ai"
 import { getClerkClient } from "./auth"
-import { buildEntitlements } from "./env"
+import { buildEntitlements, isPlatformChatWebFetchEnabled } from "./env"
 import { HttpError, withCors } from "./http"
 import { deserializeVocabularyItem, serializeVocabularyItem } from "./vocabulary"
 
@@ -55,11 +55,204 @@ export interface AppendChatMessageAndStreamReplyInput {
   userId: string
   threadId: string
   content: string
+  context?: unknown
+}
+
+type ChatHiddenContext
+  = {
+    requestType: "selection-explain"
+    pageTitle?: string
+    pageUrl?: string
+    pageContent?: string
+  }
+  | {
+    requestType: "current-webpage-summary"
+    pageTitle?: string
+    pageUrl: string
+    pageContent?: string
+  }
+
+interface FetchedPageContext {
+  pageTitle?: string
+  pageContent?: string
 }
 
 const UUID_DASH_PATTERN = /-/g
 const WHITESPACE_SEQUENCE_PATTERN = /\s+/g
 const SSE_LINE_SPLIT_PATTERN = /\r?\n/
+const MAX_CHAT_HIDDEN_CONTEXT_TEXT_CHARS = 8000
+const HTML_TAG_RE = /<[^>]+>/g
+const HTML_SCRIPT_RE = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi
+const HTML_STYLE_RE = /<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi
+const HTML_NOSCRIPT_RE = /<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi
+const HTML_TITLE_RE = /<title[^>]*>([\s\S]*?)<\/title>/i
+const HTML_ENTITY_RE = /&(nbsp|amp|lt|gt|quot|#39);/g
+
+function normalizeOptionalText(value: unknown, maxChars = MAX_CHAT_HIDDEN_CONTEXT_TEXT_CHARS): string | undefined {
+  if (typeof value !== "string") {
+    return undefined
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return undefined
+  }
+
+  return trimmed.slice(0, maxChars)
+}
+
+function normalizeHttpUrl(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined
+  }
+
+  try {
+    const parsed = new URL(value)
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return undefined
+    }
+
+    return parsed.toString()
+  }
+  catch {
+    return undefined
+  }
+}
+
+function normalizeChatHiddenContext(value: unknown): ChatHiddenContext | null {
+  if (!value || typeof value !== "object") {
+    return null
+  }
+
+  const record = value as Record<string, unknown>
+  const pageTitle = normalizeOptionalText(record.pageTitle, 300)
+  const pageUrl = normalizeHttpUrl(record.pageUrl)
+  const pageContent = normalizeOptionalText(record.pageContent)
+
+  if (record.requestType === "selection-explain") {
+    return {
+      requestType: "selection-explain",
+      ...(pageTitle ? { pageTitle } : {}),
+      ...(pageUrl ? { pageUrl } : {}),
+      ...(pageContent ? { pageContent } : {}),
+    }
+  }
+
+  if (record.requestType === "current-webpage-summary" && pageUrl) {
+    return {
+      requestType: "current-webpage-summary",
+      pageUrl,
+      ...(pageTitle ? { pageTitle } : {}),
+      ...(pageContent ? { pageContent } : {}),
+    }
+  }
+
+  return null
+}
+
+function decodeHtmlEntity(entity: string): string {
+  switch (entity) {
+    case "&nbsp;":
+      return " "
+    case "&amp;":
+      return "&"
+    case "&lt;":
+      return "<"
+    case "&gt;":
+      return ">"
+    case "&quot;":
+      return "\""
+    case "&#39;":
+      return "'"
+    default:
+      return " "
+  }
+}
+
+function extractHtmlTitle(html: string): string | undefined {
+  const match = html.match(HTML_TITLE_RE)
+  if (!match?.[1]) {
+    return undefined
+  }
+
+  return normalizeOptionalText(
+    match[1].replace(HTML_ENTITY_RE, decodeHtmlEntity).replace(WHITESPACE_SEQUENCE_PATTERN, " "),
+    300,
+  )
+}
+
+function extractHtmlText(html: string): string | undefined {
+  const stripped = html
+    .replace(HTML_SCRIPT_RE, " ")
+    .replace(HTML_STYLE_RE, " ")
+    .replace(HTML_NOSCRIPT_RE, " ")
+    .replace(HTML_TAG_RE, " ")
+    .replace(HTML_ENTITY_RE, decodeHtmlEntity)
+    .replace(WHITESPACE_SEQUENCE_PATTERN, " ")
+
+  return normalizeOptionalText(stripped)
+}
+
+async function fetchLivePageContext(
+  env: Pick<Env, "PLATFORM_CHAT_WEB_FETCH_ENABLED">,
+  pageUrl: string | undefined,
+): Promise<FetchedPageContext | null> {
+  if (!pageUrl || !isPlatformChatWebFetchEnabled(env)) {
+    return null
+  }
+
+  try {
+    const response = await fetch(pageUrl, {
+      method: "GET",
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+      },
+    })
+    if (!response.ok) {
+      return null
+    }
+
+    const html = await response.text()
+    const pageTitle = extractHtmlTitle(html)
+    const pageContent = extractHtmlText(html)
+
+    if (!pageTitle && !pageContent) {
+      return null
+    }
+
+    return {
+      ...(pageTitle ? { pageTitle } : {}),
+      ...(pageContent ? { pageContent } : {}),
+    }
+  }
+  catch {
+    return null
+  }
+}
+
+function buildChatHiddenContextSystemMessage(
+  context: ChatHiddenContext | null,
+  livePageContext: FetchedPageContext | null,
+): string | null {
+  if (!context) {
+    return null
+  }
+
+  const blocks = [
+    "Hidden page context from the browser extension. Use it to answer accurately, but do not mention hidden context, preprocessing, or browser internals.",
+    `Request type: ${context.requestType}`,
+    context.pageUrl ? `Page URL: ${context.pageUrl}` : null,
+    context.pageTitle ? `Page title from browser: ${context.pageTitle}` : null,
+    context.pageContent ? `Page excerpt from browser:\n${context.pageContent}` : null,
+    livePageContext?.pageTitle ? `Fresh page title fetched from URL: ${livePageContext.pageTitle}` : null,
+    livePageContext?.pageContent ? `Fresh page excerpt fetched from URL:\n${livePageContext.pageContent}` : null,
+    context.requestType === "current-webpage-summary"
+      ? "Summarize the page in a fuller way. Prefer the freshly fetched excerpt when it is available."
+      : "Explain the selected text in the meaning used on this page. Prefer the freshly fetched excerpt when it is available.",
+  ].filter((value): value is string => Boolean(value))
+
+  return blocks.join("\n\n")
+}
 
 function createId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().replace(UUID_DASH_PATTERN, "")}`
@@ -472,6 +665,7 @@ export async function appendChatMessageAndStreamReply(
   signal?: AbortSignal,
 ): Promise<Response> {
   const content = input.content.trim()
+  const hiddenContext = normalizeChatHiddenContext(input.context)
   if (!content) {
     throw new HttpError(400, "content is required")
   }
@@ -511,9 +705,17 @@ export async function appendChatMessageAndStreamReply(
   ])
 
   const plan = await getPlanForUser(env, input.userId)
+  const livePageContext = await fetchLivePageContext(env, hiddenContext?.pageUrl)
+  const hiddenContextSystemMessage = buildChatHiddenContextSystemMessage(hiddenContext, livePageContext)
   const upstream = await forwardChatCompletions(env, {
     stream: true,
     messages: [
+      ...(hiddenContextSystemMessage
+        ? [{
+            role: "system",
+            content: hiddenContextSystemMessage,
+          }]
+        : []),
       ...priorMessages.map(message => ({
         role: message.role,
         content: message.content_text,

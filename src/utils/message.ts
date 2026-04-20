@@ -46,7 +46,12 @@ interface ProtocolMap {
   checkAndAskAutoPageTranslation: (data: { url: string, detectedCodeOrUnd: LangCodeISO6393 | "und" }) => void
   // ask host to start page translation
   askManagerToTogglePageTranslation: (data: { enabled: boolean, analyticsContext?: FeatureUsageContext }) => void
-  getCurrentWebPageContext: () => Promise<{ url: string, webTitle: string, webContent: string } | null>
+  getCurrentWebPageContext: () => Promise<{
+    url: string
+    webTitle: string
+    webContent: string
+    webContextContent: string
+  } | null>
   openSelectionTranslationFromContextMenu: (data: { selectionText: string }) => void
   openSelectionExplainFromContextMenu: (data: { selectionText: string }) => void
   openSelectionCustomActionFromContextMenu: (data: { actionId: string, selectionText: string }) => void
@@ -59,7 +64,12 @@ interface ProtocolMap {
   returnPinState: (data: { isPinned: boolean }) => void
   // request
   enqueueTranslateRequest: (data: { text: string, langConfig: Config["language"], providerConfig: ProviderConfig, scheduleAt: number, hash: string, scene?: string, webTitle?: string | null, webContent?: string | null, webSummary?: string | null }) => Promise<string>
-  getOrGenerateWebPageSummary: (data: { webTitle: string, webContent: string, providerConfig: ProviderConfig }) => Promise<string | null>
+  getOrGenerateWebPageSummary: (data: {
+    url?: string
+    webTitle: string
+    webContent: string
+    providerConfig: ProviderConfig
+  }) => Promise<string | null>
   enqueueSubtitlesTranslateRequest: (data: { text: string, langConfig: Config["language"], providerConfig: ProviderConfig, scheduleAt: number, hash: string, videoTitle?: string | null, summary?: string | null }) => Promise<string>
   getSubtitlesSummary: (data: { videoTitle: string, subtitlesContext: string, providerConfig: ProviderConfig }) => Promise<string | null>
   backgroundGenerateText: (data: BackgroundGenerateTextPayload) => Promise<BackgroundGenerateTextResponse>

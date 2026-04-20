@@ -47,7 +47,7 @@ vi.mock("../ai-content-aware", () => ({
 }))
 
 vi.mock("../personalized-prompt", () => ({
-  PersonalizedPrompts: () => null,
+  PersonalizedPrompts: () => <div data-testid="personalized-prompts">Personalized prompts</div>,
 }))
 
 vi.mock("../auto-translate-website-patterns", () => ({
@@ -96,5 +96,11 @@ describe("translation page", () => {
     expect(translationMode).toBeInTheDocument()
     expect(quickControls.compareDocumentPosition(languageDetection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(languageDetection.compareDocumentPosition(translationMode) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it("does not render the personalized prompts section anymore", () => {
+    render(<TranslationPage />)
+
+    expect(screen.queryByTestId("personalized-prompts")).not.toBeInTheDocument()
   })
 })

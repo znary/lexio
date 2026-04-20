@@ -51,4 +51,10 @@ describe("general page", () => {
     expect(screen.getByText("options.general.quickSettings.shortcuts.description")).toBeInTheDocument()
     expect(screen.queryByRole("heading", { name: "options.general.quickSettings.reading.title" })).not.toBeInTheDocument()
   })
+
+  it("does not render the page language recognition block anymore", () => {
+    render(<GeneralPage />)
+
+    expect(screen.queryByTestId("language-detection")).not.toBeInTheDocument()
+  })
 })

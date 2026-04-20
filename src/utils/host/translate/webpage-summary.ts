@@ -12,12 +12,14 @@ export async function getOrGenerateWebPageSummary(
     return null
   }
 
-  const { webTitle, webContent } = webPageContext
+  const { url, webTitle, webContextContent } = webPageContext
+  const webContent = webContextContent.trim()
   if (!webTitle.trim() || !webContent.trim()) {
     return null
   }
 
   const summary = await sendMessage("getOrGenerateWebPageSummary", {
+    url,
     webTitle,
     webContent,
     providerConfig,

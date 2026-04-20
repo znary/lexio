@@ -64,6 +64,13 @@ export const SEARCH_ITEMS: SearchItem[] = [
 
   // Translation page
   {
+    sectionId: "page-language-detection",
+    route: "/translation",
+    titleKey: "options.translation.pageLanguageDetection.title",
+    descriptionKey: "options.translation.pageLanguageDetection.description",
+    pageKey: "options.translation.title",
+  },
+  {
     sectionId: "translation-mode",
     route: "/translation",
     titleKey: "options.translation.translationMode.title",
@@ -103,13 +110,6 @@ export const SEARCH_ITEMS: SearchItem[] = [
     route: "/translation",
     titleKey: "options.translation.aiContentAware.title",
     descriptionKey: "options.translation.aiContentAware.description",
-    pageKey: "options.translation.title",
-  },
-  {
-    sectionId: "personalized-prompts",
-    route: "/translation",
-    titleKey: "options.translation.personalizedPrompts.title",
-    descriptionKey: "options.translation.personalizedPrompts.description",
     pageKey: "options.translation.title",
   },
   {

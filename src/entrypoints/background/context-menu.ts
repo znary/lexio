@@ -7,8 +7,10 @@ import { CONFIG_STORAGE_KEY } from "@/utils/constants/config"
 import { isSelectionToolbarInternalAction } from "@/utils/constants/custom-action"
 import { getTranslationStateKey, TRANSLATION_STATE_KEY_PREFIX } from "@/utils/constants/storage-keys"
 import { sendMessage } from "@/utils/message"
+import { buildCurrentWebPageSummaryRequestPayload } from "@/utils/platform/sidepanel-chat-request"
 import { ensureInitializedConfig } from "./config"
 import { openSidePanelInWindow, queueSidePanelChatRequest } from "./sidepanel"
+import { fireAndForgetTabMessage, requestTabMessageOrNull } from "./tab-message"
 
 export const MENU_ID_ROOT = "read-frog-root"
 export const MENU_ID_TRANSLATE = "read-frog-translate"
@@ -318,12 +320,15 @@ async function handleTranslateClick(tabId: number) {
   await storage.setItem(getTranslationStateKey(tabId), { enabled: newState })
 
   // Notify content script in that specific tab
-  void sendMessage("askManagerToTogglePageTranslation", {
-    enabled: newState,
-    analyticsContext: newState
-      ? createFeatureUsageContext(ANALYTICS_FEATURE.PAGE_TRANSLATION, ANALYTICS_SURFACE.CONTEXT_MENU)
-      : undefined,
-  }, tabId)
+  fireAndForgetTabMessage(
+    sendMessage("askManagerToTogglePageTranslation", {
+      enabled: newState,
+      analyticsContext: newState
+        ? createFeatureUsageContext(ANALYTICS_FEATURE.PAGE_TRANSLATION, ANALYTICS_SURFACE.CONTEXT_MENU)
+        : undefined,
+    }, tabId),
+    "askManagerToTogglePageTranslation",
+  )
 
   // Update menu title immediately
   await updateTranslateMenuTitle(tabId)
@@ -342,9 +347,12 @@ async function handleSelectionTranslateClick(
     ? { tabId, frameId: info.frameId }
     : tabId
 
-  void sendMessage("openSelectionTranslationFromContextMenu", {
-    selectionText,
-  }, target)
+  fireAndForgetTabMessage(
+    sendMessage("openSelectionTranslationFromContextMenu", {
+      selectionText,
+    }, target),
+    "openSelectionTranslationFromContextMenu",
+  )
 }
 
 async function handleSelectionExplainClick(
@@ -360,9 +368,12 @@ async function handleSelectionExplainClick(
     ? { tabId, frameId: info.frameId }
     : tabId
 
-  void sendMessage("openSelectionExplainFromContextMenu", {
-    selectionText,
-  }, target)
+  fireAndForgetTabMessage(
+    sendMessage("openSelectionExplainFromContextMenu", {
+      selectionText,
+    }, target),
+    "openSelectionExplainFromContextMenu",
+  )
 }
 
 async function handleSelectionCustomActionClick(
@@ -379,10 +390,13 @@ async function handleSelectionCustomActionClick(
     ? { tabId, frameId: info.frameId }
     : tabId
 
-  void sendMessage("openSelectionCustomActionFromContextMenu", {
-    actionId,
-    selectionText,
-  }, target)
+  fireAndForgetTabMessage(
+    sendMessage("openSelectionCustomActionFromContextMenu", {
+      actionId,
+      selectionText,
+    }, target),
+    "openSelectionCustomActionFromContextMenu",
+  )
 }
 
 async function handleCurrentWebPageSummaryClick(tab: Browser.tabs.Tab) {
@@ -395,16 +409,23 @@ async function handleCurrentWebPageSummaryClick(tab: Browser.tabs.Tab) {
     return
   }
 
-  const webPageContext = await sendMessage("getCurrentWebPageContext", undefined, tab.id)
+  const webPageContext = await requestTabMessageOrNull(
+    sendMessage("getCurrentWebPageContext", undefined, tab.id),
+    "getCurrentWebPageContext",
+  )
   const pageUrl = webPageContext?.url?.trim() || tab.url?.trim()
   if (!pageUrl) {
     return
   }
 
-  await queueSidePanelChatRequest({
-    type: "current-webpage-summary",
-    pageTitle: webPageContext?.webTitle.trim() || tab.title?.trim() || undefined,
-    pageUrl,
-    pageContent: webPageContext?.webContent.trim() || undefined,
-  }, tab.windowId)
+  const request = buildCurrentWebPageSummaryRequestPayload({
+    fallbackPageTitle: tab.title,
+    fallbackPageUrl: pageUrl,
+    webPageContext,
+  })
+  if (!request) {
+    return
+  }
+
+  await queueSidePanelChatRequest(request, tab.windowId)
 }

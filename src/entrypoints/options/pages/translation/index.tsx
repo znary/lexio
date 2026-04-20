@@ -8,7 +8,6 @@ import { CustomTranslationStyle } from "./custom-translation-style"
 import PageLanguageDetectionConfig from "./language-detection-config"
 import { NodeTranslationHotkey } from "./node-translation-hotkey"
 import { PageTranslationShortcut } from "./page-translation-shortcut"
-import { PersonalizedPrompts } from "./personalized-prompt"
 import { PreloadConfig } from "./preload-config"
 import { RequestBatch } from "./request-batch"
 import { SkipLanguages } from "./skip-languages"
@@ -28,7 +27,6 @@ export function TranslationPage() {
       <NodeTranslationHotkey />
       <CustomTranslationStyle />
       <AIContentAware />
-      <PersonalizedPrompts />
       <AutoTranslateWebsitePatterns />
       <AutoTranslateLanguages />
       <SkipLanguages />

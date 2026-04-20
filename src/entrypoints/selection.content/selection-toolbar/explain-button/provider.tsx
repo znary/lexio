@@ -4,7 +4,9 @@ import type { SelectionSession } from "../atoms"
 import { useAtomValue, useSetAtom } from "jotai"
 import { createContext, use, useCallback, useEffect, useMemo, useRef } from "react"
 import { toast } from "sonner"
+import { getOrCreateWebPageContext } from "@/utils/host/translate/webpage-context"
 import { onMessage, sendMessage } from "@/utils/message"
+import { buildSelectionExplainRequestPayload } from "@/utils/platform/sidepanel-chat-request"
 import { normalizeSelectedText } from "../../utils"
 import {
   contextAtom,
@@ -71,12 +73,18 @@ export function SelectionExplainProvider({
       return
     }
 
-    const opened = await sendMessage("openSidePanelChatRequest", {
-      type: "selection-explain",
+    const webPageContext = await getOrCreateWebPageContext().catch(() => null)
+    const request = buildSelectionExplainRequestPayload({
       selectionText,
-      pageTitle: document.title || undefined,
-      pageUrl: window.location.href || undefined,
+      fallbackPageTitle: document.title,
+      fallbackPageUrl: window.location.href,
+      webPageContext,
     })
+    if (!request) {
+      return
+    }
+
+    const opened = await sendMessage("openSidePanelChatRequest", request)
     if (!opened) {
       throw new Error("Side panel is unavailable in this browser.")
     }

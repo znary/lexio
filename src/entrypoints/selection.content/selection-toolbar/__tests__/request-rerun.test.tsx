@@ -763,33 +763,24 @@ describe("selection toolbar requests", () => {
     expect(screen.getByTestId("footer-paragraphs").textContent).toBe("Original page paragraph with surrounding context.")
   })
 
-  it("aborts llm translations when the popover closes without surfacing an error", async () => {
+  it("keeps an llm translation running across close and reopen without a duplicate request", async () => {
+    const llmRun = createDeferredPromise<BackgroundTextStreamSnapshot>()
     const streamCalls: Array<{ signal?: AbortSignal, onChunk?: (data: BackgroundTextStreamSnapshot) => void }> = []
-    translateTextCoreMock.mockResolvedValue("")
 
     streamManagedTranslationMock.mockImplementation((_payload, options: {
       signal?: AbortSignal
       onChunk?: (data: BackgroundTextStreamSnapshot) => void
     }) => {
       streamCalls.push({ signal: options.signal, onChunk: options.onChunk })
-
-      return new Promise<BackgroundTextStreamSnapshot>((_resolve, reject) => {
-        options.signal?.addEventListener("abort", () => {
-          reject(new DOMException("aborted", "AbortError"))
-        })
-      })
+      return llmRun.promise
     })
 
     const store = createStore()
-    store.set(configAtom, createStandardTranslateConfig())
+    const config = createStandardTranslateConfig()
+    setSelectionToolbarTranslateProvider(config, MANAGED_CLOUD_PROVIDER_ID)
+    store.set(configAtom, config)
     setSelectionState(store, { text: "Selected text" })
     renderWithProviders(<TranslateButton />, store)
-
-    const updatedConfig = cloneConfig(store.get(configAtom))
-    setSelectionToolbarTranslateProvider(updatedConfig, MANAGED_CLOUD_PROVIDER_ID)
-    act(() => {
-      store.set(configAtom, updatedConfig)
-    })
 
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
 
@@ -799,18 +790,37 @@ describe("selection toolbar requests", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }))
 
-    expect(streamCalls[0]?.signal?.aborted).toBe(true)
+    expect(streamCalls[0]?.signal?.aborted).toBe(false)
+    expect(screen.queryByTestId("translation-content")).toBeNull()
+
+    fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
+
+    expect(streamManagedTranslationMock).toHaveBeenCalledTimes(1)
 
     await act(async () => {
+      llmRun.resolve({
+        output: "后台完成",
+        thinking: {
+          status: "complete",
+          text: "",
+        },
+      })
       await Promise.resolve()
     })
 
+    await waitFor(() => {
+      expect(screen.getByTestId("translation-result").textContent).toBe("后台完成")
+    })
+
+    expect(saveTranslatedSelectionToVocabularyMock).toHaveBeenCalledWith(expect.objectContaining({
+      sourceText: "Selected text",
+      translatedText: "后台完成",
+    }))
     expect(toastErrorMock).not.toHaveBeenCalled()
     expect(screen.queryByRole("alert")).toBeNull()
-    expect(screen.queryByTestId("translation-content")).toBeNull()
   })
 
-  it("does not start llm streaming after the popover closes while webpage context is still loading", async () => {
+  it("continues into llm streaming after the popover closes while webpage context is still loading", async () => {
     const pendingContext = createDeferredPromise<{
       url: string
       webTitle: string
@@ -850,7 +860,9 @@ describe("selection toolbar requests", () => {
       await Promise.resolve()
     })
 
-    expect(streamManagedTranslationMock).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(streamManagedTranslationMock).toHaveBeenCalledTimes(1)
+    })
     expect(toastErrorMock).not.toHaveBeenCalled()
     expect(screen.queryByRole("alert")).toBeNull()
     expect(screen.queryByTestId("translation-content")).toBeNull()
@@ -911,7 +923,7 @@ describe("selection toolbar requests", () => {
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
-  it("does not show the dictionary precheck alert while translation is still running", async () => {
+  it("starts the dictionary detail request while the main translation is still running", async () => {
     const translationRun = createDeferredPromise<string>()
     translateTextCoreMock.mockReturnValue(translationRun.promise)
     streamBackgroundStructuredObjectMock.mockResolvedValue(
@@ -931,7 +943,9 @@ describe("selection toolbar requests", () => {
     })
 
     expect(screen.queryByRole("alert")).toBeNull()
-    expect(streamBackgroundStructuredObjectMock).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(1)
+    })
     expect(screen.getByTestId("translation-detailed-error").textContent).toBe("")
 
     await act(async () => {

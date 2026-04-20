@@ -7,19 +7,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { VocabularyLibraryCard } from "../vocabulary-library"
 
-const { invalidateMock, removeVocabularyItemMock } = vi.hoisted(() => ({
+const { invalidateMock, removeVocabularyItemsMock } = vi.hoisted(() => ({
   invalidateMock: vi.fn(),
-  removeVocabularyItemMock: vi.fn(),
+  removeVocabularyItemsMock: vi.fn(),
 }))
 
 vi.mock("#imports", () => ({
   i18n: {
     t: (key: string) => {
       const messages: Record<string, string> = {
-        "options.floatingButtonAndToolbar.selectionToolbar.customActions.form.delete": "Delete",
-        "options.floatingButtonAndToolbar.selectionToolbar.customActions.form.deleteDialog.confirm": "Delete",
-        "options.floatingButtonAndToolbar.selectionToolbar.customActions.form.deleteDialog.cancel": "Cancel",
-        "options.floatingButtonAndToolbar.selectionToolbar.customActions.form.deleteDialog.description": "This action cannot be undone.",
+        "options.vocabulary.library.deleteSelected": "Delete selected",
+        "options.vocabulary.library.selectedCount": "$1 selected",
+        "options.vocabulary.library.deleteSelectedDialog.title": "Delete $1 selected items?",
+        "options.vocabulary.library.deleteSelectedDialog.description": "This action cannot be undone. Selected items will be removed from your library.",
+        "options.vocabulary.library.deleteSelectedDialog.confirm": "Delete selected items",
+        "options.vocabulary.library.deleteSelectedDialog.cancel": "Cancel",
+        "options.vocabulary.library.selectAll": "Select all visible items",
+        "options.vocabulary.library.selectItem": "Select",
       }
       return messages[key] ?? key
     },
@@ -38,6 +42,14 @@ vi.mock("@/hooks/use-vocabulary-items", () => ({
           hitCount: 3,
           lastSeenAt: 1700000000000,
         },
+        {
+          id: "voc_delete_2",
+          sourceText: "world",
+          translatedText: "世界",
+          kind: "word",
+          hitCount: 2,
+          lastSeenAt: 1700000100000,
+        },
       ],
     },
     invalidate: invalidateMock,
@@ -46,7 +58,7 @@ vi.mock("@/hooks/use-vocabulary-items", () => ({
 
 vi.mock("@/utils/vocabulary/service", () => ({
   clearVocabularyItems: vi.fn(),
-  removeVocabularyItem: (...args: unknown[]) => removeVocabularyItemMock(...args),
+  removeVocabularyItems: (...args: unknown[]) => removeVocabularyItemsMock(...args),
 }))
 
 vi.mock("file-saver", () => ({
@@ -151,38 +163,42 @@ vi.mock("@/components/ui/base-ui/alert-dialog", async () => {
 describe("vocabulary library card", () => {
   beforeEach(() => {
     invalidateMock.mockReset()
-    removeVocabularyItemMock.mockReset()
+    removeVocabularyItemsMock.mockReset()
   })
 
-  it("asks for confirmation before deleting an item", () => {
+  it("asks for confirmation before deleting selected items", () => {
     render(<VocabularyLibraryCard />)
 
-    fireEvent.click(screen.getByRole("button", { name: "options.floatingButtonAndToolbar.selectionToolbar.customActions.form.delete: hello" }))
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select hello" }))
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select world" }))
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected (2)" }))
 
-    expect(removeVocabularyItemMock).not.toHaveBeenCalled()
-    expect(screen.getByText("options.floatingButtonAndToolbar.selectionToolbar.customActions.form.deleteDialog.description")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "options.floatingButtonAndToolbar.selectionToolbar.customActions.form.deleteDialog.confirm" })).toBeInTheDocument()
+    expect(removeVocabularyItemsMock).not.toHaveBeenCalled()
+    expect(screen.getByText("Delete 2 selected items?")).toBeInTheDocument()
+    expect(screen.getByText("This action cannot be undone. Selected items will be removed from your library.")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Delete selected items" })).toBeInTheDocument()
   })
 
-  it("locks the confirm action while deleting and avoids refetch flicker", async () => {
+  it("locks the confirm action while deleting and avoids duplicate submits", async () => {
     let resolveDelete: (() => void) | null = null
-    removeVocabularyItemMock.mockReturnValue(new Promise<void>((resolve) => {
+    removeVocabularyItemsMock.mockReturnValue(new Promise<void>((resolve) => {
       resolveDelete = resolve
     }))
 
     render(<VocabularyLibraryCard />)
 
-    fireEvent.click(screen.getByRole("button", { name: "options.floatingButtonAndToolbar.selectionToolbar.customActions.form.delete: hello" }))
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select hello" }))
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected (1)" }))
 
-    const confirmButton = screen.getByRole("button", { name: "options.floatingButtonAndToolbar.selectionToolbar.customActions.form.deleteDialog.confirm" })
+    const confirmButton = screen.getByRole("button", { name: "Delete selected items" })
     fireEvent.click(confirmButton)
 
-    expect(removeVocabularyItemMock).toHaveBeenCalledTimes(1)
-    expect(removeVocabularyItemMock).toHaveBeenCalledWith("voc_delete")
+    expect(removeVocabularyItemsMock).toHaveBeenCalledTimes(1)
+    expect(removeVocabularyItemsMock).toHaveBeenCalledWith(["voc_delete"])
     expect(confirmButton).toBeDisabled()
 
     fireEvent.click(confirmButton)
-    expect(removeVocabularyItemMock).toHaveBeenCalledTimes(1)
+    expect(removeVocabularyItemsMock).toHaveBeenCalledTimes(1)
 
     if (!resolveDelete) {
       throw new Error("delete promise resolver was not captured")
