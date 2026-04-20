@@ -211,6 +211,12 @@ describe("chat routes", () => {
         },
         body: JSON.stringify({
           content: "hello",
+          context: {
+            requestType: "current-webpage-summary",
+            pageTitle: "Example article",
+            pageUrl: "https://example.com/article",
+            pageContent: "Fresh page content",
+          },
         }),
       }),
       createEnv(),
@@ -227,6 +233,12 @@ describe("chat routes", () => {
         userId: "user_1",
         threadId: "thread_1",
         content: "hello",
+        context: {
+          requestType: "current-webpage-summary",
+          pageTitle: "Example article",
+          pageUrl: "https://example.com/article",
+          pageContent: "Fresh page content",
+        },
       }),
       expect.any(AbortSignal),
     )

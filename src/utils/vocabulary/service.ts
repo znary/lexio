@@ -731,20 +731,39 @@ export async function updateVocabularyItemDetails(
 }
 
 export async function removeVocabularyItem(itemId: string): Promise<void> {
+  await removeVocabularyItems([itemId])
+}
+
+export async function removeVocabularyItems(itemIds: string[]): Promise<void> {
   const scope = await getActiveVocabularyScope()
   const previousItems = await getVocabularyItems()
-  const nextItems = previousItems.filter(item => item.id !== itemId)
-  const snapshot = beginVocabularyMutation(scope)
-  setVocabularyItemsCache(scope, nextItems)
+  const uniqueItemIds = [...new Set(itemIds.map(id => id.trim()).filter(Boolean))]
 
-  try {
-    await apiDeleteVocabularyItem(itemId)
-    markVocabularySnapshotFresh(scope, nextItems)
+  if (uniqueItemIds.length === 0) {
+    return
   }
-  catch (error) {
-    revertVocabularyMutation(scope, snapshot)
-    throw error
+
+  const snapshot = beginVocabularyMutation(scope)
+  const removedItemIds = new Set(uniqueItemIds)
+  const optimisticItems = previousItems.filter(item => !removedItemIds.has(item.id))
+  setVocabularyItemsCache(scope, optimisticItems)
+
+  const results = await Promise.allSettled(
+    uniqueItemIds.map(async itemId => await apiDeleteVocabularyItem(itemId)),
+  )
+  const failedResult = results.find(result => result.status === "rejected")
+
+  if (failedResult) {
+    const deletedItemIds = new Set(
+      results.flatMap((result, index) => result.status === "fulfilled" ? [uniqueItemIds[index]] : []),
+    )
+    const partialItems = snapshot.previousItems.filter(item => !deletedItemIds.has(item.id))
+    setVocabularyItemsCache(scope, partialItems)
+    setVocabularySyncState(scope, buildVocabularySyncState(partialItems))
+    throw failedResult.reason
   }
+
+  markVocabularySnapshotFresh(scope, optimisticItems)
 }
 
 export async function clearVocabularyItems(): Promise<void> {

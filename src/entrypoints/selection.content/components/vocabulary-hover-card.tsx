@@ -1,4 +1,5 @@
 import type { VocabularyHoverPreview } from "../vocabulary-highlight-ui"
+import { i18n } from "#imports"
 import { useAtomValue } from "jotai"
 import { useLayoutEffect, useRef, useState } from "react"
 import { selectionToolbarRectAtom } from "../selection-toolbar/atoms"
@@ -41,8 +42,12 @@ export function VocabularyHoverCard({
   }
 
   const meaning = preview.item.definition?.trim() || preview.item.translatedText
-  const metadata = [preview.item.partOfSpeech, preview.item.phonetic].filter(Boolean).join(" · ")
   const showLemma = preview.item.lemma && preview.item.lemma !== preview.item.sourceText
+  const metadata = [preview.item.partOfSpeech, preview.item.phonetic].filter(Boolean).join(" · ")
+  const sourceLabel = i18n.t("options.vocabulary.hoverCard.source")
+  const rootLabel = i18n.t("options.vocabulary.hoverCard.root")
+  const meaningLabel = i18n.t("options.vocabulary.hoverCard.meaning")
+  const detailLabel = i18n.t("options.vocabulary.hoverCard.details")
 
   return (
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[2147483647]">
@@ -52,25 +57,22 @@ export function VocabularyHoverCard({
         style={position}
       >
         <div className="space-y-1.5">
-          <div className="space-y-0.5">
-            <p className="text-sm font-medium leading-snug text-popover-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-              {preview.item.sourceText}
-              {showLemma ? ` -> ${preview.item.lemma}` : ""}
-            </p>
-            {metadata && (
-              <p className="text-xs leading-snug text-muted-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                {metadata}
-              </p>
-            )}
-          </div>
-          <p className="text-sm leading-snug text-popover-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-            {meaning}
+          <p className="text-sm font-medium leading-snug text-popover-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            {`${sourceLabel}：${preview.item.sourceText}`}
           </p>
-          {preview.item.definition?.trim() && preview.item.translatedText !== preview.item.definition && (
+          {showLemma && (
             <p className="text-xs leading-snug text-muted-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-              {preview.item.translatedText}
+              {`${rootLabel}：${preview.item.lemma}`}
             </p>
           )}
+          {metadata && (
+            <p className="text-xs leading-snug text-muted-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+              {`${detailLabel}：${metadata}`}
+            </p>
+          )}
+          <p className="text-sm leading-snug text-popover-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            {`${meaningLabel}：${meaning}`}
+          </p>
         </div>
       </div>
     </div>

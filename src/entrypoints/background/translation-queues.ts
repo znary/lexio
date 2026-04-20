@@ -21,6 +21,7 @@ import { getTranslatePrompt } from "@/utils/prompts/translate"
 import { BatchCountMismatchError, BatchQueue } from "@/utils/request/batch-queue"
 import { RequestQueue } from "@/utils/request/request-queue"
 import { ensureInitializedConfig } from "./config"
+import { fireAndForgetTabMessage } from "./tab-message"
 
 export const MANAGED_TRANSLATION_MAX_CONCURRENCY = 100
 export const MANAGED_TRANSLATION_QUEUE_TIMEOUT_MS = 3 * 60_000
@@ -90,6 +91,7 @@ export async function executeBatchTranslation<TContext>(
 }
 
 async function getOrGenerateWebPageSummary(
+  url: string | undefined,
   webTitle: string,
   webContent: string,
   providerConfig: LLMProviderConfig,
@@ -107,7 +109,7 @@ async function getOrGenerateWebPageSummary(
   }
 
   const textHash = Sha256Hex(preparedText)
-  const cacheKey = Sha256Hex(webTitle, textHash, JSON.stringify(providerConfig))
+  const cacheKey = Sha256Hex(url ?? "", webTitle, textHash, JSON.stringify(providerConfig))
 
   const cached = await db.articleSummaryCache.get(cacheKey)
   if (cached) {
@@ -133,7 +135,7 @@ async function getOrGenerateWebPageSummary(
       return cachedAgain.summary
     }
 
-    const summary = await generateArticleSummary(webTitle, webContent, providerConfig)
+    const summary = await generateArticleSummary(webTitle, webContent, providerConfig, { url })
     if (!summary) {
       return ""
     }
@@ -286,10 +288,13 @@ function notifyManagedTranslationStatus(
 
   const uniqueStatusKeys = [...new Set(statusKeys.map(key => key.trim()).filter(Boolean))]
   for (const statusKey of uniqueStatusKeys) {
-    void sendMessage("notifyManagedTranslationStatus", {
-      statusKey,
-      state: update.state,
-    }, tabId)
+    fireAndForgetTabMessage(
+      sendMessage("notifyManagedTranslationStatus", {
+        statusKey,
+        state: update.state,
+      }, tabId),
+      "notifyManagedTranslationStatus",
+    )
   }
 }
 
@@ -731,13 +736,13 @@ export async function setUpWebPageTranslationQueue() {
   })
 
   onMessage("getOrGenerateWebPageSummary", async (message) => {
-    const { webTitle, webContent, providerConfig } = message.data
+    const { url, webTitle, webContent, providerConfig } = message.data
 
     if (!isLLMProviderConfig(providerConfig) || !webTitle || !webContent) {
       return null
     }
 
-    return await getOrGenerateWebPageSummary(webTitle, webContent, providerConfig, requestQueue)
+    return await getOrGenerateWebPageSummary(url, webTitle, webContent, providerConfig, requestQueue)
   })
 
   onMessage("setTranslateRequestQueueConfig", (message) => {

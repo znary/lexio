@@ -9,14 +9,14 @@ import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { MANAGED_CLOUD_PROVIDER_ID } from "@/utils/constants/platform"
 import { ConfigCard } from "../../components/config-card"
 
-export default function LanguageDetectionConfig() {
+export default function PageLanguageDetectionConfig() {
   const [languageDetection, setLanguageDetection] = useAtom(configFieldsAtomMap.languageDetection)
 
   return (
     <ConfigCard
-      id="language-detection"
-      title={i18n.t("options.general.languageDetection.title")}
-      description={i18n.t("options.general.languageDetection.description")}
+      id="page-language-detection"
+      title={i18n.t("options.translation.pageLanguageDetection.title")}
+      description={i18n.t("options.translation.pageLanguageDetection.description")}
     >
       <FieldGroup>
         <RadioGroup
@@ -37,12 +37,12 @@ export default function LanguageDetectionConfig() {
           className="flex flex-row gap-4"
         >
           <div className="flex items-center gap-2">
-            <RadioGroupItem value="basic" id="lang-detection-basic" />
-            <Label htmlFor="lang-detection-basic">{i18n.t("options.general.languageDetection.mode.basic")}</Label>
+            <RadioGroupItem value="basic" id="page-lang-detection-basic" />
+            <Label htmlFor="page-lang-detection-basic">{i18n.t("options.translation.pageLanguageDetection.mode.basic")}</Label>
           </div>
           <div className="flex items-center gap-2">
-            <RadioGroupItem value="llm" id="lang-detection-llm" />
-            <Label htmlFor="lang-detection-llm">{i18n.t("options.general.languageDetection.mode.llm")}</Label>
+            <RadioGroupItem value="llm" id="page-lang-detection-llm" />
+            <Label htmlFor="page-lang-detection-llm">{i18n.t("options.translation.pageLanguageDetection.mode.llm")}</Label>
           </div>
         </RadioGroup>
       </FieldGroup>

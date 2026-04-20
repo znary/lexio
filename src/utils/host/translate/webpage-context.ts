@@ -2,11 +2,12 @@ import type { WebPageContext } from "@/types/content"
 import { Readability } from "@mozilla/readability"
 import { removeDummyNodes } from "@/utils/content/utils"
 import { logger } from "@/utils/logger"
-import { truncateWebPageContent } from "./webpage-content"
+import { truncateWebPageContent, truncateWebPageContextContent } from "./webpage-content"
 
 export interface CachedWebPageContext extends WebPageContext {
   url: string
   webContent: string
+  webContextContent: string
 }
 
 let cachedWebPageContext: CachedWebPageContext | null = null
@@ -37,7 +38,13 @@ export async function getOrCreateWebPageContext(): Promise<CachedWebPageContext 
   cachedWebPageContext = {
     url: currentUrl,
     webTitle: document.title || "",
-    webContent: truncateWebPageContent(await extractWebpageContent()),
+    webContent: "",
+    webContextContent: "",
   }
+
+  const extractedContent = await extractWebpageContent()
+  cachedWebPageContext.webContent = truncateWebPageContent(extractedContent)
+  cachedWebPageContext.webContextContent = truncateWebPageContextContent(extractedContent)
+
   return cachedWebPageContext
 }

@@ -1,6 +1,7 @@
 import { browser } from "#imports"
 import { OFFICIAL_SITE_URL_PATTERNS } from "@/utils/constants/url"
 import { onMessage, sendMessage } from "@/utils/message"
+import { fireAndForgetTabMessage } from "./tab-message"
 
 let lastIsPinned = false
 
@@ -32,7 +33,10 @@ async function checkPinnedAndNotify() {
 
   browser.tabs.query({ url: OFFICIAL_SITE_URL_PATTERNS }, (tabs) => {
     for (const tab of tabs) {
-      void sendMessage("pinStateChanged", { isPinned: isOnToolbar }, tab.id)
+      fireAndForgetTabMessage(
+        sendMessage("pinStateChanged", { isPinned: isOnToolbar }, tab.id),
+        "pinStateChanged",
+      )
     }
   })
 }

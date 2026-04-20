@@ -6,6 +6,8 @@ const onMessageMock = vi.fn()
 const shouldEnableAutoTranslationMock = vi.fn()
 const loggerErrorMock = vi.fn()
 const loggerInfoMock = vi.fn()
+const loggerWarnMock = vi.fn()
+const registeredHandlers = new Map<string, (msg: any) => any>()
 
 vi.mock("@/utils/message", () => ({
   onMessage: onMessageMock,
@@ -20,6 +22,7 @@ vi.mock("@/utils/logger", () => ({
   logger: {
     error: loggerErrorMock,
     info: loggerInfoMock,
+    warn: loggerWarnMock,
   },
 }))
 
@@ -35,7 +38,11 @@ describe("translationMessage", () => {
     storage.setItem = vi.fn().mockResolvedValue(undefined)
     storage.removeItem = vi.fn().mockResolvedValue(undefined)
 
-    onMessageMock.mockReturnValue(() => {})
+    registeredHandlers.clear()
+    onMessageMock.mockImplementation((name: string, handler: (msg: any) => any) => {
+      registeredHandlers.set(name, handler)
+      return () => {}
+    })
     shouldEnableAutoTranslationMock.mockResolvedValue(false)
   })
 
@@ -63,5 +70,23 @@ describe("translationMessage", () => {
       { enabled: false },
       12,
     )
+  })
+
+  it("ignores missing receivers when notifying the manager from a content script request", async () => {
+    sendMessageMock.mockRejectedValueOnce(new Error("Could not establish connection. Receiving end does not exist."))
+
+    const { translationMessage } = await import("../translation-signal")
+
+    translationMessage()
+
+    const handler = registeredHandlers.get("tryToSetEnablePageTranslationOnContentScript")
+    if (!handler) {
+      throw new Error("Expected tryToSetEnablePageTranslationOnContentScript handler to be registered")
+    }
+
+    await expect(handler({
+      data: { enabled: true },
+      sender: { tab: { id: 12 } },
+    })).resolves.toBeUndefined()
   })
 })

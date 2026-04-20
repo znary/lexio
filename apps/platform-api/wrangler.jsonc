@@ -17,6 +17,7 @@
     "AI_GATEWAY_BASE_URL": "https://ark.cn-beijing.volces.com/api/v3",
     "AI_GATEWAY_MODEL_FREE": "ep-20260326213836-ms45r",
     "AI_GATEWAY_MODEL_PRO": "ep-20260326213836-ms45r",
+    "PLATFORM_CHAT_WEB_FETCH_ENABLED": "true",
     "PADDLE_PRO_PRICE_ID": "pri_xxx"
   },
   "observability": {

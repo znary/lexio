@@ -632,4 +632,67 @@ describe("vocabulary service", () => {
       }),
     ])
   })
+
+  it("keeps successful batch deletes removed when one request fails", async () => {
+    storageAdapterGetMock.mockResolvedValue([
+      {
+        id: "voc_delete",
+        sourceText: "hello",
+        normalizedText: "hello",
+        translatedText: "你好",
+        sourceLang: "en",
+        targetLang: "zh-CN",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 1,
+        lastSeenAt: 2,
+        hitCount: 3,
+        updatedAt: 4,
+        deletedAt: null,
+      },
+      {
+        id: "voc_delete_2",
+        sourceText: "world",
+        normalizedText: "world",
+        translatedText: "世界",
+        sourceLang: "en",
+        targetLang: "zh-CN",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 5,
+        lastSeenAt: 6,
+        hitCount: 2,
+        updatedAt: 7,
+        deletedAt: null,
+      },
+    ])
+
+    let resolveFirstDelete: ((value: { ok: true }) => void) | null = null
+    apiDeleteVocabularyItemMock
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolveFirstDelete = resolve
+      }))
+      .mockRejectedValueOnce(new Error("delete failed"))
+
+    const { getCachedVocabularyItems, removeVocabularyItems } = await import("../service")
+
+    const deletePromise = removeVocabularyItems(["voc_delete", "voc_delete_2"])
+
+    await vi.waitFor(() => {
+      expect(getCachedVocabularyItems()).toEqual([])
+    })
+
+    await vi.waitFor(() => {
+      expect(resolveFirstDelete).not.toBeNull()
+    })
+
+    resolveFirstDelete?.({ ok: true })
+
+    await expect(deletePromise).rejects.toThrow("delete failed")
+    expect(getCachedVocabularyItems()).toEqual([
+      expect.objectContaining({
+        id: "voc_delete_2",
+      }),
+    ])
+  })
 })

@@ -30,7 +30,7 @@ export async function handleChatThreadMessages(_request: Request, env: Env, sess
 
 export async function handleChatThreadMessageStream(request: Request, env: Env, session: SessionContext, threadId: string) {
   const user = await syncUserFromClerk(env, session)
-  const body = await readJson<{ content?: string }>(request)
+  const body = await readJson<{ content?: string, context?: unknown }>(request)
   const content = body.content?.trim() ?? ""
   if (!content) {
     throw new HttpError(400, "content is required")
@@ -40,6 +40,7 @@ export async function handleChatThreadMessageStream(request: Request, env: Env, 
     userId: user.id,
     threadId,
     content,
+    context: body.context,
   }, request.signal)
 }
 

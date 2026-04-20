@@ -465,6 +465,7 @@ describe("translation queue helpers", () => {
     const handler = getRegisteredMessageHandler("getOrGenerateWebPageSummary")
     const result = await handler({
       data: {
+        url: "https://example.com/article",
         webTitle: "Page title",
         webContent: "page body",
         providerConfig: llmProvider,
@@ -476,6 +477,9 @@ describe("translation queue helpers", () => {
       "Page title",
       "page body",
       llmProvider,
+      {
+        url: "https://example.com/article",
+      },
     )
   })
 

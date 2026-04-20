@@ -16,6 +16,7 @@ export interface Env {
   AI_GATEWAY_API_KEY: string
   AI_GATEWAY_MODEL_FREE?: string
   AI_GATEWAY_MODEL_PRO?: string
+  PLATFORM_CHAT_WEB_FETCH_ENABLED?: string
   PADDLE_WEBHOOK_SECRET?: string
   PADDLE_PRO_PRICE_ID?: string
 }
@@ -36,6 +37,20 @@ export function toList(value?: string): string[] {
     .split(",")
     .map(item => item.trim())
     .filter(Boolean)
+}
+
+export function isPlatformChatWebFetchEnabled(
+  env: Pick<Env, "PLATFORM_CHAT_WEB_FETCH_ENABLED">,
+): boolean {
+  const value = env.PLATFORM_CHAT_WEB_FETCH_ENABLED?.trim().toLowerCase()
+  if (!value) {
+    return true
+  }
+
+  return value !== "0"
+    && value !== "false"
+    && value !== "no"
+    && value !== "off"
 }
 
 export function buildEntitlements(plan: Plan): Entitlements {

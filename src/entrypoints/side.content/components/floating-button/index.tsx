@@ -1,6 +1,6 @@
 import { browser, i18n } from "#imports"
 import { IconSettings, IconX } from "@tabler/icons-react"
-import { useAtom } from "jotai"
+import { useAtom, useAtomValue } from "jotai"
 import { useEffect, useRef, useState } from "react"
 import lexioLogo from "@/assets/icons/lexio.svg?url&no-inline"
 import {
@@ -14,7 +14,7 @@ import { APP_NAME } from "@/utils/constants/app"
 import { sendMessage } from "@/utils/message"
 import { cn } from "@/utils/styles/utils"
 import { matchDomainPattern } from "@/utils/url"
-import { isDraggingButtonAtom, isSideOpenAtom } from "../../atoms"
+import { enablePageTranslationAtom, isDraggingButtonAtom } from "../../atoms"
 import { shadowWrapper } from "../../index"
 import HiddenButton from "./components/hidden-button"
 import TranslateButton from "./translate-button"
@@ -25,7 +25,7 @@ export default function FloatingButton() {
   const [floatingButton, setFloatingButton] = useAtom(
     configFieldsAtomMap.floatingButton,
   )
-  const [isSideOpen, setIsSideOpen] = useAtom(isSideOpenAtom)
+  const translationState = useAtomValue(enablePageTranslationAtom)
   const [isDraggingButton, setIsDraggingButton] = useAtom(isDraggingButtonAtom)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [dragPosition, setDragPosition] = useState<number | null>(null)
@@ -100,7 +100,12 @@ export default function FloatingButton() {
 
       // 只有未移动过才触发点击
       if (!hasMoved) {
-        setIsSideOpen(open => !open)
+        if (floatingButton.clickAction === "translate") {
+          void sendMessage("tryToSetEnablePageTranslationOnContentScript", { enabled: !translationState.enabled })
+        }
+        else {
+          void sendMessage("openSidePanel", undefined)
+        }
       }
     }
 
@@ -108,7 +113,7 @@ export default function FloatingButton() {
     document.addEventListener("mousemove", handleMouseMove)
   }
 
-  const attachSideClassName = isDraggingButton || isSideOpen || isDropdownOpen
+  const attachSideClassName = isDraggingButton || isDropdownOpen
     ? "translate-x-0"
     : ""
 
@@ -129,7 +134,7 @@ export default function FloatingButton() {
         className={cn(
           "border-border flex h-10 w-11 items-center rounded-l-full border border-r-0 bg-white opacity-60 shadow-lg group-hover:opacity-100 dark:bg-neutral-900",
           "translate-x-2 transition-transform duration-300 group-hover:translate-x-0",
-          (isSideOpen || isDropdownOpen) && "opacity-100",
+          isDropdownOpen && "opacity-100",
           isDraggingButton ? "cursor-move" : "cursor-pointer",
           attachSideClassName,
         )}

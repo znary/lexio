@@ -13,6 +13,9 @@ export async function generateArticleSummary(
   title: string,
   textContent: string,
   providerConfig: LLMProviderConfig,
+  options?: {
+    url?: string
+  },
 ): Promise<string | null> {
   const preparedText = cleanText(textContent)
 
@@ -32,11 +35,11 @@ export async function generateArticleSummary(
     const providerOptions = getProviderOptionsWithOverride(modelName ?? "", provider, userProviderOptions, disableThinking)
     const model = await getModelById(providerConfig.id)
 
-    const prompt = `Summarize the following article in 2-3 sentences. Focus on the main topic and key points. Return ONLY the summary, no explanations or formatting.
+    const prompt = `Summarize the following article in 4-6 sentences. Focus on the main topic, the key points, important facts or entities, and the conclusion or takeaway when it exists. Return ONLY the summary as plain text, with no bullet points or extra formatting.
 
 Title: ${title}
 
-Content:
+${options?.url ? `URL: ${options.url}\n\n` : ""}Content:
 ${preparedText}`
 
     const { text: summary } = await generateText({

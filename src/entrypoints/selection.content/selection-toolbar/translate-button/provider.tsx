@@ -60,6 +60,47 @@ interface SelectionTranslatePendingOpenRequest {
   surface: typeof ANALYTICS_SURFACE.SELECTION_TOOLBAR | typeof ANALYTICS_SURFACE.CONTEXT_MENU
 }
 
+interface TranslationResumeSnapshot {
+  isTranslating: boolean
+  thinking: ThinkingSnapshot | null
+  translatedText: string | undefined
+  translationRunKey: string | null
+}
+
+function createTranslationRunKey({
+  popoverSessionKey,
+  rerunNonce,
+  sessionId,
+  translateRequestKey,
+}: {
+  popoverSessionKey: number
+  rerunNonce: number
+  sessionId: number | null
+  translateRequestKey: string
+}) {
+  return JSON.stringify({
+    popoverSessionKey,
+    rerunNonce,
+    sessionId,
+    translateRequestKey,
+  })
+}
+
+function isSameSelectionSession(
+  left: SelectionSession | null | undefined,
+  right: SelectionSession | null | undefined,
+) {
+  if (!left || !right) {
+    return false
+  }
+
+  return left.id === right.id
+    || (
+      left.selectionSnapshot.text === right.selectionSnapshot.text
+      && left.contextSnapshot.text === right.contextSnapshot.text
+    )
+}
+
 async function getSelectionWebPagePromptContext(
   providerConfig: ProviderConfig,
   enableAIContentAware: boolean,
@@ -78,12 +119,16 @@ async function getSelectionWebPagePromptContext(
 }
 
 async function translateWithLlm({
+  onFinalSnapshot,
+  registerFinalPromise,
   preparedText,
   providerConfig,
   translateRequest,
   onChunk,
   registerAbortController,
 }: {
+  onFinalSnapshot?: (data: BackgroundTextStreamSnapshot) => void
+  registerFinalPromise?: (promise: Promise<BackgroundTextStreamSnapshot>) => void
   preparedText: string
   providerConfig: LLMProviderConfig
   translateRequest: SelectionToolbarTranslateRequestSlice
@@ -91,11 +136,13 @@ async function translateWithLlm({
   registerAbortController: (abortController: AbortController) => void
 }) {
   const targetLangName = LANG_CODE_TO_EN_NAME[translateRequest.language.targetCode]
-  const abortController = new AbortController()
-  registerAbortController(abortController)
+  const lifecycleAbortController = new AbortController()
+  // Keep a separate stream signal so a closed popover does not kill an already-started request.
+  const streamAbortController = new AbortController()
+  registerAbortController(lifecycleAbortController)
 
   const throwIfAborted = () => {
-    if (abortController.signal.aborted) {
+    if (lifecycleAbortController.signal.aborted) {
       throw new DOMException("aborted", "AbortError")
     }
   }
@@ -125,7 +172,7 @@ async function translateWithLlm({
     throw new Error(`Invalid target language code: ${translateRequest.language.targetCode}`)
   }
 
-  const translatedText = await streamManagedTranslation(
+  const streamPromise = streamManagedTranslation(
     {
       scene: "selection",
       text: preparedText,
@@ -136,10 +183,17 @@ async function translateWithLlm({
       temperature: providerConfig.temperature,
     },
     {
-      signal: abortController.signal,
+      signal: streamAbortController.signal,
       onChunk,
     },
   )
+
+  if (onFinalSnapshot) {
+    void streamPromise.then(onFinalSnapshot).catch(() => {})
+  }
+  registerFinalPromise?.(streamPromise)
+
+  const translatedText = await streamPromise
 
   return translatedText
 }
@@ -251,10 +305,11 @@ export function SelectionTranslationProvider({
   const [reusedVocabularyItem, setReusedVocabularyItem] = useState<VocabularyItem | null>(null)
   const [savedVocabularyItemId, setSavedVocabularyItemId] = useState<string | null>(null)
   const [savedVocabularyText, setSavedVocabularyText] = useState<string | null>(null)
+  const [dictionaryReadyRunKey, setDictionaryReadyRunKey] = useState<string | null>(null)
   const [thinking, setThinking] = useState<ThinkingSnapshot | null>(null)
   const [error, setError] = useState<SelectionToolbarInlineError | null>(null)
   const [isTranslating, setIsTranslating] = useState(false)
-  const [translationSettledKey, setTranslationSettledKey] = useState<string | null>(null)
+  const [translationResumeVersion, setTranslationResumeVersion] = useState(0)
   const [vocabularyReuseState, setVocabularyReuseState] = useState<"idle" | "checking" | "hit" | "miss">("idle")
   const [rerunNonce, setRerunNonce] = useState(0)
   const [sourceSurface, setSourceSurface] = useState<
@@ -272,6 +327,17 @@ export function SelectionTranslationProvider({
   const reopenFrameRef = useRef<number | null>(null)
   const lastTranslationRunKeyRef = useRef<string | null>(null)
   const lastVocabularyDetailsSyncKeyRef = useRef<string | null>(null)
+  const isTranslationInFlightRef = useRef(false)
+  const pendingLlmFinalPromiseRef = useRef<{
+    promise: Promise<BackgroundTextStreamSnapshot>
+    translationRunKey: string | null
+  } | null>(null)
+  const translationResumeSnapshotRef = useRef<TranslationResumeSnapshot>({
+    isTranslating: false,
+    thinking: null,
+    translatedText: undefined,
+    translationRunKey: null,
+  })
   const forceRefreshNextRunRef = useRef(false)
   const runIdRef = useRef(0)
   const { resolveContextMenuSelectionRequest } = useSelectionContextMenuRequestResolver(selectionSession)
@@ -295,17 +361,17 @@ export function SelectionTranslationProvider({
     [translateRequest],
   )
   const activeTranslationRunKey = useMemo(() => {
-    if (!isOpen) {
+    if (!activeSession) {
       return null
     }
 
-    return JSON.stringify({
+    return createTranslationRunKey({
       popoverSessionKey,
       rerunNonce,
       sessionId: activeSession?.id ?? null,
       translateRequestKey,
     })
-  }, [activeSession?.id, isOpen, popoverSessionKey, rerunNonce, translateRequestKey])
+  }, [activeSession, popoverSessionKey, rerunNonce, translateRequestKey])
   const dictionaryProviderId = useMemo(() => {
     const configuredProviderId = selectionToolbarConfig.customActions
       .find(action => action.id === DEFAULT_DICTIONARY_ACTION_ID)
@@ -332,7 +398,7 @@ export function SelectionTranslationProvider({
   )
   const shouldRunDictionaryAction = vocabularyReuseState === "miss"
     && activeTranslationRunKey != null
-    && translationSettledKey === activeTranslationRunKey
+    && dictionaryReadyRunKey === activeTranslationRunKey
   const dictionaryActionExecution = shouldRunDictionaryAction ? dictionaryAction : null
   const dictionaryProviderConfig = useMemo(
     () => dictionaryProviderId ? getProviderConfigById(providersConfig, dictionaryProviderId) ?? null : null,
@@ -393,19 +459,32 @@ export function SelectionTranslationProvider({
     setSavedVocabularyItemId(null)
     setTranslatedText(undefined)
     setSavedVocabularyText(null)
+    setDictionaryReadyRunKey(null)
     setThinking(null)
     setError(null)
-    setTranslationSettledKey(null)
     setVocabularyReuseState("idle")
+    translationResumeSnapshotRef.current = {
+      isTranslating: false,
+      thinking: null,
+      translatedText: undefined,
+      translationRunKey: null,
+    }
+    setTranslationResumeVersion(prev => prev + 1)
     lastVocabularyDetailsSyncKeyRef.current = null
     resetDetailedExplanation()
   }, [resetDetailedExplanation])
+
+  const updateTranslationResumeSnapshot = useCallback((snapshot: TranslationResumeSnapshot) => {
+    translationResumeSnapshotRef.current = snapshot
+    setTranslationResumeVersion(prev => prev + 1)
+  }, [])
 
   const cancelCurrentTranslation = useCallback((runId?: number) => {
     if (runId !== undefined && runIdRef.current !== runId) {
       return
     }
 
+    isTranslationInFlightRef.current = false
     runIdRef.current += 1
     abortControllerRef.current?.abort()
     abortControllerRef.current = null
@@ -431,9 +510,16 @@ export function SelectionTranslationProvider({
     const preparedText = prepareTranslationText(selectionText)
     const forceRefresh = options?.forceRefresh === true
     const currentTranslationRunKey = options?.translationRunKey ?? null
+    const isActiveRun = () => {
+      if (currentTranslationRunKey) {
+        return lastTranslationRunKeyRef.current === currentTranslationRunKey
+      }
+
+      return runIdRef.current === runId
+    }
 
     if (preparedText === "") {
-      if (runIdRef.current === runId) {
+      if (isActiveRun()) {
         resetTranslationState()
       }
       return
@@ -444,12 +530,19 @@ export function SelectionTranslationProvider({
       sourceSurface,
     )
 
+    isTranslationInFlightRef.current = true
+    updateTranslationResumeSnapshot({
+      isTranslating: true,
+      thinking: null,
+      translatedText: undefined,
+      translationRunKey: currentTranslationRunKey,
+    })
     setIsTranslating(true)
     setReusedVocabularyItem(null)
     setTranslatedText(undefined)
     setThinking(null)
     setError(null)
-    setTranslationSettledKey(null)
+    setDictionaryReadyRunKey(null)
     setVocabularyReuseState(forceRefresh ? "miss" : "checking")
 
     if (!forceRefresh && selectionText) {
@@ -460,7 +553,7 @@ export function SelectionTranslationProvider({
           targetLang: translateRequest.language.targetCode,
         })
 
-        if (runIdRef.current !== runId) {
+        if (!isActiveRun()) {
           return
         }
 
@@ -473,7 +566,13 @@ export function SelectionTranslationProvider({
           setError(null)
           setVocabularyReuseState("hit")
           setIsTranslating(false)
-          setTranslationSettledKey(currentTranslationRunKey)
+          isTranslationInFlightRef.current = false
+          updateTranslationResumeSnapshot({
+            isTranslating: false,
+            thinking: null,
+            translatedText: reusableItem.translatedText,
+            translationRunKey: currentTranslationRunKey,
+          })
 
           void trackFeatureUsed({
             ...analyticsContext,
@@ -483,23 +582,30 @@ export function SelectionTranslationProvider({
         }
       }
       catch {
-        if (runIdRef.current !== runId) {
+        if (!isActiveRun()) {
           return
         }
       }
     }
 
-    if (runIdRef.current === runId) {
+    if (isActiveRun()) {
+      setDictionaryReadyRunKey(currentTranslationRunKey)
       setVocabularyReuseState("miss")
     }
 
     const providerConfig = translateRequest.providerConfig
     if (!providerConfig || !isTranslateProviderConfig(providerConfig)) {
-      if (runIdRef.current === runId) {
+      if (isActiveRun()) {
         setIsTranslating(false)
         setError(createSelectionToolbarPrecheckError("translate", "providerUnavailable"))
-        setTranslationSettledKey(currentTranslationRunKey)
       }
+      isTranslationInFlightRef.current = false
+      updateTranslationResumeSnapshot({
+        isTranslating: false,
+        thinking: null,
+        translatedText: undefined,
+        translationRunKey: currentTranslationRunKey,
+      })
       void trackFeatureUsed({
         ...analyticsContext,
         outcome: "failure",
@@ -508,11 +614,17 @@ export function SelectionTranslationProvider({
     }
 
     if (!providerConfig.enabled) {
-      if (runIdRef.current === runId) {
+      if (isActiveRun()) {
         setIsTranslating(false)
         setError(createSelectionToolbarPrecheckError("translate", "providerDisabled"))
-        setTranslationSettledKey(currentTranslationRunKey)
       }
+      isTranslationInFlightRef.current = false
+      updateTranslationResumeSnapshot({
+        isTranslating: false,
+        thinking: null,
+        translatedText: undefined,
+        translationRunKey: currentTranslationRunKey,
+      })
       void trackFeatureUsed({
         ...analyticsContext,
         outcome: "failure",
@@ -529,11 +641,37 @@ export function SelectionTranslationProvider({
         })
 
         const nextSnapshot = await translateWithLlm({
+          onFinalSnapshot: (data) => {
+            updateTranslationResumeSnapshot({
+              isTranslating: false,
+              thinking: data.thinking,
+              translatedText: data.output,
+              translationRunKey: currentTranslationRunKey,
+            })
+
+            if (lastTranslationRunKeyRef.current === currentTranslationRunKey) {
+              setTranslatedText(data.output)
+              setThinking(data.thinking)
+              setIsTranslating(false)
+            }
+          },
+          registerFinalPromise: (promise) => {
+            pendingLlmFinalPromiseRef.current = {
+              promise,
+              translationRunKey: currentTranslationRunKey,
+            }
+          },
           preparedText,
           providerConfig,
           translateRequest,
           onChunk: (data) => {
-            if (runIdRef.current === runId) {
+            updateTranslationResumeSnapshot({
+              isTranslating: true,
+              thinking: data.thinking,
+              translatedText: data.output,
+              translationRunKey: currentTranslationRunKey,
+            })
+            if (isActiveRun()) {
               setTranslatedText(data.output)
               setThinking(data.thinking)
             }
@@ -544,7 +682,7 @@ export function SelectionTranslationProvider({
         })
 
         nextTranslatedText = nextSnapshot.output
-        if (runIdRef.current === runId) {
+        if (isActiveRun()) {
           setThinking(nextSnapshot.thinking)
         }
       }
@@ -557,11 +695,17 @@ export function SelectionTranslationProvider({
         })
       }
 
-      if (runIdRef.current === runId) {
+      if (isActiveRun()) {
+        updateTranslationResumeSnapshot({
+          isTranslating: true,
+          thinking: translationResumeSnapshotRef.current.thinking,
+          translatedText: nextTranslatedText,
+          translationRunKey: currentTranslationRunKey,
+        })
         setTranslatedText(nextTranslatedText)
       }
 
-      if (selectionText && nextTranslatedText) {
+      if (selectionText && nextTranslatedText && isActiveRun()) {
         try {
           const savedItem = await saveTranslatedSelectionToVocabulary({
             sourceText: selectionText,
@@ -571,13 +715,13 @@ export function SelectionTranslationProvider({
             settings: vocabularySettings,
           })
 
-          if (runIdRef.current === runId) {
+          if (isActiveRun()) {
             setSavedVocabularyItemId(savedItem?.id ?? null)
             setSavedVocabularyText(savedItem?.sourceText ?? null)
           }
         }
         catch {
-          if (runIdRef.current === runId) {
+          if (isActiveRun()) {
             setSavedVocabularyItemId(null)
             setSavedVocabularyText(null)
           }
@@ -590,7 +734,7 @@ export function SelectionTranslationProvider({
       })
     }
     catch (error) {
-      if (!isAbortError(error) && runIdRef.current === runId) {
+      if (!isAbortError(error) && isActiveRun()) {
         setThinking(prev => prev?.text ? { ...prev, status: "complete" } : null)
         setError(createSelectionToolbarRuntimeError("translate", error))
       }
@@ -603,13 +747,18 @@ export function SelectionTranslationProvider({
       }
     }
     finally {
-      if (runIdRef.current === runId) {
+      if (isActiveRun()) {
+        isTranslationInFlightRef.current = false
         abortControllerRef.current = null
         setIsTranslating(false)
-        setTranslationSettledKey(currentTranslationRunKey)
+        updateTranslationResumeSnapshot({
+          ...translationResumeSnapshotRef.current,
+          isTranslating: false,
+          translationRunKey: currentTranslationRunKey,
+        })
       }
     }
-  }, [resetTranslationState, selectionText, sourceSurface, translateRequest, vocabularySettings])
+  }, [resetTranslationState, selectionText, sourceSurface, translateRequest, updateTranslationResumeSnapshot, vocabularySettings])
 
   const startTranslation = useEffectEvent((runId: number, options?: { forceRefresh?: boolean, translationRunKey: string }) => {
     void runTranslation(runId, options)
@@ -627,6 +776,8 @@ export function SelectionTranslationProvider({
     if (lastTranslationRunKeyRef.current === nextRunKey) {
       return
     }
+
+    cancelCurrentTranslation()
     lastTranslationRunKeyRef.current = nextRunKey
 
     const runId = runIdRef.current + 1
@@ -639,19 +790,80 @@ export function SelectionTranslationProvider({
       forceRefresh,
       translationRunKey: nextRunKey,
     })
-
-    return () => {
-      cancelCurrentTranslation(runId)
-    }
   }, [activeTranslationRunKey, cancelCurrentTranslation, isOpen, resetDetailedExplanation])
 
-  const handleOpenChange = useCallback((nextOpen: boolean) => {
-    cancelCurrentTranslation()
-    resetTranslationState()
+  useEffect(() => {
+    if (!isOpen) {
+      return
+    }
 
+    const resumeSnapshot = translationResumeSnapshotRef.current
+    if (resumeSnapshot.translationRunKey !== lastTranslationRunKeyRef.current) {
+      return
+    }
+
+    setIsTranslating(resumeSnapshot.isTranslating)
+    setThinking(resumeSnapshot.thinking)
+    setTranslatedText(resumeSnapshot.translatedText)
+  }, [isOpen, translationResumeVersion])
+
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
     if (nextOpen) {
       const pendingRequest = pendingOpenRequestRef.current
-      const nextSession = pendingRequest?.session ?? selectionSession
+      const nextSession = pendingRequest?.session ?? selectionSession ?? activeSession
+      const hasResumableTranslationState = isTranslationInFlightRef.current
+        || translationResumeSnapshotRef.current.translationRunKey === lastTranslationRunKeyRef.current
+        || translatedText !== undefined
+        || reusedVocabularyItem != null
+        || error != null
+
+      const shouldResumeExistingSession = Boolean(
+        pendingRequest
+        && nextSession
+        && activeSession
+        && isSameSelectionSession(nextSession, activeSession)
+        && hasResumableTranslationState,
+      )
+
+      if (shouldResumeExistingSession) {
+        const resumeSnapshot = translationResumeSnapshotRef.current
+        const resumeRunKey = resumeSnapshot.translationRunKey
+        if (resumeRunKey) {
+          lastTranslationRunKeyRef.current = resumeRunKey
+        }
+        setSourceSurface(pendingRequest?.surface ?? ANALYTICS_SURFACE.SELECTION_TOOLBAR)
+        if (pendingRequest?.anchor) {
+          setAnchor(pendingRequest.anchor)
+        }
+        setIsTranslating(resumeSnapshot.isTranslating)
+        setThinking(resumeSnapshot.thinking)
+        setTranslatedText(resumeSnapshot.translatedText)
+        if (resumeRunKey && pendingLlmFinalPromiseRef.current?.translationRunKey === resumeRunKey) {
+          const pendingPromise = pendingLlmFinalPromiseRef.current.promise
+          void pendingPromise.then((data) => {
+            if (lastTranslationRunKeyRef.current !== resumeRunKey) {
+              return
+            }
+
+            updateTranslationResumeSnapshot({
+              isTranslating: false,
+              thinking: data.thinking,
+              translatedText: data.output,
+              translationRunKey: resumeRunKey,
+            })
+            setTranslatedText(data.output)
+            setThinking(data.thinking)
+            setIsTranslating(false)
+          }).catch(() => {})
+        }
+        setIsSelectionToolbarVisible(false)
+        pendingOpenRequestRef.current = null
+        setIsOpen(true)
+        return
+      }
+
+      cancelCurrentTranslation()
+      resetTranslationState()
 
       setActiveSession(nextSession)
       setSourceSurface(pendingRequest?.surface ?? ANALYTICS_SURFACE.SELECTION_TOOLBAR)
@@ -663,14 +875,38 @@ export function SelectionTranslationProvider({
       pendingOpenRequestRef.current = null
     }
     else {
-      resetPopoverSession({
-        clearAnchor: pendingOpenRequestRef.current === null,
-      })
-      lastTranslationRunKeyRef.current = null
+      const hasInFlightTranslation = isTranslationInFlightRef.current
+        || Boolean(abortControllerRef.current)
+        || isTranslating
+        || vocabularyReuseState === "checking"
+
+      if (!hasInFlightTranslation) {
+        cancelCurrentTranslation()
+        resetTranslationState()
+        resetPopoverSession({
+          clearAnchor: pendingOpenRequestRef.current === null,
+        })
+        lastTranslationRunKeyRef.current = null
+      }
+      else if (pendingOpenRequestRef.current === null) {
+        setAnchor(null)
+      }
     }
 
     setIsOpen(nextOpen)
-  }, [cancelCurrentTranslation, resetPopoverSession, resetTranslationState, selectionSession, setIsSelectionToolbarVisible])
+  }, [
+    activeSession,
+    cancelCurrentTranslation,
+    error,
+    isTranslating,
+    resetPopoverSession,
+    resetTranslationState,
+    reusedVocabularyItem,
+    selectionSession,
+    setIsSelectionToolbarVisible,
+    translatedText,
+    vocabularyReuseState,
+  ])
 
   const prepareToolbarOpen = useCallback(() => {
     if (!selectionSession) {
@@ -731,11 +967,12 @@ export function SelectionTranslationProvider({
 
   useEffect(() => {
     return () => {
+      cancelCurrentTranslation()
       if (reopenFrameRef.current !== null) {
         cancelAnimationFrame(reopenFrameRef.current)
       }
     }
-  }, [])
+  }, [cancelCurrentTranslation])
 
   const detailedExplanationLoading = Boolean(dictionaryAction)
     && (
