@@ -19,7 +19,7 @@ vi.mock("#imports", () => ({
         "options.vocabulary.library.export": "Export",
         "options.vocabulary.library.clear": "Clear",
         "options.vocabulary.library.searchPlaceholder": "Search saved words or translations",
-        "options.vocabulary.library.deleteSelected": "Delete selected",
+        "options.vocabulary.library.deleteSelected": "Delete",
         "options.vocabulary.library.selectedCount": "$1 selected",
         "options.vocabulary.library.deleteSelectedDialog.title": "Delete $1 selected items?",
         "options.vocabulary.library.deleteSelectedDialog.description": "This action cannot be undone. Selected items will be removed from your library.",

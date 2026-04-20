@@ -19,7 +19,6 @@ import { Badge } from "@/components/ui/base-ui/badge"
 import { Button } from "@/components/ui/base-ui/button"
 import { Checkbox } from "@/components/ui/base-ui/checkbox"
 import { Input } from "@/components/ui/base-ui/input"
-import { ScrollArea } from "@/components/ui/base-ui/scroll-area"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/base-ui/sheet"
 import { Spinner } from "@/components/ui/base-ui/spinner"
 import { useVocabularyItems } from "@/hooks/use-vocabulary-items"
@@ -85,7 +84,6 @@ export function VocabularySheet({
   const isAllFilteredItemsSelected = filteredItems.length > 0 && selectedFilteredItemCount === filteredItems.length
   const deleteSelectedLabel = `${tVocabularyKey("options.vocabulary.library.deleteSelected")} (${selectedItemCount})`
   const deleteSelectedDialogTitle = tVocabularyKey("options.vocabulary.library.deleteSelectedDialog.title").replace("$1", String(selectedItemCount))
-  const selectedCountLabel = tVocabularyKey("options.vocabulary.library.selectedCount").replace("$1", String(selectedItemCount))
 
   function exportItems() {
     const blob = new Blob([JSON.stringify(filteredItems, null, 2)], { type: "application/json;charset=utf-8" })
@@ -170,9 +168,9 @@ export function VocabularySheet({
         <SheetContent
           side="bottom"
           showCloseButton={false}
-          className="max-h-[82vh] rounded-t-[28px] border-x-0 border-b-0 px-0 pt-0 shadow-2xl sm:max-w-none"
+          className="flex h-[82vh] max-h-[82vh] flex-col rounded-t-[28px] border-x-0 border-b-0 px-0 pt-0 shadow-2xl sm:max-w-none"
         >
-          <SheetHeader className="gap-3 border-b border-border/70 px-4 pt-3 pb-4">
+          <SheetHeader className="shrink-0 gap-3 border-b border-border/70 px-4 pt-3 pb-4">
             <div className="mx-auto h-1.5 w-14 rounded-full bg-border/80" />
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-3">
@@ -217,12 +215,17 @@ export function VocabularySheet({
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Input
-                  value={search}
-                  placeholder={tVocabularyKey("options.vocabulary.library.searchPlaceholder")}
-                  onChange={event => setSearch(event.target.value)}
-                />
+              <Input
+                value={search}
+                placeholder={tVocabularyKey("options.vocabulary.library.searchPlaceholder")}
+                onChange={event => setSearch(event.target.value)}
+              />
+            </div>
+          </SheetHeader>
+
+          <div className="flex-1 overflow-y-auto px-4 pt-1 pb-6 scrollbar-thin">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
                 <Button
                   type="button"
                   variant="outline"
@@ -232,16 +235,8 @@ export function VocabularySheet({
                 >
                   {tVocabularyKey("options.vocabulary.library.selectAll")}
                 </Button>
-              </div>
-            </div>
-          </SheetHeader>
-
-          <ScrollArea className="max-h-[calc(82vh-180px)]">
-            <div className="space-y-3 px-4 pt-4 pb-6">
-              {selectedItemCount > 0
-                ? (
-                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-muted/30 px-3 py-2 text-sm">
-                      <div className="text-muted-foreground">{selectedCountLabel}</div>
+                {selectedItemCount > 0
+                  ? (
                       <Button
                         type="button"
                         variant="destructive"
@@ -251,9 +246,9 @@ export function VocabularySheet({
                       >
                         {deleteSelectedLabel}
                       </Button>
-                    </div>
-                  )
-                : null}
+                    )
+                  : null}
+              </div>
 
               {isLoading
                 ? (
@@ -282,7 +277,7 @@ export function VocabularySheet({
                     return (
                       <div
                         key={item.id}
-                        className={`flex items-start gap-3 rounded-2xl border px-3 py-3 transition-colors ${
+                        className={`flex items-center gap-3 rounded-2xl border px-3 py-3 transition-colors ${
                           itemSelected
                             ? "border-primary/30 bg-primary/8"
                             : "border-border/70 bg-background hover:bg-muted/40"
@@ -303,7 +298,6 @@ export function VocabularySheet({
                               return [...nextSelectedIds]
                             })
                           }}
-                          className="mt-1"
                         />
 
                         <div className="min-w-0 flex-1">
@@ -335,12 +329,23 @@ export function VocabularySheet({
                               )
                             : null}
                         </div>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="shrink-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => setPendingDeleteItemIds([item.id])}
+                          aria-label={`${tVocabularyKey("options.vocabulary.library.deleteSelected")} ${item.sourceText}`}
+                        >
+                          <IconTrash className="size-4" />
+                        </Button>
                       </div>
                     )
                   })
                 : null}
             </div>
-          </ScrollArea>
+          </div>
         </SheetContent>
       </Sheet>
 

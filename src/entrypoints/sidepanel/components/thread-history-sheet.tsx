@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/base-ui/alert-dialog"
 import { Badge } from "@/components/ui/base-ui/badge"
 import { Button } from "@/components/ui/base-ui/button"
-import { ScrollArea } from "@/components/ui/base-ui/scroll-area"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/base-ui/sheet"
 
 function formatThreadTimestamp(lastMessageAt: string | null): string {
@@ -63,9 +62,9 @@ export function ThreadHistorySheet({
         <SheetContent
           side="bottom"
           showCloseButton={false}
-          className="max-h-[78vh] rounded-t-[28px] border-x-0 border-b-0 px-0 pt-0 shadow-2xl sm:max-w-none"
+          className="flex h-[78vh] max-h-[78vh] flex-col rounded-t-[28px] border-x-0 border-b-0 px-0 pt-0 shadow-2xl sm:max-w-none"
         >
-          <SheetHeader className="gap-3 border-b border-border/70 px-4 pt-3 pb-4">
+          <SheetHeader className="shrink-0 gap-3 border-b border-border/70 px-4 pt-3 pb-4">
             <div className="mx-auto h-1.5 w-14 rounded-full bg-border/80" />
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
@@ -110,8 +109,8 @@ export function ThreadHistorySheet({
             </div>
           </SheetHeader>
 
-          <ScrollArea className="max-h-[calc(78vh-128px)]">
-            <div className="space-y-2 px-4 pt-4 pb-6">
+          <div className="flex-1 overflow-y-auto px-4 pt-4 pb-6 scrollbar-thin">
+            <div className="space-y-2">
               {draftSession
                 ? (
                     <div
@@ -190,7 +189,7 @@ export function ThreadHistorySheet({
                     ))
                   )}
             </div>
-          </ScrollArea>
+          </div>
         </SheetContent>
       </Sheet>
 

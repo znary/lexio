@@ -923,7 +923,7 @@ options:
       clear: Clear all
       selectAll: Select all
       selectItem: Select
-      deleteSelected: Delete selected
+      deleteSelected: Delete
       selectedCount: $1 selected
       deleteSelectedDialog:
         title: Delete $1 selected items?

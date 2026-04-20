@@ -916,7 +916,7 @@ options:
       clear: 清空全部
       selectAll: 全选
       selectItem: 选择
-      deleteSelected: 删除所选
+      deleteSelected: 删除
       selectedCount: $1 项已选择
       deleteSelectedDialog:
         title: 删除这 $1 项？
