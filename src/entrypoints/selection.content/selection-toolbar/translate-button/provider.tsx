@@ -34,6 +34,7 @@ import { getTranslatePromptFromConfig } from "@/utils/prompts/translate"
 import {
   findVocabularyItemForSelection,
   saveTranslatedSelectionToVocabulary,
+  setVocabularyItemMastered,
   updateVocabularyItemDetails,
 } from "@/utils/vocabulary/service"
 import { shadowWrapper } from "../.."
@@ -558,10 +559,21 @@ export function SelectionTranslationProvider({
         }
 
         if (reusableItem) {
-          setReusedVocabularyItem(reusableItem)
+          const nextReusableItem = reusableItem.masteredAt == null
+            ? reusableItem
+            : {
+                ...reusableItem,
+                masteredAt: null,
+              }
+
+          if (reusableItem.masteredAt != null) {
+            void Promise.resolve(setVocabularyItemMastered(reusableItem.id, false)).catch(() => {})
+          }
+
+          setReusedVocabularyItem(nextReusableItem)
           setSavedVocabularyItemId(reusableItem.id)
           setSavedVocabularyText(reusableItem.sourceText)
-          setTranslatedText(reusableItem.translatedText)
+          setTranslatedText(nextReusableItem.translatedText)
           setThinking(null)
           setError(null)
           setVocabularyReuseState("hit")
@@ -570,7 +582,7 @@ export function SelectionTranslationProvider({
           updateTranslationResumeSnapshot({
             isTranslating: false,
             thinking: null,
-            translatedText: reusableItem.translatedText,
+            translatedText: nextReusableItem.translatedText,
             translationRunKey: currentTranslationRunKey,
           })
 

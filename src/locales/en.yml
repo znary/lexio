@@ -924,6 +924,8 @@ options:
       selectAll: Select all
       selectItem: Select
       deleteSelected: Delete
+      markMastered: Mark as mastered
+      unmarkMastered: Mark as learning again
       selectedCount: $1 selected
       deleteSelectedDialog:
         title: Delete $1 selected items?
@@ -945,6 +947,8 @@ options:
       meaning: Meaning
       translation: Translation
       details: Details
+      markMastered: Mark as mastered
+      unmarkMastered: Mark as learning again
   videoSubtitles:
     title: Video Subtitles
     description: Currently only supports YouTube video subtitles

@@ -21,9 +21,11 @@ import { Checkbox } from "@/components/ui/base-ui/checkbox"
 import { Input } from "@/components/ui/base-ui/input"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/base-ui/sheet"
 import { Spinner } from "@/components/ui/base-ui/spinner"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/base-ui/tooltip"
+import { VocabularyMasteryToggleButton } from "@/components/vocabulary/mastery-toggle-button"
 import { useVocabularyItems } from "@/hooks/use-vocabulary-items"
 import { APP_NAME } from "@/utils/constants/app"
-import { clearVocabularyItems, removeVocabularyItems } from "@/utils/vocabulary/service"
+import { clearVocabularyItems, removeVocabularyItems, setVocabularyItemMastered } from "@/utils/vocabulary/service"
 
 function tVocabularyKey(key: string) {
   return i18n.t(key as never)
@@ -43,6 +45,23 @@ function buildMetaParts(item: VocabularyItem): string[] {
   ].filter((value): value is string => Boolean(value))
 }
 
+function VocabularyIconAction({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex" />}>
+        {children}
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 export function VocabularySheet({
   open,
   onOpenChange,
@@ -54,6 +73,7 @@ export function VocabularySheet({
   const [search, setSearch] = useState("")
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([])
   const [pendingDeleteItemIds, setPendingDeleteItemIds] = useState<string[] | null>(null)
+  const [pendingMasteredItemIds, setPendingMasteredItemIds] = useState<string[]>([])
   const [deletingSelection, setDeletingSelection] = useState(false)
   const [clearingItems, setClearingItems] = useState(false)
   const items = useMemo(() => query.data ?? [], [query.data])
@@ -147,6 +167,23 @@ export function VocabularySheet({
     }
     finally {
       setClearingItems(false)
+    }
+  }
+
+  async function handleToggleMastered(item: VocabularyItem) {
+    if (pendingMasteredItemIds.includes(item.id)) {
+      return
+    }
+
+    try {
+      setPendingMasteredItemIds(currentItemIds => [...currentItemIds, item.id])
+      await setVocabularyItemMastered(item.id, item.masteredAt == null)
+    }
+    catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error))
+    }
+    finally {
+      setPendingMasteredItemIds(currentItemIds => currentItemIds.filter(currentItemId => currentItemId !== item.id))
     }
   }
 
@@ -272,6 +309,11 @@ export function VocabularySheet({
               {!isLoading
                 ? filteredItems.map((item) => {
                     const itemSelected = selectedItemIdSet.has(item.id)
+                    const isMastered = item.masteredAt != null
+                    const masteredActionLabel = isMastered
+                      ? tVocabularyKey("options.vocabulary.library.unmarkMastered")
+                      : tVocabularyKey("options.vocabulary.library.markMastered")
+                    const masteringItem = pendingMasteredItemIds.includes(item.id)
                     const metaParts = buildMetaParts(item)
 
                     return (
@@ -280,7 +322,9 @@ export function VocabularySheet({
                         className={`flex items-center gap-3 rounded-2xl border px-3 py-3 transition-colors ${
                           itemSelected
                             ? "border-primary/30 bg-primary/8"
-                            : "border-border/70 bg-background hover:bg-muted/40"
+                            : isMastered
+                              ? "border-emerald-500/25 bg-emerald-500/6"
+                              : "border-border/70 bg-background hover:bg-muted/40"
                         }`}
                       >
                         <Checkbox
@@ -300,46 +344,64 @@ export function VocabularySheet({
                           }}
                         />
 
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
+                        <div className="min-w-0 flex-1 self-stretch">
+                          <div className="flex h-full items-start gap-3">
+                            <div className="min-w-0 flex-1 self-center">
                               <div className="truncate text-sm font-medium">{item.sourceText}</div>
                               <div className="mt-1 break-words text-sm text-muted-foreground">{item.translatedText}</div>
+
+                              {metaParts.length > 0
+                                ? (
+                                    <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                      {metaParts.map(part => (
+                                        <span key={`${item.id}-${part}`}>{part}</span>
+                                      ))}
+                                    </div>
+                                  )
+                                : null}
+
+                              {item.definition
+                                ? (
+                                    <div className="mt-2 break-words text-xs text-muted-foreground">
+                                      {item.definition}
+                                    </div>
+                                  )
+                                : null}
                             </div>
-                            <Badge variant="outline" size="sm">
-                              {item.kind}
-                            </Badge>
+
+                            <div className="flex shrink-0 flex-col items-end gap-2 self-stretch">
+                              <Badge variant="outline" size="sm" className="self-end">
+                                {item.kind}
+                              </Badge>
+
+                              <div className="my-auto flex items-center gap-1">
+                                <VocabularyIconAction label={masteredActionLabel}>
+                                  <VocabularyMasteryToggleButton
+                                    label={`${masteredActionLabel} ${item.sourceText}`}
+                                    mastered={isMastered}
+                                    pending={masteringItem}
+                                    onClick={() => {
+                                      void handleToggleMastered(item)
+                                    }}
+                                  />
+                                </VocabularyIconAction>
+
+                                <VocabularyIconAction label={tVocabularyKey("options.vocabulary.library.deleteSelected")}>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    className="text-muted-foreground hover:text-destructive"
+                                    onClick={() => setPendingDeleteItemIds([item.id])}
+                                    aria-label={`${tVocabularyKey("options.vocabulary.library.deleteSelected")} ${item.sourceText}`}
+                                  >
+                                    <IconTrash className="size-4" />
+                                  </Button>
+                                </VocabularyIconAction>
+                              </div>
+                            </div>
                           </div>
-
-                          {metaParts.length > 0
-                            ? (
-                                <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                                  {metaParts.map(part => (
-                                    <span key={`${item.id}-${part}`}>{part}</span>
-                                  ))}
-                                </div>
-                              )
-                            : null}
-
-                          {item.definition
-                            ? (
-                                <div className="mt-2 break-words text-xs text-muted-foreground">
-                                  {item.definition}
-                                </div>
-                              )
-                            : null}
                         </div>
-
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          className="shrink-0 text-muted-foreground hover:text-destructive"
-                          onClick={() => setPendingDeleteItemIds([item.id])}
-                          aria-label={`${tVocabularyKey("options.vocabulary.library.deleteSelected")} ${item.sourceText}`}
-                        >
-                          <IconTrash className="size-4" />
-                        </Button>
                       </div>
                     )
                   })

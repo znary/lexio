@@ -13,6 +13,8 @@ export interface VocabularyHighlightAnchorRect {
   width: number
 }
 
+export const VOCABULARY_HOVER_CARD_ATTRIBUTE = "data-rf-vocabulary-hover-card"
+
 export interface VocabularyHoverPreview {
   anchorRect: VocabularyHighlightAnchorRect
   item: VocabularyItem
@@ -29,8 +31,26 @@ interface VocabularyHoverCardPositionOptions {
   viewportWidth?: number
 }
 
+interface VocabularyHoverBridgeRectOptions {
+  anchorRect: VocabularyHighlightAnchorRect
+  cardRect: VocabularyHighlightAnchorRect
+}
+
+interface VocabularyHoverAreaPoint {
+  x: number
+  y: number
+}
+
+interface VocabularyHoverAreaOptions {
+  anchorRect: VocabularyHighlightAnchorRect
+  cardRect?: VocabularyHighlightAnchorRect | null
+  point: VocabularyHoverAreaPoint
+  slop?: number
+}
+
 const DEFAULT_CARD_GAP = 12
 const DEFAULT_VIEWPORT_MARGIN = 8
+const DEFAULT_HOVER_AREA_SLOP = 6
 const HEX_COLOR_REGEX = /^[\da-f]{6}$/i
 
 interface RGBColor {
@@ -195,4 +215,119 @@ export function getVocabularyHoverCardPosition({
     left: clampLeft(centeredLeft),
     top: clampTop(anchorRect.top - cardHeight - gap),
   }
+}
+
+export function getVocabularyHoverBridgeRect({
+  anchorRect,
+  cardRect,
+}: VocabularyHoverBridgeRectOptions) {
+  if (cardRect.bottom <= anchorRect.top) {
+    const left = Math.min(anchorRect.left, cardRect.left)
+    const right = Math.max(anchorRect.right, cardRect.right)
+    const top = cardRect.bottom
+    const bottom = anchorRect.top
+    return {
+      left,
+      right,
+      top,
+      bottom,
+      width: right - left,
+      height: bottom - top,
+    }
+  }
+
+  if (cardRect.top >= anchorRect.bottom) {
+    const left = Math.min(anchorRect.left, cardRect.left)
+    const right = Math.max(anchorRect.right, cardRect.right)
+    const top = anchorRect.bottom
+    const bottom = cardRect.top
+    return {
+      left,
+      right,
+      top,
+      bottom,
+      width: right - left,
+      height: bottom - top,
+    }
+  }
+
+  if (cardRect.left >= anchorRect.right) {
+    const left = anchorRect.right
+    const right = cardRect.left
+    const top = Math.min(anchorRect.top, cardRect.top)
+    const bottom = Math.max(anchorRect.bottom, cardRect.bottom)
+    return {
+      left,
+      right,
+      top,
+      bottom,
+      width: right - left,
+      height: bottom - top,
+    }
+  }
+
+  if (cardRect.right <= anchorRect.left) {
+    const left = cardRect.right
+    const right = anchorRect.left
+    const top = Math.min(anchorRect.top, cardRect.top)
+    const bottom = Math.max(anchorRect.bottom, cardRect.bottom)
+    return {
+      left,
+      right,
+      top,
+      bottom,
+      width: right - left,
+      height: bottom - top,
+    }
+  }
+
+  return null
+}
+
+function expandRect(rect: VocabularyHighlightAnchorRect, amount: number): VocabularyHighlightAnchorRect {
+  return {
+    top: rect.top - amount,
+    right: rect.right + amount,
+    bottom: rect.bottom + amount,
+    left: rect.left - amount,
+    width: rect.width + amount * 2,
+    height: rect.height + amount * 2,
+  }
+}
+
+function isPointInRect(point: VocabularyHoverAreaPoint, rect: VocabularyHighlightAnchorRect) {
+  return point.x >= rect.left
+    && point.x <= rect.right
+    && point.y >= rect.top
+    && point.y <= rect.bottom
+}
+
+export function isPointInVocabularyHoverArea({
+  point,
+  anchorRect,
+  cardRect = null,
+  slop = DEFAULT_HOVER_AREA_SLOP,
+}: VocabularyHoverAreaOptions) {
+  if (isPointInRect(point, expandRect(anchorRect, slop))) {
+    return true
+  }
+
+  if (!cardRect) {
+    return false
+  }
+
+  if (isPointInRect(point, expandRect(cardRect, slop))) {
+    return true
+  }
+
+  const bridgeRect = getVocabularyHoverBridgeRect({
+    anchorRect,
+    cardRect,
+  })
+
+  if (!bridgeRect) {
+    return false
+  }
+
+  return isPointInRect(point, expandRect(bridgeRect, slop))
 }

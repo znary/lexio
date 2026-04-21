@@ -66,7 +66,13 @@ function notifyVocabularyChanged(): void {
 }
 
 function sortVocabularyItems(items: VocabularyItem[]): VocabularyItem[] {
-  return [...items].sort((left, right) => right.updatedAt - left.updatedAt)
+  return [...items].sort((left, right) => {
+    if (right.lastSeenAt !== left.lastSeenAt) {
+      return right.lastSeenAt - left.lastSeenAt
+    }
+
+    return right.updatedAt - left.updatedAt
+  })
 }
 
 function hydrateVocabularyItem(item: VocabularyItem): VocabularyItem {
@@ -86,6 +92,7 @@ function hydrateVocabularyItem(item: VocabularyItem): VocabularyItem {
     ...(metadata.lemma ? { lemma: item.lemma ?? metadata.lemma } : {}),
     ...(matchTerms.size > 0 ? { matchTerms: [...matchTerms] } : {}),
     normalizedText: metadata.normalizedText || item.normalizedText,
+    masteredAt: item.masteredAt ?? null,
   }
 }
 
@@ -465,6 +472,7 @@ function restoreOrUpdateExistingItem(
     normalizedText: metadata.normalizedText,
     updatedAt: now,
     deletedAt: null,
+    masteredAt: null,
   }
 }
 
@@ -498,6 +506,7 @@ function buildVocabularyItem(
     hitCount: 1,
     updatedAt: now,
     deletedAt: null,
+    masteredAt: null,
   }
 }
 
@@ -711,6 +720,36 @@ export async function updateVocabularyItemDetails(
     ...(metadata.lemma ? { lemma: metadata.lemma } : {}),
     ...(metadata.matchTerms.length > 0 ? { matchTerms: metadata.matchTerms } : {}),
     normalizedText: metadata.normalizedText,
+    updatedAt: Date.now(),
+  })
+
+  const snapshot = beginVocabularyMutation(scope)
+  const nextItems = upsertVocabularyItem(previousItems, updatedItem)
+  setVocabularyItemsCache(scope, nextItems)
+
+  try {
+    await apiUpdateVocabularyItem(updatedItem)
+    markVocabularySnapshotFresh(scope, nextItems)
+  }
+  catch (error) {
+    revertVocabularyMutation(scope, snapshot)
+    throw error
+  }
+
+  return updatedItem
+}
+
+export async function setVocabularyItemMastered(itemId: string, mastered: boolean): Promise<VocabularyItem | null> {
+  const scope = await getActiveVocabularyScope()
+  const previousItems = await getVocabularyItems()
+  const existingItem = previousItems.find(item => item.id === itemId)
+  if (!existingItem) {
+    return null
+  }
+
+  const updatedItem = hydrateVocabularyItem({
+    ...existingItem,
+    masteredAt: mastered ? Date.now() : null,
     updatedAt: Date.now(),
   })
 

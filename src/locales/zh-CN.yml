@@ -917,6 +917,8 @@ options:
       selectAll: 全选
       selectItem: 选择
       deleteSelected: 删除
+      markMastered: 标记为已掌握
+      unmarkMastered: 取消已掌握
       selectedCount: $1 项已选择
       deleteSelectedDialog:
         title: 删除这 $1 项？
@@ -938,6 +940,8 @@ options:
       meaning: 释义
       translation: 译文
       details: 信息
+      markMastered: 标记为已掌握
+      unmarkMastered: 标记为学习中
   videoSubtitles:
     title: 视频字幕
     description: 当前仅支持 YouTube 视频字幕

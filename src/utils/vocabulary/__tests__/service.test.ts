@@ -162,6 +162,54 @@ describe("vocabulary service", () => {
     }))
   })
 
+  it("moves a mastered item back to learning when the same selection is translated again", async () => {
+    storageAdapterGetMock.mockResolvedValue([
+      {
+        id: "voc_existing",
+        sourceText: "hello",
+        normalizedText: "hello",
+        translatedText: "你好",
+        sourceLang: "en",
+        targetLang: "zh-CN",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 1,
+        lastSeenAt: 2,
+        hitCount: 3,
+        updatedAt: 4,
+        deletedAt: null,
+        masteredAt: 5,
+      },
+    ])
+
+    const { saveTranslatedSelectionToVocabulary } = await import("../service")
+    const savedItem = await saveTranslatedSelectionToVocabulary({
+      sourceText: "hello",
+      translatedText: "您好",
+      sourceLang: "en",
+      targetLang: "zh-CN",
+      settings: {
+        autoSave: true,
+        highlightEnabled: true,
+        maxPhraseWords: 3,
+        highlightColor: "#fde68a",
+      },
+    })
+
+    expect(apiUpdateVocabularyItemMock).toHaveBeenCalledWith(expect.objectContaining({
+      id: "voc_existing",
+      translatedText: "您好",
+      hitCount: 4,
+      masteredAt: null,
+    }))
+    expect(savedItem).toEqual(expect.objectContaining({
+      id: "voc_existing",
+      translatedText: "您好",
+      hitCount: 4,
+      masteredAt: null,
+    }))
+  })
+
   it("stores english word variants under the same canonical entry", async () => {
     const { saveTranslatedSelectionToVocabulary } = await import("../service")
     const savedItem = await saveTranslatedSelectionToVocabulary({
@@ -280,6 +328,117 @@ describe("vocabulary service", () => {
       phonetic: "/theta-ng-k/",
       matchTerms: expect.arrayContaining(["think", "thinking", "thinks", "thought"]),
     }))
+  })
+
+  it("marks an existing item as mastered with an optimistic cache update", async () => {
+    storageAdapterGetMock.mockResolvedValue([
+      {
+        id: "voc_existing",
+        sourceText: "thinking",
+        normalizedText: "thinking",
+        translatedText: "思考",
+        sourceLang: "en",
+        targetLang: "zh-CN",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 1,
+        lastSeenAt: 2,
+        hitCount: 3,
+        updatedAt: 4,
+        deletedAt: null,
+      },
+    ])
+
+    let resolveUpdate: ((value: { ok: true }) => void) | null = null
+    apiUpdateVocabularyItemMock.mockReturnValue(new Promise((resolve) => {
+      resolveUpdate = resolve
+    }))
+
+    const { getCachedVocabularyItems, setVocabularyItemMastered, VOCABULARY_CHANGED_EVENT } = await import("../service")
+    const changedListener = vi.fn()
+    document.addEventListener(VOCABULARY_CHANGED_EVENT, changedListener)
+
+    const updatePromise = setVocabularyItemMastered("voc_existing", true)
+
+    await vi.waitFor(() => {
+      expect(getCachedVocabularyItems()).toEqual([
+        expect.objectContaining({
+          id: "voc_existing",
+          masteredAt: expect.any(Number),
+        }),
+      ])
+      expect(changedListener).toHaveBeenCalledTimes(1)
+    })
+
+    if (!resolveUpdate) {
+      throw new Error("update promise resolver was not captured")
+    }
+
+    const finishUpdate = resolveUpdate as (value: { ok: true }) => void
+    finishUpdate({ ok: true })
+    await expect(updatePromise).resolves.toEqual(expect.objectContaining({
+      id: "voc_existing",
+      masteredAt: expect.any(Number),
+    }))
+
+    expect(apiUpdateVocabularyItemMock).toHaveBeenCalledWith(expect.objectContaining({
+      id: "voc_existing",
+      masteredAt: expect.any(Number),
+    }))
+
+    document.removeEventListener(VOCABULARY_CHANGED_EVENT, changedListener)
+  })
+
+  it("sorts vocabulary items by last seen time so mastered toggles do not reorder the list", async () => {
+    storageAdapterGetMock.mockResolvedValue([
+      {
+        id: "voc_older",
+        sourceText: "hello",
+        normalizedText: "hello",
+        translatedText: "你好",
+        sourceLang: "en",
+        targetLang: "zh-CN",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 1,
+        lastSeenAt: 2,
+        hitCount: 3,
+        updatedAt: 100,
+        deletedAt: null,
+      },
+      {
+        id: "voc_recent",
+        sourceText: "world",
+        normalizedText: "world",
+        translatedText: "世界",
+        sourceLang: "en",
+        targetLang: "zh-CN",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 5,
+        lastSeenAt: 6,
+        hitCount: 2,
+        updatedAt: 50,
+        deletedAt: null,
+      },
+    ])
+
+    const { getCachedVocabularyItems, getVocabularyItems, setVocabularyItemMastered } = await import("../service")
+
+    await expect(getVocabularyItems()).resolves.toEqual([
+      expect.objectContaining({ id: "voc_recent" }),
+      expect.objectContaining({ id: "voc_older" }),
+    ])
+
+    await setVocabularyItemMastered("voc_older", true)
+
+    expect(getCachedVocabularyItems()).toEqual([
+      expect.objectContaining({ id: "voc_recent" }),
+      expect.objectContaining({
+        id: "voc_older",
+        masteredAt: expect.any(Number),
+      }),
+    ])
   })
 
   it("finds a saved item by its lemma for the same language pair", async () => {

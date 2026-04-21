@@ -10,6 +10,10 @@ const { removeVocabularyItemsMock } = vi.hoisted(() => ({
   removeVocabularyItemsMock: vi.fn(),
 }))
 
+const { setVocabularyItemMasteredMock } = vi.hoisted(() => ({
+  setVocabularyItemMasteredMock: vi.fn(),
+}))
+
 vi.mock("#imports", () => ({
   i18n: {
     t: (key: string) => {
@@ -27,6 +31,8 @@ vi.mock("#imports", () => ({
         "options.vocabulary.library.deleteSelectedDialog.cancel": "Cancel",
         "options.vocabulary.library.selectAll": "Select all visible items",
         "options.vocabulary.library.selectItem": "Select",
+        "options.vocabulary.library.markMastered": "Mark as mastered",
+        "options.vocabulary.library.unmarkMastered": "Mark as learning again",
       }
       return messages[key] ?? key
     },
@@ -66,6 +72,7 @@ vi.mock("@/hooks/use-vocabulary-items", () => ({
           updatedAt: 1700000100000,
           lastSeenAt: 1700000100000,
           deletedAt: null,
+          masteredAt: 1700000200000,
         },
       ],
       isPending: false,
@@ -76,6 +83,7 @@ vi.mock("@/hooks/use-vocabulary-items", () => ({
 vi.mock("@/utils/vocabulary/service", () => ({
   clearVocabularyItems: vi.fn(),
   removeVocabularyItems: (...args: unknown[]) => removeVocabularyItemsMock(...args),
+  setVocabularyItemMastered: (...args: unknown[]) => setVocabularyItemMasteredMock(...args),
 }))
 
 vi.mock("file-saver", () => ({
@@ -214,6 +222,7 @@ vi.mock("@/components/ui/base-ui/alert-dialog", async () => {
 describe("vocabulary sheet", () => {
   beforeEach(() => {
     removeVocabularyItemsMock.mockReset()
+    setVocabularyItemMasteredMock.mockReset()
   })
 
   it("asks for confirmation before deleting selected items", () => {
@@ -260,5 +269,29 @@ describe("vocabulary sheet", () => {
     await waitFor(() => {
       expect(confirmButton).not.toBeInTheDocument()
     })
+  })
+
+  it("marks an unmastered item as mastered from the library list", () => {
+    render(<VocabularySheet open onOpenChange={vi.fn()} />)
+
+    const masteryButton = screen.getByRole("button", { name: "options.vocabulary.library.markMastered hello" })
+    expect(masteryButton).toHaveAttribute("data-mastery-state", "learning")
+
+    fireEvent.click(masteryButton)
+
+    expect(setVocabularyItemMasteredMock).toHaveBeenCalledTimes(1)
+    expect(setVocabularyItemMasteredMock).toHaveBeenCalledWith("voc_delete", true)
+  })
+
+  it("lets the user revoke mastered status from the library list", () => {
+    render(<VocabularySheet open onOpenChange={vi.fn()} />)
+
+    const masteryButton = screen.getByRole("button", { name: "options.vocabulary.library.unmarkMastered world" })
+    expect(masteryButton).toHaveAttribute("data-mastery-state", "mastered")
+
+    fireEvent.click(masteryButton)
+
+    expect(setVocabularyItemMasteredMock).toHaveBeenCalledTimes(1)
+    expect(setVocabularyItemMasteredMock).toHaveBeenCalledWith("voc_delete_2", false)
   })
 })

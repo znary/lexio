@@ -1,7 +1,7 @@
-import type { VocabularyHoverPreview } from "./vocabulary-highlight-ui"
+import type { VocabularyHighlightAnchorRect, VocabularyHoverPreview } from "./vocabulary-highlight-ui"
 import type { VocabularyItem } from "@/types/vocabulary"
 import { useAtomValue } from "jotai"
-import { useEffect, useEffectEvent, useRef, useState } from "react"
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { NOTRANSLATE_CLASS } from "@/utils/constants/dom-labels"
 import {
@@ -15,7 +15,9 @@ import { getVocabularyItems, VOCABULARY_CHANGED_EVENT } from "@/utils/vocabulary
 import { SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE } from "./overlay-layers"
 import {
   createVocabularyHighlightStyle,
+  isPointInVocabularyHoverArea,
   toVocabularyHighlightAnchorRect,
+  VOCABULARY_HOVER_CARD_ATTRIBUTE,
 } from "./vocabulary-highlight-ui"
 
 const HIGHLIGHT_EXCLUDE_SELECTORS = [
@@ -40,8 +42,36 @@ interface ActiveHoverHighlight {
   itemId: string
 }
 
+interface VocabularyHighlightingState {
+  handleHoverCardPointerEnter: () => void
+  handleHoverCardPointerLeave: () => void
+  hoverPreview: VocabularyHoverPreview | null
+  setHoverCardRect: (rect: VocabularyHighlightAnchorRect | null) => void
+}
+
+const HOVER_PREVIEW_HIDE_DELAY = 120
+const HOVER_CARD_MEASURE_GRACE_MS = 160
+
 export function shouldHighlightAcrossElements(item: Pick<VocabularyItem, "kind" | "wordCount">) {
   return item.kind === "phrase" || item.wordCount > 1
+}
+
+function isSameRect(left: VocabularyHighlightAnchorRect, right: VocabularyHighlightAnchorRect) {
+  return left.top === right.top
+    && left.right === right.right
+    && left.bottom === right.bottom
+    && left.left === right.left
+    && left.width === right.width
+    && left.height === right.height
+}
+
+function getHoverCardElement(target: EventTarget | null) {
+  if (!(target instanceof Node)) {
+    return null
+  }
+
+  const baseElement = target instanceof HTMLElement ? target : target.parentElement
+  return baseElement?.closest(`[${VOCABULARY_HOVER_CARD_ATTRIBUTE}]`) as HTMLElement | null
 }
 
 function ensureHighlightStyle(color: string) {
@@ -119,24 +149,55 @@ function getHighlightElement(target: EventTarget | null) {
   return baseElement?.closest(`mark.${VOCABULARY_HIGHLIGHT_CLASS_NAME}[${VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE}]`) as HTMLElement | null
 }
 
-export function useVocabularyHighlighting() {
+export function useVocabularyHighlighting(): VocabularyHighlightingState {
   const vocabulary = useAtomValue(configFieldsAtomMap.vocabulary)
   const [hoverPreview, setHoverPreview] = useState<VocabularyHoverPreview | null>(null)
   const itemsByIdRef = useRef(new Map<string, VocabularyItem>())
   const hoverHighlightRef = useRef<ActiveHoverHighlight | null>(null)
+  const hoverPreviewRef = useRef<VocabularyHoverPreview | null>(null)
+  const hoverCardRectRef = useRef<VocabularyHighlightAnchorRect | null>(null)
+  const isPointerInsideHoverCardRef = useRef(false)
+  const hoverOpenedAtRef = useRef(0)
   const hideHoverTimerRef = useRef<number | null>(null)
 
-  const clearHideHoverTimer = () => {
+  const clearHideHoverTimer = useCallback(() => {
     if (hideHoverTimerRef.current !== null) {
       window.clearTimeout(hideHoverTimerRef.current)
       hideHoverTimerRef.current = null
     }
-  }
+  }, [])
 
-  const hideHoverPreview = useEffectEvent(() => {
+  const hideHoverPreview = useCallback(() => {
     clearHideHoverTimer()
     hoverHighlightRef.current = null
+    hoverPreviewRef.current = null
+    hoverCardRectRef.current = null
+    isPointerInsideHoverCardRef.current = false
     setHoverPreview(null)
+  }, [clearHideHoverTimer])
+
+  const setHoverCardRect = useCallback((rect: VocabularyHighlightAnchorRect | null) => {
+    hoverCardRectRef.current = rect
+  }, [])
+
+  const handleHoverCardPointerEnter = useCallback(() => {
+    isPointerInsideHoverCardRef.current = true
+    clearHideHoverTimer()
+  }, [clearHideHoverTimer])
+
+  const updateHoverPreview = useEffectEvent((nextPreview: VocabularyHoverPreview) => {
+    hoverPreviewRef.current = nextPreview
+    setHoverPreview((currentPreview) => {
+      if (
+        currentPreview
+        && currentPreview.item.id === nextPreview.item.id
+        && isSameRect(currentPreview.anchorRect, nextPreview.anchorRect)
+      ) {
+        return currentPreview
+      }
+
+      return nextPreview
+    })
   })
 
   const refreshHoverPreview = useEffectEvent(() => {
@@ -156,7 +217,7 @@ export function useVocabularyHighlighting() {
       return
     }
 
-    setHoverPreview({
+    updateHoverPreview({
       item,
       anchorRect: toVocabularyHighlightAnchorRect(activeHighlight.element.getBoundingClientRect()),
     })
@@ -173,24 +234,76 @@ export function useVocabularyHighlighting() {
       return
     }
 
+    const previousHighlight = hoverHighlightRef.current
+    const isSameHighlight = previousHighlight?.element === element && previousHighlight.itemId === itemId
+
     clearHideHoverTimer()
     hoverHighlightRef.current = {
       element,
       itemId,
     }
+    isPointerInsideHoverCardRef.current = false
 
-    setHoverPreview({
+    if (!isSameHighlight) {
+      hoverOpenedAtRef.current = window.performance.now()
+      hoverCardRectRef.current = null
+    }
+
+    updateHoverPreview({
       item,
       anchorRect: toVocabularyHighlightAnchorRect(element.getBoundingClientRect()),
     })
   })
 
-  const scheduleHideHoverPreview = useEffectEvent(() => {
+  const scheduleHideHoverPreview = useCallback(() => {
     clearHideHoverTimer()
     hideHoverTimerRef.current = window.setTimeout(() => {
       hideHoverTimerRef.current = null
       hideHoverPreview()
-    }, 60)
+    }, HOVER_PREVIEW_HIDE_DELAY)
+  }, [clearHideHoverTimer, hideHoverPreview])
+
+  const handleHoverCardPointerLeave = useCallback(() => {
+    isPointerInsideHoverCardRef.current = false
+    scheduleHideHoverPreview()
+  }, [scheduleHideHoverPreview])
+
+  const isPointerInsideActiveHoverArea = useEffectEvent((event: PointerEvent) => {
+    const activePreview = hoverPreviewRef.current
+    const activeItemId = hoverHighlightRef.current?.itemId
+    if (!activePreview || !activeItemId) {
+      return false
+    }
+
+    if (isPointerInsideHoverCardRef.current) {
+      return true
+    }
+
+    const hoveredHighlight = getHighlightElement(event.target)
+    const hoveredItemId = hoveredHighlight?.getAttribute(VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE)
+    if (hoveredItemId === activeItemId) {
+      return true
+    }
+
+    if (getHoverCardElement(event.target)) {
+      return true
+    }
+
+    if (
+      hoverCardRectRef.current == null
+      && window.performance.now() - hoverOpenedAtRef.current <= HOVER_CARD_MEASURE_GRACE_MS
+    ) {
+      return true
+    }
+
+    return isPointInVocabularyHoverArea({
+      point: {
+        x: event.clientX,
+        y: event.clientY,
+      },
+      anchorRect: activePreview.anchorRect,
+      cardRect: hoverCardRectRef.current,
+    })
   })
 
   useEffect(() => {
@@ -236,7 +349,7 @@ export function useVocabularyHighlighting() {
         await unmark(markInstance)
 
         const activeItems = items
-          .filter(item => item.deletedAt == null && item.sourceText.trim())
+          .filter(item => item.deletedAt == null && item.masteredAt == null && item.sourceText.trim())
           .sort((left, right) => {
             const leftLongestTerm = getVocabularyHighlightTerms(left)[0]?.length ?? left.sourceText.length
             const rightLongestTerm = getVocabularyHighlightTerms(right)[0]?.length ?? right.sourceText.length
@@ -284,32 +397,43 @@ export function useVocabularyHighlighting() {
       }))
     }
 
-    const handleHighlightMouseOver = (event: MouseEvent) => {
+    const handlePointerMove = (event: PointerEvent) => {
       const target = getHighlightElement(event.target)
-      if (!target) {
+      if (target) {
+        showHoverPreview(target)
         return
       }
 
-      showHoverPreview(target)
+      if (!hoverPreviewRef.current) {
+        return
+      }
+
+      if (isPointerInsideActiveHoverArea(event)) {
+        clearHideHoverTimer()
+        refreshHoverPreview()
+        return
+      }
+
+      scheduleHideHoverPreview()
     }
 
-    const handleHighlightMouseOut = (event: MouseEvent) => {
+    const handlePointerOver = (event: PointerEvent) => {
       const target = getHighlightElement(event.target)
-      if (!target) {
+      if (target) {
+        showHoverPreview(target)
         return
       }
 
-      const nextTarget = getHighlightElement(event.relatedTarget)
-      if (nextTarget === target) {
+      if (!hoverPreviewRef.current) {
         return
       }
 
-      const targetItemId = target.getAttribute(VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE)
-      const nextItemId = nextTarget?.getAttribute(VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE)
-      if (targetItemId && targetItemId === nextItemId) {
-        return
+      if (isPointerInsideActiveHoverArea(event)) {
+        clearHideHoverTimer()
       }
+    }
 
+    const handlePointerLeave = () => {
       scheduleHideHoverPreview()
     }
 
@@ -332,11 +456,13 @@ export function useVocabularyHighlighting() {
     }
 
     document.addEventListener("click", handleHighlightClick, true)
-    document.addEventListener("mouseover", handleHighlightMouseOver, true)
-    document.addEventListener("mouseout", handleHighlightMouseOut, true)
+    document.addEventListener("pointerover", handlePointerOver, true)
+    document.addEventListener("pointermove", handlePointerMove, true)
+    document.addEventListener("pointerleave", handlePointerLeave, true)
     document.addEventListener(VOCABULARY_CHANGED_EVENT, handleVocabularyChanged)
     window.addEventListener("hashchange", queueHighlight)
     window.addEventListener("popstate", queueHighlight)
+    window.addEventListener("blur", hideHoverPreview)
     window.addEventListener("resize", refreshHoverPreview)
     window.addEventListener("scroll", refreshHoverPreview, true)
     void applyHighlights()
@@ -349,17 +475,34 @@ export function useVocabularyHighlighting() {
       }
       observer?.disconnect()
       document.removeEventListener("click", handleHighlightClick, true)
-      document.removeEventListener("mouseover", handleHighlightMouseOver, true)
-      document.removeEventListener("mouseout", handleHighlightMouseOut, true)
+      document.removeEventListener("pointerover", handlePointerOver, true)
+      document.removeEventListener("pointermove", handlePointerMove, true)
+      document.removeEventListener("pointerleave", handlePointerLeave, true)
       document.removeEventListener(VOCABULARY_CHANGED_EVENT, handleVocabularyChanged)
       window.removeEventListener("hashchange", queueHighlight)
       window.removeEventListener("popstate", queueHighlight)
+      window.removeEventListener("blur", hideHoverPreview)
       window.removeEventListener("resize", refreshHoverPreview)
       window.removeEventListener("scroll", refreshHoverPreview, true)
       hoverHighlightRef.current = null
+      hoverPreviewRef.current = null
+      hoverCardRectRef.current = null
       setHoverPreview(null)
     }
-  }, [vocabulary.highlightColor, vocabulary.highlightEnabled])
+  }, [
+    clearHideHoverTimer,
+    hideHoverPreview,
+    scheduleHideHoverPreview,
+    vocabulary.highlightColor,
+    vocabulary.highlightEnabled,
+  ])
 
-  return hoverPreview
+  return {
+    handleHoverCardPointerEnter,
+    handleHoverCardPointerLeave,
+    hoverPreview,
+    setHoverCardRect,
+  }
 }
+
+export { VOCABULARY_HOVER_CARD_ATTRIBUTE }

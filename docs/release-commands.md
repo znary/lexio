@@ -1,11 +1,12 @@
 # 发布和打包命令
 
-这份文档只说明四件事：
+这份文档只说明五件事：
 
 - 发布前怎么处理 D1 migration
 - 发布 API
 - 发布 Web
 - 打包浏览器扩展
+- 把 Chrome 解包目录复制到 iCloud 云盘根目录
 
 建议都在仓库根目录 `/Users/liuzhuangm4/develop/english` 执行。这样不用反复切目录。
 
@@ -16,20 +17,21 @@
 
 ## 直接可用的命令
 
-| 场景                  | 命令                             | 实际做的事                                         |
-| --------------------- | -------------------------------- | -------------------------------------------------- |
-| 启动 API 本地开发     | `pnpm dev:api`                   | 进入 `apps/platform-api` 跑 `wrangler dev`         |
-| 启动 Web 本地开发     | `pnpm dev:web`                   | 进入 `apps/platform-web` 跑 `vite`                 |
-| 同时启动 API 和 Web   | `pnpm dev:platform`              | 并行启动上面两个服务                               |
-| 构建 Web              | `pnpm build:web`                 | 进入 `apps/platform-web` 跑 `vite build`           |
-| 发布 API              | `pnpm deploy:api`                | 进入 `apps/platform-api` 跑 `wrangler deploy`      |
-| 发布 Web              | `pnpm deploy:web`                | 先构建 `apps/platform-web`，再跑 `wrangler deploy` |
-| 本地执行 D1 migration | `pnpm migrate:api:local`         | 进入 `apps/platform-api` 跑本地 D1 migration       |
-| 远端执行 D1 migration | `pnpm migrate:api:remote`        | 进入 `apps/platform-api` 跑远端 D1 migration       |
-| 打包 Chrome 扩展      | `pnpm package:extension`         | 生成 Chrome zip                                    |
-| 打包 Edge 扩展        | `pnpm package:extension:edge`    | 生成 Edge zip                                      |
-| 打包 Firefox 扩展     | `pnpm package:extension:firefox` | 生成 Firefox zip                                   |
-| 一次打包全部扩展      | `pnpm package:extension:all`     | 顺序生成 Chrome / Edge / Firefox 三份 zip          |
+| 场景                                 | 命令                                           | 实际做的事                                                     |
+| ------------------------------------ | ---------------------------------------------- | -------------------------------------------------------------- |
+| 启动 API 本地开发                    | `pnpm dev:api`                                 | 进入 `apps/platform-api` 跑 `wrangler dev`                     |
+| 启动 Web 本地开发                    | `pnpm dev:web`                                 | 进入 `apps/platform-web` 跑 `vite`                             |
+| 同时启动 API 和 Web                  | `pnpm dev:platform`                            | 并行启动上面两个服务                                           |
+| 构建 Web                             | `pnpm build:web`                               | 进入 `apps/platform-web` 跑 `vite build`                       |
+| 发布 API                             | `pnpm deploy:api`                              | 进入 `apps/platform-api` 跑 `wrangler deploy`                  |
+| 发布 Web                             | `pnpm deploy:web`                              | 先构建 `apps/platform-web`，再跑 `wrangler deploy`             |
+| 本地执行 D1 migration                | `pnpm migrate:api:local`                       | 进入 `apps/platform-api` 跑本地 D1 migration                   |
+| 远端执行 D1 migration                | `pnpm migrate:api:remote`                      | 进入 `apps/platform-api` 跑远端 D1 migration                   |
+| 打包 Chrome 扩展                     | `pnpm package:extension`                       | 生成 Chrome zip                                                |
+| 打包 Edge 扩展                       | `pnpm package:extension:edge`                  | 生成 Edge zip                                                  |
+| 打包 Firefox 扩展                    | `pnpm package:extension:firefox`               | 生成 Firefox zip                                               |
+| 一次打包全部扩展                     | `pnpm package:extension:all`                   | 顺序生成 Chrome / Edge / Firefox 三份 zip                      |
+| 复制 Chrome 解包目录到 iCloud 根目录 | `bash scripts/copy-chrome-output-to-icloud.sh` | 把 `.output/chrome-mv3` 复制到 iCloud 根目录，并自动加时间标识 |
 
 ## 数据库有变更时的发布顺序
 
@@ -140,6 +142,22 @@ pnpm package:extension:all
 ```
 
 产物会放在根目录的 `.output/` 下面。
+
+## 4. 复制 Chrome 解包目录到 iCloud 根目录
+
+如果你已经有 `.output/chrome-mv3`，想把整个目录复制到 iCloud 云盘根目录，可以直接执行：
+
+```bash
+bash scripts/copy-chrome-output-to-icloud.sh
+```
+
+这个命令会把目录复制到：
+
+```text
+$HOME/Library/Mobile Documents/com~apple~CloudDocs/lexio-chrome-mv3-时间标识
+```
+
+时间标识格式是 `YYYYMMDD-HHMMSS`。如果刚好同一秒已经有同名目录，脚本还会自动补一个递增后缀，避免覆盖之前的内容。
 
 ## 现在不要再用的旧名字
 

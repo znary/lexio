@@ -20,6 +20,7 @@ interface VocabularyRow {
   hit_count: number
   updated_at: number
   deleted_at: number | null
+  mastered_at: number | null
 }
 
 function readString(item: VocabularyItemRecord, key: string, fallback = ""): string {
@@ -86,6 +87,7 @@ export function serializeVocabularyItem(item: VocabularyItemRecord): VocabularyR
     hit_count: readNumber(item, "hitCount", 1),
     updated_at: readNumber(item, "updatedAt", now),
     deleted_at: readNullableNumber(item, "deletedAt"),
+    mastered_at: readNullableNumber(item, "masteredAt"),
   }
 }
 
@@ -110,5 +112,6 @@ export function deserializeVocabularyItem(row: VocabularyRow): VocabularyItemRec
     hitCount: row.hit_count,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
+    masteredAt: row.mastered_at,
   }
 }

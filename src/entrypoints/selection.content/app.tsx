@@ -20,7 +20,12 @@ export default function App({
   uiContainer: HTMLElement
 }) {
   useInputTranslation()
-  const vocabularyHoverPreview = useVocabularyHighlighting()
+  const {
+    hoverPreview,
+    setHoverCardRect,
+    handleHoverCardPointerEnter,
+    handleHoverCardPointerLeave,
+  } = useVocabularyHighlighting()
   const opacity = useAtomValue(configFieldsAtomMap.selectionToolbar).opacity / 100
 
   useEffect(() => {
@@ -40,7 +45,12 @@ export default function App({
           </SelectionCustomActionProvider>
         </SelectionExplainProvider>
       </SelectionTranslationProvider>
-      <VocabularyHoverCard preview={vocabularyHoverPreview} />
+      <VocabularyHoverCard
+        preview={hoverPreview}
+        onCardRectChange={setHoverCardRect}
+        onPointerEnter={handleHoverCardPointerEnter}
+        onPointerLeave={handleHoverCardPointerLeave}
+      />
       <Toaster
         richColors
         className={`${SELECTION_CONTENT_OVERLAY_LAYERS.selectionOverlay} notranslate`}

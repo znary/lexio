@@ -26,10 +26,11 @@ export async function handleVocabularyList(_request: Request, env: Env, session:
       last_seen_at,
       hit_count,
       updated_at,
-      deleted_at
+      deleted_at,
+      mastered_at
     FROM vocabulary_items
     WHERE user_id = ?1
-    ORDER BY updated_at DESC
+    ORDER BY last_seen_at DESC, updated_at DESC
   `).bind(user.id).all()
 
   const items = (rows.results ?? []).map(row => deserializeVocabularyItem(row as Parameters<typeof deserializeVocabularyItem>[0]))
@@ -62,9 +63,9 @@ export async function handleVocabularyCreate(request: Request, env: Env, session
     INSERT INTO vocabulary_items (
       id, user_id, source_text, normalized_text, lemma, match_terms_json, translated_text,
       phonetic, part_of_speech, definition, difficulty, source_lang, target_lang, kind,
-      word_count, created_at, last_seen_at, hit_count, updated_at, deleted_at
+      word_count, created_at, last_seen_at, hit_count, updated_at, deleted_at, mastered_at
     )
-    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
   `).bind(
     row.id,
     user.id,
@@ -86,6 +87,7 @@ export async function handleVocabularyCreate(request: Request, env: Env, session
     row.hit_count,
     row.updated_at,
     row.deleted_at,
+    row.mastered_at,
   ).run()
 
   return json({ ok: true, id: row.id })
@@ -120,8 +122,9 @@ export async function handleVocabularyUpdate(request: Request, env: Env, session
         last_seen_at = ?15,
         hit_count = ?16,
         updated_at = ?17,
-        deleted_at = ?18
-    WHERE id = ?19 AND user_id = ?20
+        deleted_at = ?18,
+        mastered_at = ?19
+    WHERE id = ?20 AND user_id = ?21
   `).bind(
     row.source_text,
     row.normalized_text,
@@ -141,6 +144,7 @@ export async function handleVocabularyUpdate(request: Request, env: Env, session
     row.hit_count,
     row.updated_at,
     row.deleted_at,
+    row.mastered_at,
     id,
     user.id,
   ).run()

@@ -528,7 +528,8 @@ export async function pullSyncData(env: Env, userId: string): Promise<SyncPayloa
       last_seen_at,
       hit_count,
       updated_at,
-      deleted_at
+      deleted_at,
+      mastered_at
     FROM vocabulary_items
     WHERE user_id = ?1
     ORDER BY updated_at DESC
@@ -570,9 +571,9 @@ export async function pushSyncData(env: Env, userId: string, payload: SyncPayloa
               INSERT INTO vocabulary_items (
                 id, user_id, source_text, normalized_text, lemma, match_terms_json, translated_text,
                 phonetic, part_of_speech, definition, difficulty, source_lang, target_lang, kind,
-                word_count, created_at, last_seen_at, hit_count, updated_at, deleted_at
+                word_count, created_at, last_seen_at, hit_count, updated_at, deleted_at, mastered_at
               )
-              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
+              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
             `).bind(
               typeof item.id === "string" ? item.id : createId("voc"),
               userId,
@@ -594,6 +595,7 @@ export async function pushSyncData(env: Env, userId: string, payload: SyncPayloa
               row.hit_count,
               row.updated_at,
               row.deleted_at,
+              row.mastered_at,
             )
           }),
         ]

@@ -29,6 +29,7 @@ export const vocabularyItemSchema = z.object({
   hitCount: z.number().int().min(1),
   updatedAt: z.number().int().nonnegative(),
   deletedAt: z.number().int().nonnegative().nullable().default(null),
+  masteredAt: z.number().int().nonnegative().nullable().optional(),
 })
 
 export const vocabularyItemsSchema = z.array(vocabularyItemSchema)

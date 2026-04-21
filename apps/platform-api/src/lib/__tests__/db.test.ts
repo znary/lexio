@@ -57,6 +57,7 @@ describe("pushSyncData", () => {
           hitCount: 3,
           updatedAt: 4,
           deletedAt: null,
+          masteredAt: 5,
         },
       ],
     })
@@ -69,6 +70,7 @@ describe("pushSyncData", () => {
     expect(insertStatement?.sql).toContain("lemma")
     expect(insertStatement?.sql).toContain("target_lang")
     expect(insertStatement?.sql).toContain("definition")
+    expect(insertStatement?.sql).toContain("mastered_at")
     expect(insertStatement?.sql).not.toContain("item_json")
   })
 })

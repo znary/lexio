@@ -41,6 +41,7 @@ const getOrCreateWebPageContextMock = vi.fn().mockResolvedValue(null)
 const getOrGenerateWebPageSummaryMock = vi.fn()
 const findVocabularyItemForSelectionMock = vi.fn()
 const saveTranslatedSelectionToVocabularyMock = vi.fn().mockResolvedValue(null)
+const setVocabularyItemMasteredMock = vi.fn().mockResolvedValue(null)
 const updateVocabularyItemDetailsMock = vi.fn().mockResolvedValue(null)
 const toastErrorMock = vi.fn()
 const onMessageMock = vi.fn()
@@ -286,6 +287,7 @@ vi.mock("@/utils/message", () => ({
 vi.mock("@/utils/vocabulary/service", () => ({
   findVocabularyItemForSelection: (...args: unknown[]) => findVocabularyItemForSelectionMock(...args),
   saveTranslatedSelectionToVocabulary: (...args: unknown[]) => saveTranslatedSelectionToVocabularyMock(...args),
+  setVocabularyItemMastered: (...args: unknown[]) => setVocabularyItemMasteredMock(...args),
   updateVocabularyItemDetails: (...args: unknown[]) => updateVocabularyItemDetailsMock(...args),
 }))
 
@@ -1044,6 +1046,56 @@ describe("selection toolbar requests", () => {
     await waitFor(() => {
       expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(1)
     })
+  })
+
+  it("marks a mastered reused item as learning again when the user translates it again", async () => {
+    findVocabularyItemForSelectionMock.mockResolvedValue({
+      id: "voc_existing",
+      sourceText: "think",
+      normalizedText: "think",
+      lemma: "think",
+      matchTerms: ["think", "thinking", "thinks", "thought"],
+      translatedText: "思考",
+      phonetic: "/theta-ng-k/",
+      partOfSpeech: "verb",
+      definition: "思考；认为",
+      difficulty: "B1",
+      sourceLang: "en",
+      targetLang: "zh-CN",
+      kind: "word",
+      wordCount: 1,
+      createdAt: 1,
+      lastSeenAt: 2,
+      hitCount: 3,
+      updatedAt: 4,
+      deletedAt: null,
+      masteredAt: 5,
+    })
+    getOrCreateWebPageContextMock.mockResolvedValue(null)
+
+    const store = createStore()
+    store.set(configAtom, createStandardTranslateConfig())
+    setSelectionState(store, { text: "thinking" })
+    renderWithProviders(<TranslateButton />, store)
+
+    fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
+
+    await waitFor(() => {
+      expect(findVocabularyItemForSelectionMock).toHaveBeenCalledWith({
+        sourceText: "thinking",
+        sourceLang: "auto",
+        targetLang: "cmn",
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId("translation-result").textContent).toBe("思考")
+    })
+
+    expect(setVocabularyItemMasteredMock).toHaveBeenCalledTimes(1)
+    expect(setVocabularyItemMasteredMock).toHaveBeenCalledWith("voc_existing", false)
+    expect(translateTextCoreMock).not.toHaveBeenCalled()
+    expect(streamManagedTranslationMock).not.toHaveBeenCalled()
   })
 
   it("shows a precheck alert when the translate provider is unavailable", async () => {

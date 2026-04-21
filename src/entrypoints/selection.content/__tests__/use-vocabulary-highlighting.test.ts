@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import type { VocabularyItem } from "@/types/vocabulary"
-import { cleanup, render, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react"
 import { atom } from "jotai"
 import Mark from "mark.js"
-import { createElement } from "react"
+import { createElement, useEffect } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { NOTRANSLATE_CLASS } from "@/utils/constants/dom-labels"
 import {
@@ -32,8 +32,28 @@ vi.mock("@/utils/atoms/config", async (importOriginal) => {
 
 vi.mock("@/utils/vocabulary/service", () => ({
   getVocabularyItems: () => getVocabularyItemsMock(),
+  setVocabularyItemMastered: vi.fn(),
   VOCABULARY_CHANGED_EVENT: "lexio:vocabulary-changed",
 }))
+
+vi.mock("#imports", () => ({
+  i18n: {
+    t: (key: string) => key,
+  },
+}))
+
+vi.mock("@/components/ui/base-ui/tooltip", () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => children,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => children,
+  TooltipContent: ({ children }: { children: React.ReactNode }) => children,
+}))
+
+vi.mock("../selection-toolbar/atoms", async () => {
+  const actual = await vi.importActual<typeof import("jotai")>("jotai")
+  return {
+    selectionToolbarRectAtom: actual.atom(null),
+  }
+})
 
 function createVocabularyItem(overrides: Partial<VocabularyItem>): VocabularyItem {
   return {
@@ -74,17 +94,87 @@ function markVocabularyItem(item: VocabularyItem, html: string) {
 }
 
 function VocabularyHighlightingHarness() {
-  useVocabularyHighlighting()
-  return null
+  const { hoverPreview } = useVocabularyHighlighting()
+  return hoverPreview ? createElement("div", { "data-testid": "hover-preview-probe" }) : null
+}
+
+interface HoverCardRect {
+  bottom: number
+  height: number
+  left: number
+  right: number
+  top: number
+  width: number
+}
+
+function HoverCardProbe({
+  hoverPreview,
+  cardRect,
+  onCardRectChange,
+  onHoverCardPointerEnter,
+  onHoverCardPointerLeave,
+}: {
+  cardRect: HoverCardRect
+  hoverPreview: ReturnType<typeof useVocabularyHighlighting>["hoverPreview"]
+  onCardRectChange: ReturnType<typeof useVocabularyHighlighting>["setHoverCardRect"]
+  onHoverCardPointerEnter: ReturnType<typeof useVocabularyHighlighting>["handleHoverCardPointerEnter"]
+  onHoverCardPointerLeave: ReturnType<typeof useVocabularyHighlighting>["handleHoverCardPointerLeave"]
+}) {
+  useEffect(() => {
+    onCardRectChange(hoverPreview ? cardRect : null)
+
+    return () => {
+      onCardRectChange(null)
+    }
+  }, [cardRect, hoverPreview, onCardRectChange])
+
+  return hoverPreview
+    ? createElement("div", {
+        "data-testid": "hover-card-probe",
+        "onPointerEnter": () => onHoverCardPointerEnter(),
+        "onPointerLeave": () => onHoverCardPointerLeave(),
+      })
+    : null
+}
+
+function noop() {}
+
+function InteractiveHoverCardHarness({
+  cardRect,
+  enableCardPointerHandlers = false,
+}: {
+  cardRect: HoverCardRect
+  enableCardPointerHandlers?: boolean
+}) {
+  const {
+    hoverPreview,
+    setHoverCardRect,
+    handleHoverCardPointerEnter,
+    handleHoverCardPointerLeave,
+  } = useVocabularyHighlighting()
+
+  return createElement(HoverCardProbe, {
+    hoverPreview,
+    cardRect,
+    onCardRectChange: setHoverCardRect,
+    onHoverCardPointerEnter: enableCardPointerHandlers ? handleHoverCardPointerEnter : noop,
+    onHoverCardPointerLeave: enableCardPointerHandlers ? handleHoverCardPointerLeave : noop,
+  })
 }
 
 beforeEach(() => {
   document.body.innerHTML = ""
   getVocabularyItemsMock.mockReset()
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => window.setTimeout(() => callback(performance.now()), 0))
+  vi.stubGlobal("cancelAnimationFrame", (handle: number) => window.clearTimeout(handle))
+  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(180)
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(72)
 })
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 
 describe("shouldHighlightAcrossElements", () => {
@@ -194,5 +284,241 @@ describe("shouldHighlightAcrossElements", () => {
       expect(highlight?.textContent).toBe("think")
       expect(highlight).toHaveClass(NOTRANSLATE_CLASS)
     })
+  })
+
+  it("removes highlights immediately after an item is marked as mastered", async () => {
+    const item = createVocabularyItem({
+      sourceText: "integration",
+      normalizedText: "integration",
+      kind: "word",
+      wordCount: 1,
+    })
+    let currentItems: VocabularyItem[] = [item]
+
+    getVocabularyItemsMock.mockImplementation(async () => currentItems)
+    document.body.innerHTML = `
+      <main>
+        <p data-read-frog-paragraph="">Integration is working.</p>
+      </main>
+    `
+
+    const container = document.createElement("div")
+    document.body.append(container)
+    render(createElement(VocabularyHighlightingHarness), { container })
+
+    await waitFor(() => {
+      const highlight = document.querySelector("p mark")
+      expect(highlight?.textContent).toBe("Integration")
+    })
+
+    currentItems = [
+      {
+        ...item,
+        masteredAt: 10,
+        updatedAt: 10,
+      },
+    ]
+    document.dispatchEvent(new CustomEvent("lexio:vocabulary-changed"))
+
+    await waitFor(() => {
+      expect(document.querySelector("p mark")).toBeNull()
+    })
+  })
+
+  it("keeps the hover card open while the cursor crosses the bridge between the highlight and the card", async () => {
+    const item = createVocabularyItem({
+      sourceText: "integration",
+      normalizedText: "integration",
+      kind: "word",
+    })
+
+    getVocabularyItemsMock.mockResolvedValue([item])
+    document.body.innerHTML = `
+      <main>
+        <p data-read-frog-paragraph="">Integration is working.</p>
+      </main>
+    `
+
+    const container = document.createElement("div")
+    document.body.append(container)
+    render(createElement(InteractiveHoverCardHarness, {
+      cardRect: {
+        top: 76,
+        right: 310,
+        bottom: 148,
+        left: 130,
+        width: 180,
+        height: 72,
+      },
+    }), { container })
+
+    const highlight = await waitFor(() => {
+      const node = document.querySelector("p mark") as HTMLElement | null
+      expect(node).not.toBeNull()
+      return node as HTMLElement
+    })
+
+    vi.spyOn(highlight, "getBoundingClientRect").mockReturnValue({
+      top: 160,
+      right: 240,
+      bottom: 180,
+      left: 200,
+      width: 40,
+      height: 20,
+      x: 200,
+      y: 160,
+      toJSON: () => ({}),
+    } as DOMRect)
+
+    fireEvent.pointerOver(highlight, {
+      clientX: 220,
+      clientY: 170,
+    })
+
+    await waitFor(() => {
+      expect(document.querySelector("[data-testid='hover-card-probe']")).not.toBeNull()
+    })
+
+    vi.useFakeTimers()
+    fireEvent.pointerMove(document.body, {
+      clientX: 210,
+      clientY: 154,
+    })
+    await vi.advanceTimersByTimeAsync(120)
+
+    expect(document.querySelector("[data-testid='hover-card-probe']")).not.toBeNull()
+  })
+
+  it("keeps the hover card open when the card overlaps the highlight", async () => {
+    const item = createVocabularyItem({
+      sourceText: "integration",
+      normalizedText: "integration",
+      kind: "word",
+    })
+
+    getVocabularyItemsMock.mockResolvedValue([item])
+    document.body.innerHTML = `
+      <main>
+        <p data-read-frog-paragraph="">Integration is working.</p>
+      </main>
+    `
+
+    const container = document.createElement("div")
+    document.body.append(container)
+    render(createElement(InteractiveHoverCardHarness, {
+      cardRect: {
+        top: 150,
+        right: 320,
+        bottom: 222,
+        left: 170,
+        width: 150,
+        height: 72,
+      },
+    }), { container })
+
+    const highlight = await waitFor(() => {
+      const node = document.querySelector("p mark") as HTMLElement | null
+      expect(node).not.toBeNull()
+      return node as HTMLElement
+    })
+
+    vi.spyOn(highlight, "getBoundingClientRect").mockReturnValue({
+      top: 160,
+      right: 240,
+      bottom: 180,
+      left: 200,
+      width: 40,
+      height: 20,
+      x: 200,
+      y: 160,
+      toJSON: () => ({}),
+    } as DOMRect)
+
+    fireEvent.pointerOver(highlight, {
+      clientX: 220,
+      clientY: 170,
+    })
+
+    await waitFor(() => {
+      expect(document.querySelector("[data-testid='hover-card-probe']")).not.toBeNull()
+    })
+
+    vi.useFakeTimers()
+    fireEvent.pointerMove(document.body, {
+      clientX: 214,
+      clientY: 170,
+    })
+    await vi.advanceTimersByTimeAsync(120)
+
+    expect(document.querySelector("[data-testid='hover-card-probe']")).not.toBeNull()
+  })
+
+  it("keeps the hover card open after the pointer enters the card itself", async () => {
+    const item = createVocabularyItem({
+      sourceText: "integration",
+      normalizedText: "integration",
+      kind: "word",
+    })
+
+    getVocabularyItemsMock.mockResolvedValue([item])
+    document.body.innerHTML = `
+      <main>
+        <p data-read-frog-paragraph="">Integration is working.</p>
+      </main>
+    `
+
+    const container = document.createElement("div")
+    document.body.append(container)
+    render(createElement(InteractiveHoverCardHarness, {
+      enableCardPointerHandlers: true,
+      cardRect: {
+        top: 76,
+        right: 310,
+        bottom: 148,
+        left: 130,
+        width: 180,
+        height: 72,
+      },
+    }), { container })
+
+    const highlight = await waitFor(() => {
+      const node = document.querySelector("p mark") as HTMLElement | null
+      expect(node).not.toBeNull()
+      return node as HTMLElement
+    })
+
+    vi.spyOn(highlight, "getBoundingClientRect").mockReturnValue({
+      top: 160,
+      right: 240,
+      bottom: 180,
+      left: 200,
+      width: 40,
+      height: 20,
+      x: 200,
+      y: 160,
+      toJSON: () => ({}),
+    } as DOMRect)
+
+    fireEvent.pointerOver(highlight, {
+      clientX: 220,
+      clientY: 170,
+    })
+
+    const hoverCard = await waitFor(() => {
+      const node = document.querySelector("[data-testid='hover-card-probe']") as HTMLElement | null
+      expect(node).not.toBeNull()
+      return node as HTMLElement
+    })
+
+    vi.useFakeTimers()
+
+    fireEvent.pointerMove(document.body, {
+      clientX: 40,
+      clientY: 40,
+    })
+    fireEvent.pointerEnter(hoverCard)
+    await vi.advanceTimersByTimeAsync(120)
+
+    expect(document.querySelector("[data-testid='hover-card-probe']")).not.toBeNull()
   })
 })
