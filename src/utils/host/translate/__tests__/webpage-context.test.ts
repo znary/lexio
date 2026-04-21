@@ -55,6 +55,7 @@ describe("getOrCreateWebPageContext", () => {
       url: first?.url,
       webTitle: "Original Title",
       webContent: first?.webContent,
+      webContextContent: first?.webContextContent,
     })
   })
 
