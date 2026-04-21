@@ -22,12 +22,14 @@ function createEnv(results: unknown[] = []): Env {
                   {
                     vocabulary_item_id: "voc_recent",
                     sentence: "The world keeps changing.",
+                    source_url: "https://example.com/world",
                     created_at: 10,
                     last_seen_at: 10,
                   },
                   {
                     vocabulary_item_id: "voc_older",
                     sentence: "I said hello there.",
+                    source_url: null,
                     created_at: 9,
                     last_seen_at: 9,
                   },
@@ -132,7 +134,9 @@ describe("vocabulary routes", () => {
     expect(prepareMock).toHaveBeenCalledWith(expect.stringContaining("FROM vocabulary_item_context_sentences"))
     expect(response.status).toBe(200)
     const responseText = await response.text()
+    expect(responseText).toContain("\"contextEntries\": [")
     expect(responseText).toContain("\"contextSentences\": [")
     expect(responseText).toContain("\"The world keeps changing.\"")
+    expect(responseText).toContain("\"sourceUrl\": \"https://example.com/world\"")
   })
 })

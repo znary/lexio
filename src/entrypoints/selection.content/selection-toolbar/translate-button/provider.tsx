@@ -724,7 +724,8 @@ export function SelectionTranslationProvider({
           const savedItem = await saveTranslatedSelectionToVocabulary({
             sourceText: selectionText,
             translatedText: nextTranslatedText,
-            contextSentence,
+            contextSentence: contextSentence ?? undefined,
+            sourceUrl: window.location.href,
             sourceLang: translateRequest.language.sourceCode,
             targetLang: translateRequest.language.targetCode,
             settings: vocabularySettings,

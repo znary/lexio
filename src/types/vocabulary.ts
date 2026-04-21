@@ -1,6 +1,10 @@
 import { z } from "zod"
 
 export const vocabularyKindSchema = z.enum(["word", "phrase"])
+export const vocabularyContextEntrySchema = z.object({
+  sentence: z.string().min(1),
+  sourceUrl: z.string().min(1).optional(),
+})
 
 export const vocabularySettingsSchema = z.object({
   autoSave: z.boolean(),
@@ -13,6 +17,7 @@ export const vocabularyItemSchema = z.object({
   id: z.string().min(1),
   sourceText: z.string().min(1),
   normalizedText: z.string().min(1),
+  contextEntries: z.array(vocabularyContextEntrySchema).optional(),
   contextSentences: z.array(z.string().min(1)).optional(),
   contextSentence: z.string().min(1).optional(),
   lemma: z.string().min(1).optional(),
@@ -37,5 +42,6 @@ export const vocabularyItemSchema = z.object({
 export const vocabularyItemsSchema = z.array(vocabularyItemSchema)
 
 export type VocabularyKind = z.infer<typeof vocabularyKindSchema>
+export type VocabularyContextEntry = z.infer<typeof vocabularyContextEntrySchema>
 export type VocabularySettings = z.infer<typeof vocabularySettingsSchema>
 export type VocabularyItem = z.infer<typeof vocabularyItemSchema>

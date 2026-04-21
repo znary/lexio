@@ -57,7 +57,7 @@ docs/specs/*
 /repos
 
 scripts/output/
-tmp/translation-observability/
+tmp
 
 reference/
 

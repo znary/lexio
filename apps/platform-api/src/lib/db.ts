@@ -544,6 +544,7 @@ export async function pullSyncData(env: Env, userId: string): Promise<SyncPayloa
     SELECT
       vocabulary_item_context_sentences.vocabulary_item_id,
       vocabulary_item_context_sentences.sentence,
+      vocabulary_item_context_sentences.source_url,
       vocabulary_item_context_sentences.created_at,
       vocabulary_item_context_sentences.last_seen_at
     FROM vocabulary_item_context_sentences
@@ -636,13 +637,15 @@ export async function pushSyncData(env: Env, userId: string, payload: SyncPayloa
                   INSERT INTO vocabulary_item_context_sentences (
                     vocabulary_item_id,
                     sentence,
+                    source_url,
                     created_at,
                     last_seen_at
                   )
-                  VALUES (?1, ?2, ?3, ?4)
+                  VALUES (?1, ?2, ?3, ?4, ?5)
                 `).bind(
                   contextRow.vocabulary_item_id,
                   contextRow.sentence,
+                  contextRow.source_url,
                   contextRow.created_at,
                   contextRow.last_seen_at,
                 )),

@@ -82,6 +82,7 @@ describe("vocabulary service", () => {
       sourceText: "hello",
       translatedText: "你好",
       contextSentence: "We said hello before the meeting.",
+      sourceUrl: "https://example.com/meeting",
       sourceLang: "en",
       targetLang: "zh-CN",
       settings: {
@@ -97,6 +98,12 @@ describe("vocabulary service", () => {
         expect.objectContaining({
           sourceText: "hello",
           translatedText: "你好",
+          contextEntries: [
+            {
+              sentence: "We said hello before the meeting.",
+              sourceUrl: "https://example.com/meeting",
+            },
+          ],
           contextSentences: ["We said hello before the meeting."],
           normalizedText: "hello",
         }),
@@ -113,6 +120,12 @@ describe("vocabulary service", () => {
     await expect(savePromise).resolves.toEqual(expect.objectContaining({
       sourceText: "hello",
       translatedText: "你好",
+      contextEntries: [
+        {
+          sentence: "We said hello before the meeting.",
+          sourceUrl: "https://example.com/meeting",
+        },
+      ],
       contextSentences: ["We said hello before the meeting."],
     }))
 
@@ -144,6 +157,7 @@ describe("vocabulary service", () => {
       sourceText: "hello",
       translatedText: "您好",
       contextSentence: "I still want to say hello politely.",
+      sourceUrl: "https://example.com/polite",
       sourceLang: "en",
       targetLang: "zh-CN",
       settings: {
@@ -157,6 +171,15 @@ describe("vocabulary service", () => {
     expect(apiUpdateVocabularyItemMock).toHaveBeenCalledWith(expect.objectContaining({
       id: "voc_existing",
       translatedText: "您好",
+      contextEntries: [
+        {
+          sentence: "I still want to say hello politely.",
+          sourceUrl: "https://example.com/polite",
+        },
+        {
+          sentence: "We said hello before the meeting.",
+        },
+      ],
       contextSentences: [
         "I still want to say hello politely.",
         "We said hello before the meeting.",
@@ -167,6 +190,15 @@ describe("vocabulary service", () => {
     expect(savedItem).toEqual(expect.objectContaining({
       id: "voc_existing",
       translatedText: "您好",
+      contextEntries: [
+        {
+          sentence: "I still want to say hello politely.",
+          sourceUrl: "https://example.com/polite",
+        },
+        {
+          sentence: "We said hello before the meeting.",
+        },
+      ],
       contextSentences: [
         "I still want to say hello politely.",
         "We said hello before the meeting.",
@@ -221,6 +253,39 @@ describe("vocabulary service", () => {
       "Old sentence 7",
       "Old sentence 8",
       "Old sentence 9",
+    ])
+  })
+
+  it("records the source url with the newest context sentence", async () => {
+    const { saveTranslatedSelectionToVocabulary } = await import("../service")
+    const savedItem = await saveTranslatedSelectionToVocabulary({
+      sourceText: "article",
+      translatedText: "文章",
+      contextSentence: "I bookmarked this article yesterday.",
+      sourceUrl: "https://example.com/article",
+      sourceLang: "en",
+      targetLang: "zh-CN",
+      settings: {
+        autoSave: true,
+        highlightEnabled: true,
+        maxPhraseWords: 3,
+        highlightColor: "#fde68a",
+      },
+    })
+
+    expect(apiCreateVocabularyItemMock).toHaveBeenCalledWith(expect.objectContaining({
+      contextEntries: [
+        {
+          sentence: "I bookmarked this article yesterday.",
+          sourceUrl: "https://example.com/article",
+        },
+      ],
+    }))
+    expect(savedItem?.contextEntries).toEqual([
+      {
+        sentence: "I bookmarked this article yesterday.",
+        sourceUrl: "https://example.com/article",
+      },
     ])
   })
 

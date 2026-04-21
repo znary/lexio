@@ -58,6 +58,15 @@ describe("pushSyncData", () => {
           updatedAt: 4,
           deletedAt: null,
           masteredAt: 5,
+          contextEntries: [
+            {
+              sentence: "I am thinking now.",
+              sourceUrl: "https://example.com/article",
+            },
+            {
+              sentence: "Thinking helps.",
+            },
+          ],
           contextSentences: ["I am thinking now.", "Thinking helps."],
         },
       ],
@@ -76,6 +85,7 @@ describe("pushSyncData", () => {
     expect(insertStatement?.sql).toContain("mastered_at")
     expect(insertStatement?.sql).not.toContain("item_json")
     expect(contextInsertStatements).toHaveLength(2)
+    expect(contextInsertStatements[0]?.sql).toContain("source_url")
   })
 })
 

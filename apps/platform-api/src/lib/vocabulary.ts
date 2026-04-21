@@ -28,8 +28,14 @@ interface VocabularyRow {
 interface VocabularyContextSentenceRow {
   vocabulary_item_id: string
   sentence: string
+  source_url: string | null
   created_at: number
   last_seen_at: number
+}
+
+interface VocabularyContextEntryRecord {
+  sentence: string
+  sourceUrl?: string
 }
 
 function readString(item: VocabularyItemRecord, key: string, fallback = ""): string {
@@ -58,28 +64,56 @@ function readStringArray(item: VocabularyItemRecord, key: string): string[] {
     : []
 }
 
-function normalizeContextSentences(sentences: Array<string | null | undefined>): string[] {
-  const uniqueSentences: string[] = []
-  const seenSentences = new Set<string>()
+function normalizeSourceUrl(sourceUrl: string | null | undefined): string | null {
+  return typeof sourceUrl === "string" && sourceUrl.trim()
+    ? sourceUrl.trim()
+    : null
+}
 
-  for (const sentence of sentences) {
-    const normalizedSentence = typeof sentence === "string" && sentence.trim()
-      ? sentence.trim()
-      : null
+function normalizeContextEntry(
+  entry: Partial<VocabularyContextEntryRecord> | null | undefined,
+): VocabularyContextEntryRecord | null {
+  const sentence = typeof entry?.sentence === "string" && entry.sentence.trim()
+    ? entry.sentence.trim()
+    : null
 
-    if (!normalizedSentence || seenSentences.has(normalizedSentence)) {
+  if (!sentence) {
+    return null
+  }
+
+  const sourceUrl = normalizeSourceUrl(entry.sourceUrl)
+  return sourceUrl
+    ? { sentence, sourceUrl }
+    : { sentence }
+}
+
+function normalizeContextEntries(
+  entries: Array<Partial<VocabularyContextEntryRecord> | null | undefined>,
+): VocabularyContextEntryRecord[] {
+  const uniqueEntries: VocabularyContextEntryRecord[] = []
+  const entryBySentence = new Map<string, VocabularyContextEntryRecord>()
+
+  for (const entry of entries) {
+    const normalizedEntry = normalizeContextEntry(entry)
+    if (!normalizedEntry) {
       continue
     }
 
-    seenSentences.add(normalizedSentence)
-    uniqueSentences.push(normalizedSentence)
+    const existingEntry = entryBySentence.get(normalizedEntry.sentence)
+    if (!existingEntry) {
+      uniqueEntries.push(normalizedEntry)
+      entryBySentence.set(normalizedEntry.sentence, normalizedEntry)
+    }
+    else if (!existingEntry.sourceUrl && normalizedEntry.sourceUrl) {
+      existingEntry.sourceUrl = normalizedEntry.sourceUrl
+    }
 
-    if (uniqueSentences.length >= MAX_VOCABULARY_CONTEXT_SENTENCES) {
+    if (uniqueEntries.length >= MAX_VOCABULARY_CONTEXT_SENTENCES) {
       break
     }
   }
 
-  return uniqueSentences
+  return uniqueEntries
 }
 
 function parseMatchTerms(matchTermsJson: string): string[] {
@@ -94,11 +128,43 @@ function parseMatchTerms(matchTermsJson: string): string[] {
   }
 }
 
-export function readVocabularyContextSentences(item: VocabularyItemRecord): string[] {
-  return normalizeContextSentences([
-    ...readStringArray(item, "contextSentences"),
-    readOptionalString(item, "contextSentence"),
+function readContextEntryArray(item: VocabularyItemRecord, key: string): VocabularyContextEntryRecord[] {
+  const value = item[key]
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return []
+    }
+
+    const record = entry as Record<string, unknown>
+    const normalizedEntry = normalizeContextEntry({
+      sentence: typeof record.sentence === "string" ? record.sentence : null,
+      sourceUrl: typeof record.sourceUrl === "string" ? record.sourceUrl : null,
+    })
+
+    return normalizedEntry ? [normalizedEntry] : []
+  })
+}
+
+export function readVocabularyContextEntries(item: VocabularyItemRecord): VocabularyContextEntryRecord[] {
+  const legacyContextSentence = readOptionalString(item, "contextSentence")
+
+  return normalizeContextEntries([
+    ...readContextEntryArray(item, "contextEntries"),
+    ...readStringArray(item, "contextSentences").map(sentence => ({ sentence })),
+    legacyContextSentence
+      ? {
+          sentence: legacyContextSentence,
+        }
+      : null,
   ])
+}
+
+export function readVocabularyContextSentences(item: VocabularyItemRecord): string[] {
+  return readVocabularyContextEntries(item).map(entry => entry.sentence)
 }
 
 export function buildVocabularyContextSentenceRows(
@@ -106,9 +172,10 @@ export function buildVocabularyContextSentenceRows(
   item: VocabularyItemRecord,
   baseTimestamp = Date.now(),
 ): VocabularyContextSentenceRow[] {
-  return readVocabularyContextSentences(item).map((sentence, index) => ({
+  return readVocabularyContextEntries(item).map((entry, index) => ({
     vocabulary_item_id: itemId,
-    sentence,
+    sentence: entry.sentence,
+    source_url: entry.sourceUrl ?? null,
     created_at: baseTimestamp - index,
     last_seen_at: baseTimestamp - index,
   }))
@@ -118,25 +185,37 @@ export function mergeVocabularyContextSentenceRows(
   items: VocabularyItemRecord[],
   rows: VocabularyContextSentenceRow[],
 ): VocabularyItemRecord[] {
-  const groupedSentences = new Map<string, string[]>()
+  const groupedEntries = new Map<string, VocabularyContextEntryRecord[]>()
 
   for (const row of rows) {
-    const currentSentences = groupedSentences.get(row.vocabulary_item_id) ?? []
-    currentSentences.push(row.sentence)
-    groupedSentences.set(row.vocabulary_item_id, currentSentences)
+    const currentEntries = groupedEntries.get(row.vocabulary_item_id) ?? []
+    currentEntries.push({
+      sentence: row.sentence,
+      ...(row.source_url ? { sourceUrl: row.source_url } : {}),
+    })
+    groupedEntries.set(row.vocabulary_item_id, currentEntries)
   }
 
   return items.map((item) => {
     const itemId = typeof item.id === "string" ? item.id : ""
-    const mergedSentences = normalizeContextSentences([
-      ...(itemId ? (groupedSentences.get(itemId) ?? []) : []),
-      ...readVocabularyContextSentences(item),
+    const mergedEntries = normalizeContextEntries([
+      ...(itemId ? (groupedEntries.get(itemId) ?? []) : []),
+      ...readVocabularyContextEntries(item),
     ])
 
-    const { contextSentence: _legacyContextSentence, contextSentences: _currentContextSentences, ...restItem } = item
+    const {
+      contextEntries: _currentContextEntries,
+      contextSentence: _legacyContextSentence,
+      contextSentences: _currentContextSentences,
+      ...restItem
+    } = item
 
-    return mergedSentences.length > 0
-      ? { ...restItem, contextSentences: mergedSentences }
+    return mergedEntries.length > 0
+      ? {
+          ...restItem,
+          contextEntries: mergedEntries,
+          contextSentences: mergedEntries.map(entry => entry.sentence),
+        }
       : restItem
   })
 }
@@ -173,13 +252,24 @@ export function serializeVocabularyItem(item: VocabularyItemRecord): VocabularyR
 }
 
 export function deserializeVocabularyItem(row: VocabularyRow): VocabularyItemRecord {
-  const contextSentences = normalizeContextSentences([row.context_sentence ?? null])
+  const contextEntries = normalizeContextEntries([
+    row.context_sentence
+      ? {
+          sentence: row.context_sentence,
+        }
+      : null,
+  ])
 
   return {
     id: row.id,
     sourceText: row.source_text,
     normalizedText: row.normalized_text,
-    ...(contextSentences.length > 0 ? { contextSentences } : {}),
+    ...(contextEntries.length > 0
+      ? {
+          contextEntries,
+          contextSentences: contextEntries.map(entry => entry.sentence),
+        }
+      : {}),
     ...(row.lemma ? { lemma: row.lemma } : {}),
     ...(parseMatchTerms(row.match_terms_json).length > 0 ? { matchTerms: parseMatchTerms(row.match_terms_json) } : {}),
     translatedText: row.translated_text,
