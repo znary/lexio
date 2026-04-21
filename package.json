@@ -32,6 +32,7 @@
     "prepare": "husky",
     "release": "changeset tag && git push origin --tags",
     "test": "vitest run",
+    "test:free-api": "RUN_FREE_API_TESTS=true vitest run src/utils/host/translate/api/__tests__/free-api.test.ts",
     "test:cov": "vitest run --coverage",
     "test:watch": "vitest",
     "type-check": "tsc --noEmit",
