@@ -7,9 +7,11 @@ export const PADDLE_CLIENT_TOKEN = import.meta.env.VITE_PADDLE_CLIENT_TOKEN || D
 export const PADDLE_ENV = (import.meta.env.VITE_PADDLE_ENV || "sandbox") as "sandbox" | "production"
 export const PADDLE_PRO_PRICE_ID = import.meta.env.VITE_PADDLE_PRO_PRICE_ID || DEFAULT_PADDLE_PRO_PRICE_ID
 export const DEFAULT_EXTENSION_ID = import.meta.env.VITE_EXTENSION_ID || ""
+export const PLATFORM_API_URL = import.meta.env.VITE_PLATFORM_API_URL || ""
 
 const EXTENSION_ID_QUERY_PARAM = "extensionId"
 const EXTENSION_ID_SESSION_STORAGE_KEY = "lexio.platform.extensionId"
+const TRAILING_SLASHES_RE = /\/+$/
 
 function readStoredExtensionId(): string {
   try {
@@ -43,4 +45,22 @@ export function getExtensionIdFromLocation(): string {
   }
 
   return getStoredExtensionId()
+}
+
+export function resolvePlatformApiUrl(): string {
+  const configuredUrl = PLATFORM_API_URL.trim()
+  if (configuredUrl) {
+    return configuredUrl.replace(TRAILING_SLASHES_RE, "")
+  }
+
+  const { hostname, origin } = window.location
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return "http://127.0.0.1:8787"
+  }
+
+  if (hostname.includes("platform-web") && hostname.endsWith(".workers.dev")) {
+    return origin.replace("platform-web", "platform-api")
+  }
+
+  return origin
 }

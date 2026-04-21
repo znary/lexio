@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from "react"
-import { render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 const syncPlatformAuthToExtensionMock = vi.fn()
@@ -32,7 +32,7 @@ afterEach(() => {
 })
 
 describe("extension sync page", () => {
-  it("syncs the token and shows a toast without rendering an extension id", async () => {
+  it("waits for manual confirmation before syncing the token", async () => {
     useAuthMock.mockReturnValue({
       isSignedIn: true,
       getToken: vi.fn().mockResolvedValue("token-1"),
@@ -54,6 +54,10 @@ describe("extension sync page", () => {
     const { ExtensionSyncPage } = await import("../extension-sync")
     render(<ExtensionSyncPage />)
 
+    expect(syncPlatformAuthToExtensionMock).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole("button", { name: "Authorize Access" }))
+
     await waitFor(() => {
       expect(syncPlatformAuthToExtensionMock).toHaveBeenCalledWith("token-1", {
         id: "user-1",
@@ -63,8 +67,10 @@ describe("extension sync page", () => {
       })
     })
 
-    expect(toastSuccessMock).toHaveBeenCalledWith("Lexio account connected.")
-    expect(screen.queryByText(/extension id/i)).toBeNull()
+    expect(toastSuccessMock).toHaveBeenCalledWith("Extension connected.")
+    expect(screen.queryByRole("heading", { name: "Extension Connected" })).not.toBeNull()
+    expect(screen.queryByRole("heading", { name: "Authorize Extension" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Close This Page" })).not.toBeNull()
   })
 
   it("shows a concise error when token sync fails", async () => {
@@ -89,8 +95,43 @@ describe("extension sync page", () => {
     const { ExtensionSyncPage } = await import("../extension-sync")
     render(<ExtensionSyncPage />)
 
+    fireEvent.click(screen.getByRole("button", { name: "Authorize Access" }))
+
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalledWith("No token")
     })
+  })
+
+  it("closes the page from the success state", async () => {
+    const closeMock = vi.spyOn(window, "close").mockImplementation(() => {})
+
+    useAuthMock.mockReturnValue({
+      isSignedIn: true,
+      getToken: vi.fn().mockResolvedValue("token-1"),
+    })
+    useUserMock.mockReturnValue({
+      user: {
+        id: "user-1",
+        primaryEmailAddress: {
+          emailAddress: "user@example.com",
+        },
+        fullName: "User One",
+        username: "userone",
+        imageUrl: null,
+      },
+    })
+
+    syncPlatformAuthToExtensionMock.mockResolvedValue(undefined)
+
+    const { ExtensionSyncPage } = await import("../extension-sync")
+    render(<ExtensionSyncPage />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Authorize Access" }))
+
+    await screen.findByRole("button", { name: "Close This Page" })
+    fireEvent.click(screen.getByRole("button", { name: "Close This Page" }))
+
+    expect(closeMock).toHaveBeenCalledTimes(1)
+    closeMock.mockRestore()
   })
 })

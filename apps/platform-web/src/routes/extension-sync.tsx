@@ -1,156 +1,219 @@
-import type { ReactNode } from "react"
-import { SignInButton, useAuth, useUser } from "@clerk/clerk-react"
-import { useEffect, useRef, useState } from "react"
+import { useAuth, useUser } from "@clerk/clerk-react"
+import { useState } from "react"
 import { toast } from "sonner"
+import { getExtensionIdFromLocation } from "../app/env"
+import {
+  BookIcon,
+  ExtensionDocumentIcon,
+  LockIcon,
+  ProfileCircleIcon,
+  SyncCycleIcon,
+} from "../app/icons"
 import { syncPlatformAuthToExtension } from "../app/platform-auth"
-
-declare global {
-  interface Window {
-    chrome?: {
-      runtime?: {
-        lastError?: {
-          message?: string
-        }
-        sendMessage?: (
-          extensionId: string,
-          message: unknown,
-          callback?: (response?: unknown) => void,
-        ) => void
-      }
-    }
-  }
-}
+import { APP_ROUTES } from "../app/routes"
 
 type SyncStatus = "idle" | "syncing" | "success" | "error"
 
-function StatusPill({ status }: { status: SyncStatus }) {
-  let className = "status-pill"
-  let label = "Waiting for sign-in"
+function getAuthorizeButtonLabel(status: SyncStatus, isSignedIn: boolean): string {
+  if (!isSignedIn) {
+    return "Sign In to Continue"
+  }
+
+  if (status === "syncing") {
+    return "Authorizing..."
+  }
 
   if (status === "success") {
-    className = "status-pill is-success"
-    label = "Extension synced"
-  }
-  else if (status === "error") {
-    className = "status-pill is-error"
-    label = "Sync failed"
-  }
-  else if (status === "syncing") {
-    className = "status-pill is-warning"
-    label = "Syncing..."
+    return "Authorized"
   }
 
-  return <div className={className}>{label}</div>
+  return "Authorize Access"
 }
 
 export function ExtensionSyncPage() {
   const { getToken, isSignedIn } = useAuth()
   const { user } = useUser()
+  const hasSignedInSession = Boolean(isSignedIn)
+  const extensionId = getExtensionIdFromLocation()
+  const signInHref = extensionId
+    ? `${APP_ROUTES.signIn}?extensionId=${encodeURIComponent(extensionId)}`
+    : APP_ROUTES.signIn
   const [status, setStatus] = useState<SyncStatus>("idle")
-  const [message, setMessage] = useState("Sign in to send the token back to the extension.")
-  const syncKey = isSignedIn
-    ? [
-        user?.id ?? "",
-        user?.primaryEmailAddress?.emailAddress ?? "",
-        user?.fullName ?? "",
-        user?.username ?? "",
-        user?.imageUrl ?? "",
-      ].join("|")
-    : "signed-out"
-  const lastSyncKeyRef = useRef("")
-  let sessionPanel: ReactNode
+  const [message, setMessage] = useState("")
 
-  useEffect(() => {
-    async function syncExtension() {
-      if (!isSignedIn) {
-        lastSyncKeyRef.current = ""
-        setStatus("idle")
-        setMessage("Sign in to send the token back to the extension.")
-        return
-      }
-
-      if (lastSyncKeyRef.current === syncKey) {
-        return
-      }
-
-      lastSyncKeyRef.current = syncKey
-
-      try {
-        setStatus("syncing")
-        const token = await getToken()
-        if (!token) {
-          throw new Error("Clerk did not return a session token.")
-        }
-
-        await syncPlatformAuthToExtension(token, {
-          id: user?.id,
-          email: user?.primaryEmailAddress?.emailAddress ?? null,
-          name: user?.fullName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress ?? "Lexio user",
-          imageUrl: user?.imageUrl ?? null,
-        })
-
-        setStatus("success")
-        setMessage("Lexio account connected. You can go back to the extension now.")
-        toast.success("Lexio account connected.")
-      }
-      catch (error) {
-        setStatus("error")
-        const nextMessage = error instanceof Error ? error.message : "Extension sync failed"
-        setMessage(nextMessage)
-        toast.error(nextMessage)
-      }
+  async function syncExtension() {
+    if (!hasSignedInSession) {
+      setStatus("idle")
+      setMessage("")
+      return
     }
 
-    void syncExtension()
-  }, [
-    getToken,
-    isSignedIn,
-    syncKey,
-    user?.fullName,
-    user?.id,
-    user?.imageUrl,
-    user?.primaryEmailAddress?.emailAddress,
-    user?.username,
-  ])
+    try {
+      setStatus("syncing")
+      setMessage("Sending your current Lexio session to the extension.")
+      const token = await getToken()
+      if (!token) {
+        throw new Error("Clerk did not return a session token.")
+      }
 
-  if (!isSignedIn) {
-    sessionPanel = (
-      <div className="card-stack">
-        <h2 className="plan-title">Sign in first</h2>
-        <p className="card-copy">The extension can only accept a signed Clerk token.</p>
-        <SignInButton mode="modal">
-          <button type="button" className="primary-button">Sign in</button>
-        </SignInButton>
-      </div>
-    )
+      await syncPlatformAuthToExtension(token, {
+        id: user?.id,
+        email: user?.primaryEmailAddress?.emailAddress ?? null,
+        name: user?.fullName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress ?? "Lexio user",
+        imageUrl: user?.imageUrl ?? null,
+      })
+
+      setStatus("success")
+      setMessage("Extension connected.")
+      toast.success("Extension connected.")
+    }
+    catch (error) {
+      setStatus("error")
+      const nextMessage = error instanceof Error ? error.message : "Extension sync failed"
+      setMessage(nextMessage)
+      toast.error(nextMessage)
+    }
   }
-  else {
-    sessionPanel = (
-      <div className="card-stack">
-        <h2 className="plan-title">Current browser session</h2>
-        <div className="feature-list">
-          <div className="feature-row">
-            <strong>User</strong>
-            <span className="muted-copy">{user?.primaryEmailAddress?.emailAddress ?? "Signed in"}</span>
+
+  function closePage() {
+    window.close()
+  }
+
+  if (status === "success") {
+    return (
+      <section className="extension-auth-page">
+        <div className="extension-auth-card extension-auth-card--success">
+          <div className="extension-auth-topbar" />
+
+          <div className="extension-auth-body extension-auth-body--success">
+            <div className="extension-auth-success-icon" aria-hidden="true">
+              <SyncCycleIcon className="extension-auth-success-icon__glyph" />
+            </div>
+
+            <div className="extension-auth-copy extension-auth-copy--success">
+              <h1>Extension Connected</h1>
+              <p>
+                Lexio has sent your current sign-in session to the extension. You can return to
+                the extension now.
+              </p>
+            </div>
+
+            <div className="extension-auth-actions">
+              <button
+                type="button"
+                className="primary-button primary-button--full"
+                onClick={closePage}
+              >
+                Close This Page
+              </button>
+            </div>
+
+            <p className="extension-auth-success-note">
+              If this tab stays open, close it manually and continue in the extension popup.
+            </p>
           </div>
         </div>
-      </div>
+      </section>
     )
   }
 
   return (
-    <section className="sync-grid">
-      <article className="sync-card">
-        <span className="eyebrow">Extension handoff</span>
-        <h1 className="section-title">Send your Lexio account token back to the extension.</h1>
-        <p className="section-copy">
-          This page is the bridge between the signed-in website and the browser extension. Once the
-          sync succeeds, the extension can call the hosted Lexio platform without asking for provider settings.
-        </p>
-        <StatusPill status={status} />
-        <p className="sync-code">{message}</p>
-      </article>
-      <aside className="sync-card">{sessionPanel}</aside>
+    <section className="extension-auth-page">
+      <div className="extension-auth-card">
+        <div className="extension-auth-topbar" />
+
+        <div className="extension-auth-body">
+          <div className="extension-auth-logos" aria-hidden="true">
+            <div className="extension-auth-icon">
+              <ExtensionDocumentIcon className="extension-auth-icon__glyph" />
+            </div>
+            <div className="extension-auth-connector" />
+            <div className="extension-auth-brand">FS</div>
+          </div>
+
+          <div className="extension-auth-copy">
+            <h1>Authorize Extension</h1>
+            <p>
+              Allow the Lexio browser extension to use your current sign-in session and sync words
+              into your Lexio account.
+            </p>
+          </div>
+
+          <section className="permission-card">
+            <h2>Requested Access</h2>
+
+            <div className="permission-list">
+              <div className="permission-item">
+                <div className="permission-icon" aria-hidden="true">
+                  <BookIcon className="permission-icon__glyph" />
+                </div>
+                <div>
+                  <strong>Save words to your Word Bank</strong>
+                  <p>The extension can add saved words and definitions to the same Lexio account you are using here.</p>
+                </div>
+              </div>
+
+              <div className="permission-item">
+                <div className="permission-icon" aria-hidden="true">
+                  <ProfileCircleIcon className="permission-icon__glyph" />
+                </div>
+                <div>
+                  <strong>Basic account profile</strong>
+                  <p>The extension receives your display name, email address, and avatar for account identification.</p>
+                </div>
+              </div>
+
+              <div className="permission-item">
+                <div className="permission-icon permission-icon--success" aria-hidden="true">
+                  <SyncCycleIcon className="permission-icon__glyph" />
+                </div>
+                <div>
+                  <strong>Current sign-in session</strong>
+                  <p>The extension receives a fresh Lexio session token so it can act on your behalf after you approve.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div className="extension-auth-actions">
+            {hasSignedInSession
+              ? (
+                  <button
+                    type="button"
+                    className="primary-button primary-button--full"
+                    onClick={() => {
+                      void syncExtension()
+                    }}
+                    disabled={status === "syncing"}
+                  >
+                    {getAuthorizeButtonLabel(status, hasSignedInSession)}
+                  </button>
+                )
+              : (
+                  <a className="primary-link primary-link--full" href={signInHref}>
+                    {getAuthorizeButtonLabel(status, hasSignedInSession)}
+                  </a>
+                )}
+
+            <a className="secondary-link secondary-link--centered" href={APP_ROUTES.home}>
+              Cancel
+            </a>
+          </div>
+
+          {status !== "idle"
+            ? (
+                <p className={`extension-auth-feedback is-${status}`}>
+                  {message}
+                </p>
+              )
+            : null}
+
+          <p className="extension-auth-note">
+            <LockIcon className="extension-auth-note__icon" />
+            <span>Secure authorization via The Focused Scholar</span>
+          </p>
+        </div>
+      </div>
     </section>
   )
 }

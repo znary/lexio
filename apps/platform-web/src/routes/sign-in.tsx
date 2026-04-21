@@ -6,25 +6,26 @@ export function SignInPage() {
   const extensionId = getExtensionIdFromLocation()
   const fallbackRedirectUrl = extensionId
     ? `${APP_ROUTES.extensionSync}?extensionId=${encodeURIComponent(extensionId)}`
-    : APP_ROUTES.extensionSync
+    : APP_ROUTES.wordBank
 
   return (
-    <section className="clerk-shell">
-      <div className="clerk-panel">
-        <article className="media-panel">
-          <span className="eyebrow">Lexio membership</span>
-          <h1>Sign in once. Your extension becomes ready.</h1>
+    <section className="signin-page">
+      <div className="signin-shell">
+        <article className="signin-copy">
+          <span className="section-kicker">Lexio Account</span>
+          <h1>Sign in once. Return to your library, practice, and extension flow.</h1>
           <p>
-            Lexio uses one hosted account for plans, synced vocabulary, and managed AI access.
-            This page is the only place the user needs to sign in.
+            Your hosted Lexio account keeps vocabulary, reading progress, and AI access in one
+            place. No provider setup. No API keys. No extra steps.
           </p>
-          <ul>
-            <li>No provider setup</li>
-            <li>No API key input</li>
-            <li>No separate sync setup</li>
+          <ul className="signin-list">
+            <li>Unified account for web and extension</li>
+            <li>Synced word bank across sessions</li>
+            <li>Managed access without manual setup</li>
           </ul>
         </article>
-        <div className="auth-panel">
+
+        <div className="signin-panel">
           <SignIn
             routing="path"
             path={APP_ROUTES.signIn}

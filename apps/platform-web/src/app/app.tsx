@@ -1,70 +1,133 @@
+import type { ReactNode } from "react"
 import { SignedIn, SignedOut, UserButton } from "@clerk/clerk-react"
 import { CheckoutSuccessPage } from "../routes/checkout-success"
 import { ExtensionSyncPage } from "../routes/extension-sync"
+import { HomePage } from "../routes/home"
+import { PracticePage } from "../routes/practice"
 import { PricingPage } from "../routes/pricing"
 import { SignInPage } from "../routes/sign-in"
+import { WordBankPage } from "../routes/word-bank"
+import { AccountOutlineIcon } from "./icons"
 import { PlatformAuthBridge } from "./platform-auth-bridge"
 import { APP_ROUTES, normalizePathname } from "./routes"
 
-const NAV_LINKS = [
-  { href: APP_ROUTES.signIn, label: "Sign in" },
-  { href: APP_ROUTES.pricing, label: "Pricing" },
-  { href: APP_ROUTES.extensionSync, label: "Sync extension" },
+const SITE_NAV_LINKS = [
+  { href: APP_ROUTES.wordBank, label: "Word Bank" },
+  { href: APP_ROUTES.practice, label: "Practice" },
 ] as const
 
-function resolvePage() {
-  switch (normalizePathname(window.location.pathname)) {
+interface ResolvedPage {
+  content: ReactNode
+  layout: "site" | "standalone"
+  headerVariant: "hero" | "library"
+}
+
+function resolvePage(pathname: string): ResolvedPage {
+  switch (normalizePathname(pathname)) {
+    case APP_ROUTES.wordBank:
+      return { layout: "site", headerVariant: "library", content: <WordBankPage /> }
+    case APP_ROUTES.practice:
+      return { layout: "site", headerVariant: "library", content: <PracticePage /> }
     case APP_ROUTES.pricing:
-      return <PricingPage />
-    case APP_ROUTES.checkoutSuccess:
-      return <CheckoutSuccessPage />
-    case APP_ROUTES.extensionSync:
-      return <ExtensionSyncPage />
+      return { layout: "site", headerVariant: "library", content: <PricingPage /> }
     case APP_ROUTES.signIn:
+      return { layout: "standalone", headerVariant: "hero", content: <SignInPage /> }
+    case APP_ROUTES.checkoutSuccess:
+      return { layout: "standalone", headerVariant: "hero", content: <CheckoutSuccessPage /> }
+    case APP_ROUTES.extensionSync:
+      return { layout: "standalone", headerVariant: "hero", content: <ExtensionSyncPage /> }
+    case APP_ROUTES.home:
     default:
-      return <SignInPage />
+      return { layout: "site", headerVariant: "hero", content: <HomePage /> }
   }
 }
 
-function Header() {
+function SiteHeader({ pathname, variant }: { pathname: string, variant: "hero" | "library" }) {
+  const signedOutActions = variant === "library"
+    ? (
+        <>
+          <a className="account-icon" href={APP_ROUTES.signIn} aria-label="Open sign in">
+            <AccountOutlineIcon className="account-glyph" />
+          </a>
+          <a className="primary-link primary-link--compact" href={APP_ROUTES.signIn}>Sign In</a>
+        </>
+      )
+    : (
+        <>
+          <a className="account-link" href={APP_ROUTES.signIn}>Sign In</a>
+          <a className="account-icon" href={APP_ROUTES.signIn} aria-label="Open sign in">
+            <AccountOutlineIcon className="account-glyph" />
+          </a>
+        </>
+      )
+
   return (
     <header className="site-header">
-      <a className="brand-lockup" href={APP_ROUTES.signIn}>
-        <span className="brand-badge">L</span>
-        <span className="brand-copy">
-          <strong>Lexio</strong>
-          <span>Account & plans</span>
-        </span>
-      </a>
-      <nav className="site-nav" aria-label="Primary">
-        {NAV_LINKS.map(link => (
-          <a key={link.href} href={link.href}>
-            {link.label}
-          </a>
-        ))}
-      </nav>
-      <div className="header-account">
-        <SignedOut>
-          <a className="ghost-button" href={APP_ROUTES.signIn}>
-            Sign in
-          </a>
-        </SignedOut>
-        <SignedIn>
-          <UserButton />
-        </SignedIn>
+      <div className="site-header__inner">
+        <a className="brand-link" href={APP_ROUTES.home}>
+          <span className="brand-wordmark">Lexio</span>
+        </a>
+
+        <nav className="site-nav" aria-label="Primary">
+          {SITE_NAV_LINKS.map(link => (
+            <a
+              key={link.href}
+              href={link.href}
+              className={pathname === link.href ? "is-active" : undefined}
+            >
+              {link.label}
+            </a>
+          ))}
+        </nav>
+
+        <div className="site-actions">
+          <SignedOut>{signedOutActions}</SignedOut>
+          <SignedIn>
+            <div className="account-user">
+              <UserButton />
+            </div>
+          </SignedIn>
+        </div>
       </div>
     </header>
   )
 }
 
-export default function App() {
+function SiteFooter() {
   return (
-    <div className="page-shell">
+    <footer className="site-footer">
+      <div className="site-footer__inner">
+        <p>© 2024 LEXIO. THE INTELLECTUAL SANCTUARY FOR FOCUSED LEARNING.</p>
+        <div className="site-footer__links">
+          <a href={APP_ROUTES.home}>Privacy</a>
+          <a href={APP_ROUTES.home}>Terms</a>
+          <a href={APP_ROUTES.home}>Methodology</a>
+          <a href={APP_ROUTES.home}>Support</a>
+        </div>
+      </div>
+    </footer>
+  )
+}
+
+export default function App() {
+  const pathname = normalizePathname(window.location.pathname)
+  const page = resolvePage(pathname)
+
+  if (page.layout === "standalone") {
+    return (
+      <div className="app-shell app-shell--standalone">
+        <PlatformAuthBridge />
+        <main className="standalone-main">{page.content}</main>
+      </div>
+    )
+  }
+
+  return (
+    <div className="app-shell">
       <PlatformAuthBridge />
-      <Header />
-      <main className="page-content">
-        {resolvePage()}
-      </main>
+      <SiteHeader pathname={pathname} variant={page.headerVariant} />
+      <main className="site-main">{page.content}</main>
+      <SiteFooter />
     </div>
   )
 }

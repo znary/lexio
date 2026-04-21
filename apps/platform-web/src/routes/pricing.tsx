@@ -24,46 +24,6 @@ async function openCheckout(priceId: string, clerkUserId: string | null) {
   })
 }
 
-function PlanCard(
-  {
-    featured,
-    title,
-    kicker,
-    price,
-    note,
-    features,
-    action,
-  }: {
-    featured?: boolean
-    title: string
-    kicker: string
-    price: string
-    note: string
-    features: string[]
-    action: React.ReactNode
-  },
-) {
-  return (
-    <article className={`pricing-card${featured ? " is-featured" : ""}`}>
-      <span className="plan-kicker">{kicker}</span>
-      <h2 className="plan-title">{title}</h2>
-      <p className="card-copy">{note}</p>
-      <div className="plan-price">
-        <span>{price}</span>
-        <small>/ month</small>
-      </div>
-      <div className="card-stack">
-        {features.map(feature => (
-          <div key={feature} className="plan-feature">
-            <strong>{feature}</strong>
-          </div>
-        ))}
-      </div>
-      <div className="button-row">{action}</div>
-    </article>
-  )
-}
-
 export function PricingPage() {
   const { userId } = useAuth()
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -89,86 +49,66 @@ export function PricingPage() {
   }
 
   return (
-    <>
-      <section className="hero-grid">
-        <article className="hero-card">
-          <span className="eyebrow">Hosted plans</span>
-          <h1 className="hero-title">One plan controls AI, sync, and account access.</h1>
-          <p className="hero-copy">
-            Lexio pricing is intentionally simple: a free tier for lighter reading workflows,
-            and one Pro plan for higher limits and stronger model routing.
+    <div className="pricing-page">
+      <section className="pricing-hero">
+        <div>
+          <span className="section-kicker">Hosted Plans</span>
+          <h1>One plan keeps Lexio clear, focused, and ready across surfaces.</h1>
+          <p>
+            Choose a simple hosted plan for synced vocabulary, web practice, and managed AI access
+            without provider setup.
           </p>
-          {errorMessage && (
-            <div className="status-pill is-error">{errorMessage}</div>
-          )}
-          <div className="hero-actions">
-            <SignedIn>
-              <button type="button" className="primary-button" onClick={handleSubscribe} disabled={isLoading}>
-                {isLoading ? "Opening checkout..." : "Upgrade to Pro"}
-              </button>
-            </SignedIn>
-            <SignedOut>
-              <SignInButton mode="modal">
-                <button type="button" className="primary-button">
-                  Sign in to continue
-                </button>
-              </SignInButton>
-            </SignedOut>
-            <a className="ghost-button" href={APP_ROUTES.extensionSync}>Sync extension</a>
-          </div>
-        </article>
-        <aside className="hero-aside">
-          <div className="status-pill is-success">Paddle.js checkout is wired for this page</div>
-          <div className="stat-list">
-            <div className="stat-row">
-              <strong>Free</strong>
-              <span className="muted-copy">Light monthly allowance and synced vocabulary.</span>
-            </div>
-            <div className="stat-row">
-              <strong>Pro</strong>
-              <span className="muted-copy">Higher request budget and stronger model routing.</span>
-            </div>
-          </div>
-        </aside>
+        </div>
+
+        {errorMessage && <div className="feedback-callout feedback-callout--error">{errorMessage}</div>}
       </section>
 
-      <section>
-        <header className="section-header">
-          <h2 className="section-title">Plans</h2>
-          <p className="section-copy">Users never touch provider settings. Their plan controls what the platform unlocks.</p>
-        </header>
-        <div className="pricing-grid">
-          <PlanCard
-            title="Free"
-            kicker="Starter"
-            price="$0"
-            note="A clean on-ramp for synced reading and lighter AI usage."
-            features={[
-              "Hosted sign-in and extension sync",
-              "Managed AI access with a monthly cap",
-              "Vocabulary sync across devices",
-            ]}
-            action={<a className="ghost-button" href={APP_ROUTES.signIn}>Sign in</a>}
-          />
-          <PlanCard
-            featured
-            title="Pro"
-            kicker="Best value"
-            price="$12"
-            note="Built for daily reading, heavier translation, and higher request volume."
-            features={[
-              "Higher monthly request allowance",
-              "Stronger model routing",
-              "Priority concurrency limits",
-            ]}
-            action={(
-              <button type="button" className="primary-button" onClick={handleSubscribe} disabled={isLoading}>
-                {isLoading ? "Opening..." : "Start Pro"}
+      <div className="pricing-grid">
+        <article className="pricing-card">
+          <span className="pricing-badge">Starter</span>
+          <h2>Free</h2>
+          <div className="pricing-price">
+            <strong>$0</strong>
+            <span>/ month</span>
+          </div>
+          <p>A clean on-ramp for reading, capture, and light practice.</p>
+          <ul className="pricing-features">
+            <li>Hosted sign-in</li>
+            <li>Word Bank access</li>
+            <li>Light monthly usage</li>
+          </ul>
+          <a className="ghost-button" href={APP_ROUTES.signIn}>Sign In</a>
+        </article>
+
+        <article className="pricing-card pricing-card--featured">
+          <span className="pricing-badge pricing-badge--featured">Best Value</span>
+          <h2>Pro</h2>
+          <div className="pricing-price">
+            <strong>$12</strong>
+            <span>/ month</span>
+          </div>
+          <p>Built for daily reading, heavier practice, and stronger model routing.</p>
+          <ul className="pricing-features">
+            <li>Higher request allowance</li>
+            <li>Stronger model routing</li>
+            <li>Priority sync and concurrency</li>
+          </ul>
+
+          <SignedIn>
+            <button type="button" className="primary-button" onClick={handleSubscribe} disabled={isLoading}>
+              {isLoading ? "Opening checkout..." : "Start Pro"}
+            </button>
+          </SignedIn>
+
+          <SignedOut>
+            <SignInButton mode="modal">
+              <button type="button" className="primary-button">
+                Sign in to continue
               </button>
-            )}
-          />
-        </div>
-      </section>
-    </>
+            </SignInButton>
+          </SignedOut>
+        </article>
+      </div>
+    </div>
   )
 }
