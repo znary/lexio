@@ -28,6 +28,7 @@ interface ProtocolMap {
   openPage: (data: { url: string, active?: boolean }) => void
   openOptionsPage: () => void
   openSidePanel: () => Promise<boolean>
+  toggleSidePanel: () => Promise<boolean>
   openSidePanelChatRequest: (data: SidepanelChatRequestPayload) => Promise<boolean>
   // config
   getInitialConfig: () => Config | null

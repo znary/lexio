@@ -30,6 +30,7 @@ import {
   watchPendingSidepanelChatRequests,
 } from "@/utils/platform/sidepanel-chat-request"
 import { SIDEPANEL_MARKDOWN_TEXT } from "./sidepanel-markdown"
+import { SidepanelWelcomeState } from "./sidepanel-welcome-state"
 import { ThreadHistorySheet } from "./thread-history-sheet"
 import { VocabularySheet } from "./vocabulary-sheet"
 
@@ -929,17 +930,7 @@ export function ChatWorkspace({
   )
 
   if (!isWorkspaceLoading && !isSignedIn) {
-    content = (
-      <div className="mx-auto flex h-full max-w-sm flex-col items-center justify-center text-center">
-        <div className="rounded-full border border-border/70 bg-muted/60 p-3 text-primary">
-          <IconMessagePlus className="size-5" />
-        </div>
-        <h2 className="mt-4 text-lg font-semibold">Sign in to use cloud chat</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Threads live in your Lexio account, so the same history follows you across devices.
-        </p>
-      </div>
-    )
+    content = <SidepanelWelcomeState />
   }
 
   if (!isWorkspaceLoading && isSignedIn) {

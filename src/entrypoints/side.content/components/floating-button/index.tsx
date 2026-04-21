@@ -104,7 +104,7 @@ export default function FloatingButton() {
           void sendMessage("tryToSetEnablePageTranslationOnContentScript", { enabled: !translationState.enabled })
         }
         else {
-          void sendMessage("openSidePanel", undefined)
+          void sendMessage("toggleSidePanel", undefined)
         }
       }
     }

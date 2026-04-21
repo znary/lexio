@@ -20,7 +20,14 @@ import { initMockData } from "./mock-data"
 import { newUserGuide } from "./new-user-guide"
 import { handlePlatformAuthExternalMessage } from "./platform-auth"
 import { proxyFetch } from "./proxy-fetch"
-import { openSidePanelForChatRequest, openSidePanelInActiveWindow, openSidePanelInWindow, setUpSidePanelBehavior } from "./sidepanel"
+import {
+  openSidePanelForChatRequest,
+  openSidePanelInActiveWindow,
+  openSidePanelInWindow,
+  setUpSidePanelBehavior,
+  toggleSidePanelInActiveWindow,
+  toggleSidePanelInWindow,
+} from "./sidepanel"
 import { setUpSubtitlesTranslationQueue, setUpWebPageTranslationQueue } from "./translation-queues"
 import { translationMessage } from "./translation-signal"
 import { setupTTSPlaybackMessageHandlers } from "./tts-playback"
@@ -76,6 +83,15 @@ export default defineBackground({
         return await openSidePanelInWindow(senderWindowId)
       }
       return await openSidePanelInActiveWindow()
+    })
+
+    onMessage("toggleSidePanel", async (message) => {
+      logger.info("toggleSidePanel")
+      const senderWindowId = message.sender?.tab?.windowId
+      if (senderWindowId) {
+        return await toggleSidePanelInWindow(senderWindowId)
+      }
+      return await toggleSidePanelInActiveWindow()
     })
 
     onMessage("openSidePanelChatRequest", async (message) => {

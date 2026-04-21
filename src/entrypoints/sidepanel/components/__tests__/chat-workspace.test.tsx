@@ -36,6 +36,14 @@ const {
   watchPendingSidepanelChatRequestMock: vi.fn(),
 }))
 
+const {
+  openPlatformExtensionSyncTabMock,
+  openPlatformPricingTabMock,
+} = vi.hoisted(() => ({
+  openPlatformExtensionSyncTabMock: vi.fn(),
+  openPlatformPricingTabMock: vi.fn(),
+}))
+
 vi.mock("@/utils/platform/api", () => ({
   createPlatformChatThread: (...args: unknown[]) => createPlatformChatThreadMock(...args),
   deletePlatformChatThread: (...args: unknown[]) => deletePlatformChatThreadMock(...args),
@@ -100,6 +108,11 @@ vi.mock("@/utils/platform/sidepanel-chat-request", () => ({
 
 vi.mock("@/utils/message", () => ({
   sendMessage: (...args: unknown[]) => sendMessageMock(...args),
+}))
+
+vi.mock("@/utils/platform/navigation", () => ({
+  openPlatformExtensionSyncTab: (...args: unknown[]) => openPlatformExtensionSyncTabMock(...args),
+  openPlatformPricingTab: (...args: unknown[]) => openPlatformPricingTabMock(...args),
 }))
 
 vi.mock("#imports", () => ({
@@ -217,6 +230,10 @@ describe("chatWorkspace", () => {
     setSidepanelChatDraftMock.mockResolvedValue(undefined)
     setSidepanelChatSnapshotMock.mockResolvedValue(undefined)
     watchPendingSidepanelChatRequestMock.mockImplementation(() => () => {})
+    openPlatformExtensionSyncTabMock.mockReset()
+    openPlatformExtensionSyncTabMock.mockResolvedValue("https://lexio.example.com/sign-in")
+    openPlatformPricingTabMock.mockReset()
+    openPlatformPricingTabMock.mockResolvedValue("https://lexio.example.com/pricing")
   })
 
   it("renders a fresh chat session without crashing", async () => {
@@ -232,6 +249,23 @@ describe("chatWorkspace", () => {
     expect(screen.getByRole("button", { name: "Open vocabulary" })).toBeInTheDocument()
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument()
     expect(listPlatformChatThreadsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("shows direct sign-in and settings actions when the user is signed out", async () => {
+    render(<ChatWorkspace isSignedIn={false} isSessionLoading={false} sessionAccountKey={null} />)
+
+    expect(screen.getByText("The sidebar is ready.")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Open settings" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "View plans" })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }))
+    fireEvent.click(screen.getByRole("button", { name: "Open settings" }))
+    fireEvent.click(screen.getByRole("button", { name: "View plans" }))
+
+    expect(openPlatformExtensionSyncTabMock).toHaveBeenCalledTimes(1)
+    expect(sendMessageMock).toHaveBeenCalledWith("openOptionsPage", undefined)
+    expect(openPlatformPricingTabMock).toHaveBeenCalledTimes(1)
   })
 
   it("keeps the vocabulary button as the rightmost composer tool", async () => {

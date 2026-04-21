@@ -130,7 +130,7 @@ describe("floatingButton close trigger", () => {
     fireEvent.mouseDown(mainTrigger!, { clientY: 100 })
     fireEvent.mouseUp(document, { clientY: 100 })
 
-    expect(sendMessageMock).toHaveBeenCalledWith("openSidePanel", undefined)
+    expect(sendMessageMock).toHaveBeenCalledWith("toggleSidePanel", undefined)
     expect(sendMessageMock).not.toHaveBeenCalledWith("tryToSetEnablePageTranslationOnContentScript", expect.anything())
     hiddenButtons.forEach((button) => {
       expect(button).not.toHaveClass("translate-x-0")
@@ -149,7 +149,7 @@ describe("floatingButton close trigger", () => {
       "tryToSetEnablePageTranslationOnContentScript",
       { enabled: true },
     )
-    expect(sendMessageMock).not.toHaveBeenCalledWith("openSidePanel", undefined)
+    expect(sendMessageMock).not.toHaveBeenCalledWith("toggleSidePanel", undefined)
   })
 
   it("does not treat a drag as a click action", () => {

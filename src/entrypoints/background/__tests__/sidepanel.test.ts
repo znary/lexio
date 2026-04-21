@@ -11,9 +11,19 @@ describe("background sidepanel helpers", () => {
     vi.resetModules()
     vi.clearAllMocks()
     const browserWithSidePanel = browser as typeof browser & {
+      runtime: typeof browser.runtime & {
+        getContexts?: ReturnType<typeof vi.fn>
+      }
       sidePanel?: {
         setPanelBehavior: ReturnType<typeof vi.fn>
         open: ReturnType<typeof vi.fn>
+        close: ReturnType<typeof vi.fn>
+        onOpened: {
+          addListener: ReturnType<typeof vi.fn>
+        }
+        onClosed: {
+          addListener: ReturnType<typeof vi.fn>
+        }
       }
     }
 
@@ -24,9 +34,17 @@ describe("background sidepanel helpers", () => {
       },
     ])
 
+    browserWithSidePanel.runtime.getContexts = vi.fn().mockResolvedValue([])
     browserWithSidePanel.sidePanel = {
       setPanelBehavior: vi.fn().mockResolvedValue(undefined),
       open: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+      onOpened: {
+        addListener: vi.fn(),
+      },
+      onClosed: {
+        addListener: vi.fn(),
+      },
     } as NonNullable<typeof browserWithSidePanel.sidePanel>
   })
 
@@ -35,6 +53,12 @@ describe("background sidepanel helpers", () => {
     const sidePanel = (browser as typeof browser & {
       sidePanel: {
         setPanelBehavior: ReturnType<typeof vi.fn>
+        onOpened: {
+          addListener: ReturnType<typeof vi.fn>
+        }
+        onClosed: {
+          addListener: ReturnType<typeof vi.fn>
+        }
       }
     }).sidePanel
 
@@ -43,6 +67,8 @@ describe("background sidepanel helpers", () => {
     expect(sidePanel.setPanelBehavior).toHaveBeenCalledWith({
       openPanelOnActionClick: true,
     })
+    expect(sidePanel.onOpened.addListener).toHaveBeenCalledTimes(1)
+    expect(sidePanel.onClosed.addListener).toHaveBeenCalledTimes(1)
   })
 
   it("opens the side panel in the active window", async () => {
@@ -80,11 +106,63 @@ describe("background sidepanel helpers", () => {
     })
   })
 
+  it("toggles the side panel open immediately even if side panel seeding is still pending", async () => {
+    const seedingPromise = new Promise<never>(() => {})
+    const browserWithSidePanel = browser as typeof browser & {
+      runtime: typeof browser.runtime & {
+        getContexts: ReturnType<typeof vi.fn>
+      }
+      sidePanel: {
+        open: ReturnType<typeof vi.fn>
+        close: ReturnType<typeof vi.fn>
+      }
+    }
+    browserWithSidePanel.runtime.getContexts.mockReturnValue(seedingPromise)
+    const { setUpSidePanelBehavior, toggleSidePanelInWindow } = await import("../sidepanel")
+
+    await setUpSidePanelBehavior()
+
+    await expect(toggleSidePanelInWindow(9)).resolves.toBe(true)
+
+    expect(browserWithSidePanel.runtime.getContexts).toHaveBeenCalledWith({
+      contextTypes: ["SIDE_PANEL"],
+    })
+    expect(browserWithSidePanel.sidePanel.open).toHaveBeenCalledWith({
+      windowId: 9,
+    })
+    expect(browserWithSidePanel.sidePanel.close).not.toHaveBeenCalled()
+  })
+
+  it("toggles the side panel closed when the window is marked open by the side panel event", async () => {
+    const browserWithSidePanel = browser as typeof browser & {
+      sidePanel: {
+        open: ReturnType<typeof vi.fn>
+        close: ReturnType<typeof vi.fn>
+        onOpened: {
+          addListener: ReturnType<typeof vi.fn>
+        }
+      }
+    }
+    const { setUpSidePanelBehavior, toggleSidePanelInWindow } = await import("../sidepanel")
+
+    await setUpSidePanelBehavior()
+    const handleOpened = browserWithSidePanel.sidePanel.onOpened.addListener.mock.calls[0]?.[0] as ((info: { windowId: number }) => void) | undefined
+    handleOpened?.({ windowId: 9 })
+
+    await expect(toggleSidePanelInWindow(9)).resolves.toBe(false)
+
+    expect(browserWithSidePanel.sidePanel.close).toHaveBeenCalledWith({
+      windowId: 9,
+    })
+    expect(browserWithSidePanel.sidePanel.open).not.toHaveBeenCalled()
+  })
+
   it("no-ops when the browser does not expose sidePanel", async () => {
     Reflect.deleteProperty(browser as typeof browser & { sidePanel?: unknown }, "sidePanel")
-    const { setUpSidePanelBehavior, openSidePanelInActiveWindow } = await import("../sidepanel")
+    const { setUpSidePanelBehavior, openSidePanelInActiveWindow, toggleSidePanelInActiveWindow } = await import("../sidepanel")
 
     await expect(setUpSidePanelBehavior()).resolves.toBeUndefined()
     await expect(openSidePanelInActiveWindow()).resolves.toBe(false)
+    await expect(toggleSidePanelInActiveWindow()).resolves.toBe(false)
   })
 })
