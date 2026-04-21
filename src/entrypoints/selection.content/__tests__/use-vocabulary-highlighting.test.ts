@@ -93,6 +93,18 @@ function markVocabularyItem(item: VocabularyItem, html: string) {
   })
 }
 
+function selectText(node: Node, startOffset = 0, endOffset?: number) {
+  const textLength = node.textContent?.length ?? 0
+  const range = document.createRange()
+  range.setStart(node, startOffset)
+  range.setEnd(node, endOffset ?? textLength)
+
+  const selection = window.getSelection()
+  selection?.removeAllRanges()
+  selection?.addRange(range)
+  document.dispatchEvent(new Event("selectionchange"))
+}
+
 function VocabularyHighlightingHarness() {
   const { hoverPreview } = useVocabularyHighlighting()
   return hoverPreview ? createElement("div", { "data-testid": "hover-preview-probe" }) : null
@@ -257,6 +269,72 @@ describe("shouldHighlightAcrossElements", () => {
       expect(highlight?.textContent).toBe("Integration")
       expect(highlight).toHaveClass(NOTRANSLATE_CLASS)
     })
+  })
+
+  it("does not select the whole highlight when it is clicked", async () => {
+    const item = createVocabularyItem({
+      sourceText: "integration",
+      normalizedText: "integration",
+      kind: "word",
+      wordCount: 1,
+    })
+
+    getVocabularyItemsMock.mockResolvedValue([item])
+    document.body.innerHTML = `
+      <main>
+        <p data-read-frog-paragraph="">Integration is working.</p>
+      </main>
+    `
+
+    const container = document.createElement("div")
+    document.body.append(container)
+    render(createElement(VocabularyHighlightingHarness), { container })
+
+    const highlight = await waitFor(() => {
+      const node = document.querySelector("p mark") as HTMLElement | null
+      expect(node).not.toBeNull()
+      return node as HTMLElement
+    })
+
+    window.getSelection()?.removeAllRanges()
+    fireEvent.click(highlight)
+
+    expect(window.getSelection()?.toString()).toBe("")
+  })
+
+  it("clears the active page selection before applying highlights", async () => {
+    const item = createVocabularyItem({
+      sourceText: "integration",
+      normalizedText: "integration",
+      kind: "word",
+      wordCount: 1,
+    })
+
+    getVocabularyItemsMock.mockResolvedValue([item])
+    document.body.innerHTML = `
+      <main>
+        <p data-read-frog-paragraph="">Integration is working.</p>
+      </main>
+    `
+
+    const paragraphText = document.querySelector("p")?.firstChild
+    if (!(paragraphText instanceof Text)) {
+      throw new TypeError("Paragraph text node is missing")
+    }
+
+    selectText(paragraphText, 0, "Integration".length)
+
+    const container = document.createElement("div")
+    document.body.append(container)
+    render(createElement(VocabularyHighlightingHarness), { container })
+
+    await waitFor(() => {
+      expect(getVocabularyItemsMock).toHaveBeenCalledTimes(1)
+      const highlight = document.querySelector("p mark")
+      expect(highlight?.textContent).toBe("Integration")
+    })
+
+    expect(window.getSelection()?.toString()).toBe("")
   })
 
   it("highlights inflected word-family matches even when the saved source text differs", async () => {

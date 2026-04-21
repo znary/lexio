@@ -149,6 +149,15 @@ function getHighlightElement(target: EventTarget | null) {
   return baseElement?.closest(`mark.${VOCABULARY_HIGHLIGHT_CLASS_NAME}[${VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE}]`) as HTMLElement | null
 }
 
+function clearActiveSelection() {
+  const selection = window.getSelection()
+  if (!selection || selection.toString().trim() === "") {
+    return
+  }
+
+  selection.removeAllRanges()
+}
+
 export function useVocabularyHighlighting(): VocabularyHighlightingState {
   const vocabulary = useAtomValue(configFieldsAtomMap.vocabulary)
   const [hoverPreview, setHoverPreview] = useState<VocabularyHoverPreview | null>(null)
@@ -336,6 +345,8 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
       isApplyingHighlights = true
 
       try {
+        clearActiveSelection()
+
         const [{ default: Mark }, items] = await Promise.all([
           import("mark.js"),
           getVocabularyItems(),
@@ -370,31 +381,6 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
       finally {
         isApplyingHighlights = false
       }
-    }
-
-    const handleHighlightClick = (event: MouseEvent) => {
-      const target = getHighlightElement(event.target)
-      if (!target) {
-        return
-      }
-
-      event.preventDefault()
-      event.stopPropagation()
-
-      const range = document.createRange()
-      range.selectNodeContents(target)
-
-      const selection = window.getSelection()
-      selection?.removeAllRanges()
-      selection?.addRange(range)
-
-      document.dispatchEvent(new MouseEvent("mouseup", {
-        bubbles: true,
-        cancelable: true,
-        clientX: event.clientX,
-        clientY: event.clientY,
-        view: window,
-      }))
     }
 
     const handlePointerMove = (event: PointerEvent) => {
@@ -455,7 +441,6 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
       scheduleHighlight(0)
     }
 
-    document.addEventListener("click", handleHighlightClick, true)
     document.addEventListener("pointerover", handlePointerOver, true)
     document.addEventListener("pointermove", handlePointerMove, true)
     document.addEventListener("pointerleave", handlePointerLeave, true)
@@ -474,7 +459,6 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
         window.clearTimeout(rehighlightTimer)
       }
       observer?.disconnect()
-      document.removeEventListener("click", handleHighlightClick, true)
       document.removeEventListener("pointerover", handlePointerOver, true)
       document.removeEventListener("pointermove", handlePointerMove, true)
       document.removeEventListener("pointerleave", handlePointerLeave, true)
