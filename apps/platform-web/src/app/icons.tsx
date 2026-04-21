@@ -68,6 +68,31 @@ export function KeyboardIcon(props: IconProps) {
   )
 }
 
+export function RestartIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M8.4 8.6A5.8 5.8 0 1 1 6 13.2" />
+      <path d="M8.6 5.8v3.5H5.1" />
+    </BaseIcon>
+  )
+}
+
+export function TuningIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M4.5 6h5" />
+      <path d="M12.5 6h7" />
+      <path d="M8.2 4v4" />
+      <path d="M4.5 12h9" />
+      <path d="M16.8 10v4" />
+      <path d="M18.8 12h.7" />
+      <path d="M4.5 18h3" />
+      <path d="M10.5 18h9" />
+      <path d="M8.8 16v4" />
+    </BaseIcon>
+  )
+}
+
 export function SpeakerIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>
@@ -105,6 +130,47 @@ export function BookIcon(props: IconProps) {
       <path d="M6.2 5.5h9.2a2.1 2.1 0 0 1 2.1 2.1v10.9a16.7 16.7 0 0 0-6-1.2 14.3 14.3 0 0 0-5.3 1.1V7.2a1.7 1.7 0 0 1 1.7-1.7Z" />
       <path d="M8.5 8.8h5.8" />
       <path d="M8.5 11.6h5.8" />
+    </BaseIcon>
+  )
+}
+
+export function ClockIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 7.8v4.6l2.9 1.7" />
+    </BaseIcon>
+  )
+}
+
+export function SpeedIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M5.5 16.5a7.5 7.5 0 1 1 13 0" />
+      <path d="M12 12l3.2-2" />
+      <path d="M8.4 17.4h7.2" />
+    </BaseIcon>
+  )
+}
+
+export function CheckCircleIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="m8.8 12 2.2 2.2 4.2-4.4" />
+    </BaseIcon>
+  )
+}
+
+export function TargetIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <circle cx="12" cy="12" r="7.5" />
+      <circle cx="12" cy="12" r="3.3" />
+      <path d="M12 4.5V2.8" />
+      <path d="M12 21.2v-1.7" />
+      <path d="M19.5 12h1.7" />
+      <path d="M2.8 12h1.7" />
     </BaseIcon>
   )
 }

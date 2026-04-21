@@ -14,6 +14,8 @@ export interface VocabularyItem {
   partOfSpeech?: string
   definition?: string
   difficulty?: string
+  lemma?: string
+  matchTerms?: string[]
   sourceLang: string
   targetLang: string
   kind: "word" | "phrase"
@@ -49,6 +51,8 @@ function isVocabularyItem(value: unknown): value is VocabularyItem {
     && typeof candidate.sourceText === "string"
     && typeof candidate.normalizedText === "string"
     && typeof candidate.translatedText === "string"
+    && (candidate.lemma == null || typeof candidate.lemma === "string")
+    && (candidate.matchTerms == null || (Array.isArray(candidate.matchTerms) && candidate.matchTerms.every(term => typeof term === "string")))
     && typeof candidate.sourceLang === "string"
     && typeof candidate.targetLang === "string"
     && (candidate.kind === "word" || candidate.kind === "phrase")
@@ -58,7 +62,7 @@ function isVocabularyItem(value: unknown): value is VocabularyItem {
     && typeof candidate.hitCount === "number"
     && typeof candidate.updatedAt === "number"
     && (candidate.deletedAt === null || typeof candidate.deletedAt === "number")
-    && (candidate.contextEntries == null || candidate.contextEntries.every(isVocabularyContextEntry))
+    && (candidate.contextEntries == null || (Array.isArray(candidate.contextEntries) && candidate.contextEntries.every(isVocabularyContextEntry)))
   )
 }
 

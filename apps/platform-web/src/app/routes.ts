@@ -1,4 +1,5 @@
 const TRAILING_SLASHES_RE = /\/+$/
+const PRACTICE_ITEM_QUERY_PARAM = "item"
 
 function normalizePath(path: string | undefined, fallback: string): string {
   const candidate = (path || fallback).trim()
@@ -26,4 +27,21 @@ export const APP_ROUTES = {
 
 export function normalizePathname(pathname: string): string {
   return normalizePath(pathname, APP_ROUTES.home)
+}
+
+export function getPracticeHref(): string {
+  return APP_ROUTES.practice
+}
+
+export function getPracticeItemHref(itemId: string): string {
+  const normalizedItemId = itemId.trim()
+  if (!normalizedItemId) {
+    return getPracticeHref()
+  }
+
+  const searchParams = new URLSearchParams({
+    [PRACTICE_ITEM_QUERY_PARAM]: normalizedItemId,
+  })
+
+  return `${APP_ROUTES.practice}?${searchParams.toString()}`
 }

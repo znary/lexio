@@ -62,3 +62,5 @@ tmp
 reference/
 
 !docs/specs/2026-04-17-translation-observability.md
+
+.superpowers/

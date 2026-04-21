@@ -112,6 +112,7 @@ function SiteFooter() {
 export default function App() {
   const pathname = normalizePathname(window.location.pathname)
   const page = resolvePage(pathname)
+  const isPracticePage = pathname === APP_ROUTES.practice
 
   if (page.layout === "standalone") {
     return (
@@ -126,8 +127,10 @@ export default function App() {
     <div className="app-shell">
       <PlatformAuthBridge />
       <SiteHeader pathname={pathname} variant={page.headerVariant} />
-      <main className="site-main">{page.content}</main>
-      <SiteFooter />
+      <main className={isPracticePage ? "site-main site-main--practice" : "site-main"}>
+        {page.content}
+      </main>
+      {isPracticePage ? null : <SiteFooter />}
     </div>
   )
 }

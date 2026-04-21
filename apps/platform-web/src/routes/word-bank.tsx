@@ -9,7 +9,7 @@ import {
   SpeakerIcon,
 } from "../app/icons"
 import { getPlatformVocabularyItems } from "../app/platform-api"
-import { APP_ROUTES } from "../app/routes"
+import { APP_ROUTES, getPracticeHref, getPracticeItemHref } from "../app/routes"
 
 const WWW_PREFIX_RE = /^www\./
 
@@ -177,6 +177,8 @@ export function WordBankPage() {
           title: "Your Word Bank is empty",
           description: "Save a word from the extension first, then refresh this page to review it here.",
         }
+  const practiceHref = getPracticeHref()
+  const selectedPracticeHref = selectedItem ? getPracticeItemHref(selectedItem.id) : practiceHref
 
   return (
     <div className="word-bank-page">
@@ -202,7 +204,7 @@ export function WordBankPage() {
             <ChevronDownIcon className="toolbar-chevron" />
           </button>
 
-          <a className="primary-button" href={APP_ROUTES.practice}>
+          <a className="primary-button" href={practiceHref}>
             <PracticeSparkIcon className="toolbar-practice-icon" />
             <span>Start Practice</span>
           </a>
@@ -268,7 +270,7 @@ export function WordBankPage() {
                     </div>
 
                     <div className="detail-actions">
-                      <a className="primary-button" href={APP_ROUTES.practice}>
+                      <a className="primary-button" href={selectedPracticeHref}>
                         <PlayTriangleIcon className="detail-play-icon" />
                         <span>Practice Now</span>
                       </a>
