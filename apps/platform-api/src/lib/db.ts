@@ -4,7 +4,12 @@ import { forwardChatCompletions } from "./ai"
 import { getClerkClient } from "./auth"
 import { buildEntitlements, isPlatformChatWebFetchEnabled } from "./env"
 import { HttpError, withCors } from "./http"
-import { deserializeVocabularyItem, serializeVocabularyItem } from "./vocabulary"
+import {
+  buildVocabularyContextSentenceRows,
+  deserializeVocabularyItem,
+  mergeVocabularyContextSentenceRows,
+  serializeVocabularyItem,
+} from "./vocabulary"
 
 export interface UserRecord {
   id: string
@@ -513,6 +518,7 @@ export async function pullSyncData(env: Env, userId: string): Promise<SyncPayloa
       id,
       source_text,
       normalized_text,
+      context_sentence,
       lemma,
       match_terms_json,
       translated_text,
@@ -534,6 +540,19 @@ export async function pullSyncData(env: Env, userId: string): Promise<SyncPayloa
     WHERE user_id = ?1
     ORDER BY updated_at DESC
   `).bind(userId).all()
+  const vocabularyContextSentenceRows = await env.DB.prepare(`
+    SELECT
+      vocabulary_item_context_sentences.vocabulary_item_id,
+      vocabulary_item_context_sentences.sentence,
+      vocabulary_item_context_sentences.created_at,
+      vocabulary_item_context_sentences.last_seen_at
+    FROM vocabulary_item_context_sentences
+    INNER JOIN vocabulary_items
+      ON vocabulary_items.id = vocabulary_item_context_sentences.vocabulary_item_id
+    WHERE vocabulary_items.user_id = ?1
+    ORDER BY vocabulary_item_context_sentences.last_seen_at DESC,
+             vocabulary_item_context_sentences.created_at DESC
+  `).bind(userId).all()
 
   const now = nowIso()
   await env.DB.prepare(`
@@ -547,7 +566,10 @@ export async function pullSyncData(env: Env, userId: string): Promise<SyncPayloa
 
   return {
     settings: settingsRow?.settings_json ? JSON.parse(settingsRow.settings_json) as Record<string, unknown> : null,
-    vocabularyItems: (vocabularyRows.results ?? []).map(row => deserializeVocabularyItem(row as Parameters<typeof deserializeVocabularyItem>[0])),
+    vocabularyItems: mergeVocabularyContextSentenceRows(
+      (vocabularyRows.results ?? []).map(row => deserializeVocabularyItem(row as Parameters<typeof deserializeVocabularyItem>[0])),
+      (vocabularyContextSentenceRows.results ?? []) as Parameters<typeof mergeVocabularyContextSentenceRows>[1],
+    ),
   }
 }
 
@@ -564,39 +586,67 @@ export async function pushSyncData(env: Env, userId: string, payload: SyncPayloa
   `).bind(userId, JSON.stringify(payload.settings ?? {}, null, 2), timestamp),
     ...(payload.vocabularyItems
       ? [
-          env.DB.prepare("DELETE FROM vocabulary_items WHERE user_id = ?1").bind(userId),
-          ...payload.vocabularyItems.map((item) => {
-            const row = serializeVocabularyItem(item)
-            return env.DB.prepare(`
-              INSERT INTO vocabulary_items (
-                id, user_id, source_text, normalized_text, lemma, match_terms_json, translated_text,
-                phonetic, part_of_speech, definition, difficulty, source_lang, target_lang, kind,
-                word_count, created_at, last_seen_at, hit_count, updated_at, deleted_at, mastered_at
-              )
-              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
-            `).bind(
-              typeof item.id === "string" ? item.id : createId("voc"),
-              userId,
-              row.source_text,
-              row.normalized_text,
-              row.lemma,
-              row.match_terms_json,
-              row.translated_text,
-              row.phonetic,
-              row.part_of_speech,
-              row.definition,
-              row.difficulty,
-              row.source_lang,
-              row.target_lang,
-              row.kind,
-              row.word_count,
-              row.created_at,
-              row.last_seen_at,
-              row.hit_count,
-              row.updated_at,
-              row.deleted_at,
-              row.mastered_at,
+          env.DB.prepare(`
+            DELETE FROM vocabulary_item_context_sentences
+            WHERE vocabulary_item_id IN (
+              SELECT id
+              FROM vocabulary_items
+              WHERE user_id = ?1
             )
+          `).bind(userId),
+          env.DB.prepare("DELETE FROM vocabulary_items WHERE user_id = ?1").bind(userId),
+          ...payload.vocabularyItems.flatMap((item) => {
+            const row = serializeVocabularyItem(item)
+            const itemId = row.id
+            const contextSentenceRows = buildVocabularyContextSentenceRows(itemId, item, row.updated_at)
+
+            return [
+              env.DB.prepare(`
+                INSERT INTO vocabulary_items (
+                  id, user_id, source_text, normalized_text, lemma, match_terms_json, translated_text,
+                  phonetic, part_of_speech, definition, difficulty, source_lang, target_lang, kind,
+                  word_count, created_at, last_seen_at, hit_count, updated_at, deleted_at, mastered_at
+                )
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
+              `).bind(
+                itemId,
+                userId,
+                row.source_text,
+                row.normalized_text,
+                row.lemma,
+                row.match_terms_json,
+                row.translated_text,
+                row.phonetic,
+                row.part_of_speech,
+                row.definition,
+                row.difficulty,
+                row.source_lang,
+                row.target_lang,
+                row.kind,
+                row.word_count,
+                row.created_at,
+                row.last_seen_at,
+                row.hit_count,
+                row.updated_at,
+                row.deleted_at,
+                row.mastered_at,
+              ),
+              ...contextSentenceRows.map(contextRow =>
+                env.DB.prepare(`
+                  INSERT INTO vocabulary_item_context_sentences (
+                    vocabulary_item_id,
+                    sentence,
+                    created_at,
+                    last_seen_at
+                  )
+                  VALUES (?1, ?2, ?3, ?4)
+                `).bind(
+                  contextRow.vocabulary_item_id,
+                  contextRow.sentence,
+                  contextRow.created_at,
+                  contextRow.last_seen_at,
+                )),
+            ]
           }),
         ]
       : []),

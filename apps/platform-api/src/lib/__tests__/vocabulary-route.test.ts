@@ -16,7 +16,24 @@ function createEnv(results: unknown[] = []): Env {
         bind: (...args: unknown[]) => ({
           sql,
           args,
-          all: vi.fn().mockResolvedValue({ results }),
+          all: vi.fn().mockResolvedValue({
+            results: sql.includes("FROM vocabulary_item_context_sentences")
+              ? [
+                  {
+                    vocabulary_item_id: "voc_recent",
+                    sentence: "The world keeps changing.",
+                    created_at: 10,
+                    last_seen_at: 10,
+                  },
+                  {
+                    vocabulary_item_id: "voc_older",
+                    sentence: "I said hello there.",
+                    created_at: 9,
+                    last_seen_at: 9,
+                  },
+                ]
+              : results,
+          }),
         }),
       })),
     } as unknown as D1Database,
@@ -59,6 +76,7 @@ describe("vocabulary routes", () => {
         id: "voc_recent",
         source_text: "world",
         normalized_text: "world",
+        context_sentence: null,
         lemma: null,
         match_terms_json: "[]",
         translated_text: "世界",
@@ -81,6 +99,7 @@ describe("vocabulary routes", () => {
         id: "voc_older",
         source_text: "hello",
         normalized_text: "hello",
+        context_sentence: null,
         lemma: null,
         match_terms_json: "[]",
         translated_text: "你好",
@@ -110,6 +129,10 @@ describe("vocabulary routes", () => {
 
     const prepareMock = env.DB.prepare as unknown as ReturnType<typeof vi.fn>
     expect(prepareMock).toHaveBeenCalledWith(expect.stringContaining("ORDER BY last_seen_at DESC, updated_at DESC"))
+    expect(prepareMock).toHaveBeenCalledWith(expect.stringContaining("FROM vocabulary_item_context_sentences"))
     expect(response.status).toBe(200)
+    const responseText = await response.text()
+    expect(responseText).toContain("\"contextSentences\": [")
+    expect(responseText).toContain("\"The world keeps changing.\"")
   })
 })

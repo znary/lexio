@@ -21,6 +21,7 @@ const GUEST_VOCABULARY_SCOPE_KEY = "guest"
 const GUEST_VOCABULARY_STORAGE_KEY = "vocabularyItems:guest"
 const GUEST_VOCABULARY_META_STORAGE_KEY = "vocabularyMeta:guest"
 const VOCABULARY_REMOTE_CHECK_TTL_MS = 5 * 60 * 1000
+const MAX_VOCABULARY_CONTEXT_SENTENCES = 10
 
 const vocabularySyncStateSchema = z.object({
   checkedAt: z.number().int().nonnegative(),
@@ -75,7 +76,49 @@ function sortVocabularyItems(items: VocabularyItem[]): VocabularyItem[] {
   })
 }
 
+function normalizeVocabularyContextSentence(contextSentence: string | null | undefined): string | null {
+  const normalizedSentence = contextSentence?.trim()
+  return normalizedSentence || null
+}
+
+function normalizeVocabularyContextSentences(contextSentences: Array<string | null | undefined>): string[] {
+  const uniqueSentences: string[] = []
+  const seenSentences = new Set<string>()
+
+  for (const sentence of contextSentences) {
+    const normalizedSentence = normalizeVocabularyContextSentence(sentence)
+    if (!normalizedSentence || seenSentences.has(normalizedSentence)) {
+      continue
+    }
+
+    seenSentences.add(normalizedSentence)
+    uniqueSentences.push(normalizedSentence)
+
+    if (uniqueSentences.length >= MAX_VOCABULARY_CONTEXT_SENTENCES) {
+      break
+    }
+  }
+
+  return uniqueSentences
+}
+
+function resolveVocabularyContextSentences(
+  item: Pick<VocabularyItem, "contextSentence" | "contextSentences">,
+  nextContextSentence?: string | null,
+): string[] {
+  return normalizeVocabularyContextSentences([
+    ...(nextContextSentence ? [nextContextSentence] : []),
+    ...(item.contextSentences ?? []),
+    item.contextSentence,
+  ])
+}
+
 function hydrateVocabularyItem(item: VocabularyItem): VocabularyItem {
+  const {
+    contextSentence,
+    contextSentences,
+    ...restItem
+  } = item
   const normalizedSourceText = normalizeVocabularyText(item.sourceText)
   const preferredLemma = item.lemma
     ?? (item.normalizedText && item.normalizedText !== normalizedSourceText ? item.normalizedText : null)
@@ -86,9 +129,14 @@ function hydrateVocabularyItem(item: VocabularyItem): VocabularyItem {
     ...metadata.matchTerms,
     ...(item.matchTerms ?? []).map(term => normalizeVocabularyText(term)).filter(Boolean),
   ])
+  const nextContextSentences = resolveVocabularyContextSentences({
+    contextSentence,
+    contextSentences,
+  })
 
   return {
-    ...item,
+    ...restItem,
+    ...(nextContextSentences.length > 0 ? { contextSentences: nextContextSentences } : {}),
     ...(metadata.lemma ? { lemma: item.lemma ?? metadata.lemma } : {}),
     ...(matchTerms.size > 0 ? { matchTerms: [...matchTerms] } : {}),
     normalizedText: metadata.normalizedText || item.normalizedText,
@@ -448,6 +496,7 @@ function restoreOrUpdateExistingItem(
   item: VocabularyItem,
   sourceText: string,
   translatedText: string,
+  contextSentence: string | null | undefined,
   sourceLang: string,
   targetLang: string,
   wordCount: number,
@@ -456,10 +505,12 @@ function restoreOrUpdateExistingItem(
   const metadata = buildVocabularyTermMetadata(sourceText, {
     preferredLemma: item.lemma,
   })
+  const nextContextSentences = resolveVocabularyContextSentences(item, contextSentence)
 
   return {
     ...item,
     sourceText: sourceText.trim(),
+    ...(nextContextSentences.length > 0 ? { contextSentences: nextContextSentences } : {}),
     ...(metadata.lemma ? { lemma: metadata.lemma } : {}),
     ...(metadata.matchTerms.length > 0 ? { matchTerms: metadata.matchTerms } : {}),
     translatedText: translatedText.trim(),
@@ -483,16 +534,22 @@ function classifyVocabularyKind(wordCount: number): "word" | "phrase" {
 function buildVocabularyItem(
   sourceText: string,
   translatedText: string,
+  contextSentence: string | null | undefined,
   sourceLang: string,
   targetLang: string,
   wordCount: number,
   now: number,
 ): VocabularyItem {
   const metadata = buildVocabularyTermMetadata(sourceText)
+  const nextContextSentences = resolveVocabularyContextSentences({
+    contextSentence: undefined,
+    contextSentences: [],
+  }, contextSentence)
 
   return {
     id: globalThis.crypto.randomUUID(),
     sourceText: sourceText.trim(),
+    ...(nextContextSentences.length > 0 ? { contextSentences: nextContextSentences } : {}),
     ...(metadata.lemma ? { lemma: metadata.lemma } : {}),
     ...(metadata.matchTerms.length > 0 ? { matchTerms: metadata.matchTerms } : {}),
     normalizedText: metadata.normalizedText,
@@ -624,12 +681,14 @@ export async function findVocabularyItemForSelection({
 export async function saveTranslatedSelectionToVocabulary({
   sourceText,
   translatedText,
+  contextSentence,
   sourceLang,
   targetLang,
   settings,
 }: {
   sourceText: string
   translatedText: string
+  contextSentence?: string
   sourceLang: string
   targetLang: string
   settings: VocabularySettings
@@ -652,6 +711,7 @@ export async function saveTranslatedSelectionToVocabulary({
       existingItem,
       sourceText,
       translatedText,
+      contextSentence,
       sourceLang,
       targetLang,
       wordCount,
@@ -674,7 +734,7 @@ export async function saveTranslatedSelectionToVocabulary({
     return updatedItem
   }
 
-  const newItem = buildVocabularyItem(sourceText, translatedText, sourceLang, targetLang, wordCount, now)
+  const newItem = buildVocabularyItem(sourceText, translatedText, contextSentence, sourceLang, targetLang, wordCount, now)
   const snapshot = beginVocabularyMutation(scope)
   const nextItems = upsertVocabularyItem(currentItems, newItem)
 

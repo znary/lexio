@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest"
 import {
   buildContextSnapshot,
   createRangeSnapshot,
+  extractSelectionContextSentence,
   readSelectionSnapshot,
   truncateContextTextForCustomAction,
 } from "../utils"
@@ -123,6 +124,22 @@ describe("buildContextSnapshot", () => {
       text: "Alpha Beta gamma",
       paragraphs: ["Alpha Beta gamma"],
     })
+  })
+})
+
+describe("extractSelectionContextSentence", () => {
+  it("returns the sentence that contains the current selection", () => {
+    expect(extractSelectionContextSentence("keyword", {
+      text: "Before keyword after. Another sentence follows.",
+      paragraphs: ["Before keyword after. Another sentence follows."],
+    })).toBe("Before keyword after.")
+  })
+
+  it("falls back to the first captured paragraph when sentence matching fails", () => {
+    expect(extractSelectionContextSentence("missing", {
+      text: "First paragraph.\n\nSecond paragraph.",
+      paragraphs: ["First paragraph.", "Second paragraph."],
+    })).toBe("First paragraph.")
   })
 })
 

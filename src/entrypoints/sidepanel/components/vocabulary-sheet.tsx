@@ -90,6 +90,7 @@ export function VocabularySheet({
       || item.lemma?.toLowerCase().includes(normalizedQuery)
       || item.partOfSpeech?.toLowerCase().includes(normalizedQuery)
       || item.definition?.toLowerCase().includes(normalizedQuery)
+      || item.contextSentences?.some(sentence => sentence.toLowerCase().includes(normalizedQuery))
       || item.translatedText.toLowerCase().includes(normalizedQuery),
     )
   }, [items, search])
@@ -364,6 +365,20 @@ export function VocabularySheet({
                                 ? (
                                     <div className="mt-2 break-words text-xs text-muted-foreground">
                                       {item.definition}
+                                    </div>
+                                  )
+                                : null}
+
+                              {item.contextSentences?.length
+                                ? (
+                                    <div className="mt-2 space-y-1 text-xs italic text-muted-foreground">
+                                      {item.contextSentences.map(sentence => (
+                                        <div key={`${item.id}-${sentence}`} className="break-words">
+                                          "
+                                          {sentence}
+                                          "
+                                        </div>
+                                      ))}
                                     </div>
                                   )
                                 : null}

@@ -81,6 +81,7 @@ describe("vocabulary service", () => {
     const savePromise = saveTranslatedSelectionToVocabulary({
       sourceText: "hello",
       translatedText: "你好",
+      contextSentence: "We said hello before the meeting.",
       sourceLang: "en",
       targetLang: "zh-CN",
       settings: {
@@ -96,6 +97,7 @@ describe("vocabulary service", () => {
         expect.objectContaining({
           sourceText: "hello",
           translatedText: "你好",
+          contextSentences: ["We said hello before the meeting."],
           normalizedText: "hello",
         }),
       ])
@@ -111,6 +113,7 @@ describe("vocabulary service", () => {
     await expect(savePromise).resolves.toEqual(expect.objectContaining({
       sourceText: "hello",
       translatedText: "你好",
+      contextSentences: ["We said hello before the meeting."],
     }))
 
     document.removeEventListener(VOCABULARY_CHANGED_EVENT, changedListener)
@@ -122,6 +125,7 @@ describe("vocabulary service", () => {
         id: "voc_existing",
         sourceText: "hello",
         normalizedText: "hello",
+        contextSentences: ["We said hello before the meeting."],
         translatedText: "你好",
         sourceLang: "en",
         targetLang: "zh-CN",
@@ -139,6 +143,7 @@ describe("vocabulary service", () => {
     const savedItem = await saveTranslatedSelectionToVocabulary({
       sourceText: "hello",
       translatedText: "您好",
+      contextSentence: "I still want to say hello politely.",
       sourceLang: "en",
       targetLang: "zh-CN",
       settings: {
@@ -152,14 +157,71 @@ describe("vocabulary service", () => {
     expect(apiUpdateVocabularyItemMock).toHaveBeenCalledWith(expect.objectContaining({
       id: "voc_existing",
       translatedText: "您好",
+      contextSentences: [
+        "I still want to say hello politely.",
+        "We said hello before the meeting.",
+      ],
       hitCount: 4,
     }))
     expect(apiCreateVocabularyItemMock).not.toHaveBeenCalled()
     expect(savedItem).toEqual(expect.objectContaining({
       id: "voc_existing",
       translatedText: "您好",
+      contextSentences: [
+        "I still want to say hello politely.",
+        "We said hello before the meeting.",
+      ],
       hitCount: 4,
     }))
+  })
+
+  it("keeps only the 10 most recent context sentences for the same item", async () => {
+    storageAdapterGetMock.mockResolvedValue([
+      {
+        id: "voc_existing",
+        sourceText: "hello",
+        normalizedText: "hello",
+        contextSentences: Array.from({ length: 10 }, (_, index) => `Old sentence ${index + 1}`),
+        translatedText: "你好",
+        sourceLang: "en",
+        targetLang: "zh-CN",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 1,
+        lastSeenAt: 2,
+        hitCount: 3,
+        updatedAt: 4,
+        deletedAt: null,
+      },
+    ])
+
+    const { saveTranslatedSelectionToVocabulary } = await import("../service")
+    const savedItem = await saveTranslatedSelectionToVocabulary({
+      sourceText: "hello",
+      translatedText: "您好",
+      contextSentence: "Newest sentence",
+      sourceLang: "en",
+      targetLang: "zh-CN",
+      settings: {
+        autoSave: true,
+        highlightEnabled: true,
+        maxPhraseWords: 3,
+        highlightColor: "#fde68a",
+      },
+    })
+
+    expect(savedItem?.contextSentences).toEqual([
+      "Newest sentence",
+      "Old sentence 1",
+      "Old sentence 2",
+      "Old sentence 3",
+      "Old sentence 4",
+      "Old sentence 5",
+      "Old sentence 6",
+      "Old sentence 7",
+      "Old sentence 8",
+      "Old sentence 9",
+    ])
   })
 
   it("moves a mastered item back to learning when the same selection is translated again", async () => {

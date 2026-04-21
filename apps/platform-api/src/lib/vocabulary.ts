@@ -1,9 +1,11 @@
 type VocabularyItemRecord = Record<string, unknown>
+const MAX_VOCABULARY_CONTEXT_SENTENCES = 10
 
 interface VocabularyRow {
   id: string
   source_text: string
   normalized_text: string
+  context_sentence?: string | null
   lemma: string | null
   match_terms_json: string
   translated_text: string
@@ -21,6 +23,13 @@ interface VocabularyRow {
   updated_at: number
   deleted_at: number | null
   mastered_at: number | null
+}
+
+interface VocabularyContextSentenceRow {
+  vocabulary_item_id: string
+  sentence: string
+  created_at: number
+  last_seen_at: number
 }
 
 function readString(item: VocabularyItemRecord, key: string, fallback = ""): string {
@@ -49,6 +58,30 @@ function readStringArray(item: VocabularyItemRecord, key: string): string[] {
     : []
 }
 
+function normalizeContextSentences(sentences: Array<string | null | undefined>): string[] {
+  const uniqueSentences: string[] = []
+  const seenSentences = new Set<string>()
+
+  for (const sentence of sentences) {
+    const normalizedSentence = typeof sentence === "string" && sentence.trim()
+      ? sentence.trim()
+      : null
+
+    if (!normalizedSentence || seenSentences.has(normalizedSentence)) {
+      continue
+    }
+
+    seenSentences.add(normalizedSentence)
+    uniqueSentences.push(normalizedSentence)
+
+    if (uniqueSentences.length >= MAX_VOCABULARY_CONTEXT_SENTENCES) {
+      break
+    }
+  }
+
+  return uniqueSentences
+}
+
 function parseMatchTerms(matchTermsJson: string): string[] {
   try {
     const value = JSON.parse(matchTermsJson) as unknown
@@ -61,14 +94,62 @@ function parseMatchTerms(matchTermsJson: string): string[] {
   }
 }
 
+export function readVocabularyContextSentences(item: VocabularyItemRecord): string[] {
+  return normalizeContextSentences([
+    ...readStringArray(item, "contextSentences"),
+    readOptionalString(item, "contextSentence"),
+  ])
+}
+
+export function buildVocabularyContextSentenceRows(
+  itemId: string,
+  item: VocabularyItemRecord,
+  baseTimestamp = Date.now(),
+): VocabularyContextSentenceRow[] {
+  return readVocabularyContextSentences(item).map((sentence, index) => ({
+    vocabulary_item_id: itemId,
+    sentence,
+    created_at: baseTimestamp - index,
+    last_seen_at: baseTimestamp - index,
+  }))
+}
+
+export function mergeVocabularyContextSentenceRows(
+  items: VocabularyItemRecord[],
+  rows: VocabularyContextSentenceRow[],
+): VocabularyItemRecord[] {
+  const groupedSentences = new Map<string, string[]>()
+
+  for (const row of rows) {
+    const currentSentences = groupedSentences.get(row.vocabulary_item_id) ?? []
+    currentSentences.push(row.sentence)
+    groupedSentences.set(row.vocabulary_item_id, currentSentences)
+  }
+
+  return items.map((item) => {
+    const itemId = typeof item.id === "string" ? item.id : ""
+    const mergedSentences = normalizeContextSentences([
+      ...(itemId ? (groupedSentences.get(itemId) ?? []) : []),
+      ...readVocabularyContextSentences(item),
+    ])
+
+    const { contextSentence: _legacyContextSentence, contextSentences: _currentContextSentences, ...restItem } = item
+
+    return mergedSentences.length > 0
+      ? { ...restItem, contextSentences: mergedSentences }
+      : restItem
+  })
+}
+
 export function serializeVocabularyItem(item: VocabularyItemRecord): VocabularyRow {
   const now = Date.now()
+  const itemId = readString(item, "id").trim() || crypto.randomUUID()
   const normalizedText = readString(item, "normalizedText")
   const sourceText = readString(item, "sourceText", normalizedText)
   const matchTerms = readStringArray(item, "matchTerms")
 
   return {
-    id: readString(item, "id", crypto.randomUUID()),
+    id: itemId,
     source_text: sourceText,
     normalized_text: normalizedText,
     lemma: readOptionalString(item, "lemma"),
@@ -92,10 +173,13 @@ export function serializeVocabularyItem(item: VocabularyItemRecord): VocabularyR
 }
 
 export function deserializeVocabularyItem(row: VocabularyRow): VocabularyItemRecord {
+  const contextSentences = normalizeContextSentences([row.context_sentence ?? null])
+
   return {
     id: row.id,
     sourceText: row.source_text,
     normalizedText: row.normalized_text,
+    ...(contextSentences.length > 0 ? { contextSentences } : {}),
     ...(row.lemma ? { lemma: row.lemma } : {}),
     ...(parseMatchTerms(row.match_terms_json).length > 0 ? { matchTerms: parseMatchTerms(row.match_terms_json) } : {}),
     translatedText: row.translated_text,

@@ -822,6 +822,41 @@ describe("selection toolbar requests", () => {
     expect(screen.queryByRole("alert")).toBeNull()
   })
 
+  it("saves the sentence that contains the selection into vocabulary", async () => {
+    translateTextCoreMock.mockResolvedValue("关键词")
+    getOrCreateWebPageContextMock.mockResolvedValue(null)
+
+    document.body.innerHTML = `
+      <p id="paragraph">
+        Before <span id="selection">keyword</span> after. Another sentence follows.
+      </p>
+    `
+
+    const selectionNode = document.getElementById("selection")?.firstChild
+    if (!(selectionNode instanceof Text)) {
+      throw new TypeError("Expected a text node for selection context sentence test")
+    }
+
+    const range = document.createRange()
+    range.setStart(selectionNode, 0)
+    range.setEnd(selectionNode, selectionNode.textContent?.length ?? 0)
+
+    const store = createStore()
+    store.set(configAtom, createStandardTranslateConfig())
+    setSelectionState(store, { range })
+    renderWithProviders(<TranslateButton />, store)
+
+    fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
+
+    await waitFor(() => {
+      expect(saveTranslatedSelectionToVocabularyMock).toHaveBeenCalledWith(expect.objectContaining({
+        sourceText: "keyword",
+        translatedText: "关键词",
+        contextSentence: "Before keyword after.",
+      }))
+    })
+  })
+
   it("continues into llm streaming after the popover closes while webpage context is still loading", async () => {
     const pendingContext = createDeferredPromise<{
       url: string

@@ -2,7 +2,55 @@ import type { SessionContext } from "../lib/auth"
 import type { Env } from "../lib/env"
 import { syncUserFromClerk } from "../lib/db"
 import { json, readJson } from "../lib/http"
-import { deserializeVocabularyItem, serializeVocabularyItem } from "../lib/vocabulary"
+import {
+  buildVocabularyContextSentenceRows,
+  deserializeVocabularyItem,
+  mergeVocabularyContextSentenceRows,
+  serializeVocabularyItem,
+} from "../lib/vocabulary"
+
+async function loadVocabularyContextSentenceRows(env: Env, userId: string) {
+  const rows = await env.DB.prepare(`
+    SELECT
+      vocabulary_item_context_sentences.vocabulary_item_id,
+      vocabulary_item_context_sentences.sentence,
+      vocabulary_item_context_sentences.created_at,
+      vocabulary_item_context_sentences.last_seen_at
+    FROM vocabulary_item_context_sentences
+    INNER JOIN vocabulary_items
+      ON vocabulary_items.id = vocabulary_item_context_sentences.vocabulary_item_id
+    WHERE vocabulary_items.user_id = ?1
+    ORDER BY vocabulary_item_context_sentences.last_seen_at DESC,
+             vocabulary_item_context_sentences.created_at DESC
+  `).bind(userId).all()
+
+  return (rows.results ?? []) as Parameters<typeof mergeVocabularyContextSentenceRows>[1]
+}
+
+async function replaceVocabularyContextSentences(env: Env, itemId: string, item: Record<string, unknown>, baseTimestamp: number) {
+  await env.DB.prepare(`
+    DELETE FROM vocabulary_item_context_sentences
+    WHERE vocabulary_item_id = ?1
+  `).bind(itemId).run()
+
+  const contextSentenceRows = buildVocabularyContextSentenceRows(itemId, item, baseTimestamp)
+  for (const row of contextSentenceRows) {
+    await env.DB.prepare(`
+      INSERT INTO vocabulary_item_context_sentences (
+        vocabulary_item_id,
+        sentence,
+        created_at,
+        last_seen_at
+      )
+      VALUES (?1, ?2, ?3, ?4)
+    `).bind(
+      row.vocabulary_item_id,
+      row.sentence,
+      row.created_at,
+      row.last_seen_at,
+    ).run()
+  }
+}
 
 export async function handleVocabularyList(_request: Request, env: Env, session: SessionContext) {
   const user = await syncUserFromClerk(env, session)
@@ -11,6 +59,7 @@ export async function handleVocabularyList(_request: Request, env: Env, session:
       id,
       source_text,
       normalized_text,
+      context_sentence,
       lemma,
       match_terms_json,
       translated_text,
@@ -34,8 +83,9 @@ export async function handleVocabularyList(_request: Request, env: Env, session:
   `).bind(user.id).all()
 
   const items = (rows.results ?? []).map(row => deserializeVocabularyItem(row as Parameters<typeof deserializeVocabularyItem>[0]))
+  const contextSentenceRows = await loadVocabularyContextSentenceRows(env, user.id)
 
-  return json({ items })
+  return json({ items: mergeVocabularyContextSentenceRows(items, contextSentenceRows) })
 }
 
 export async function handleVocabularyMeta(_request: Request, env: Env, session: SessionContext) {
@@ -89,6 +139,7 @@ export async function handleVocabularyCreate(request: Request, env: Env, session
     row.deleted_at,
     row.mastered_at,
   ).run()
+  await replaceVocabularyContextSentences(env, row.id, item, row.updated_at)
 
   return json({ ok: true, id: row.id })
 }
@@ -153,11 +204,18 @@ export async function handleVocabularyUpdate(request: Request, env: Env, session
     return json({ error: "not found" }, { status: 404 })
   }
 
+  await replaceVocabularyContextSentences(env, id, item, row.updated_at)
+
   return json({ ok: true })
 }
 
 export async function handleVocabularyDelete(request: Request, env: Env, session: SessionContext, itemId: string) {
   const user = await syncUserFromClerk(env, session)
+
+  await env.DB.prepare(`
+    DELETE FROM vocabulary_item_context_sentences
+    WHERE vocabulary_item_id = ?1
+  `).bind(itemId).run()
 
   const result = await env.DB.prepare(`
     DELETE FROM vocabulary_items
@@ -173,6 +231,15 @@ export async function handleVocabularyDelete(request: Request, env: Env, session
 
 export async function handleVocabularyClear(_request: Request, env: Env, session: SessionContext) {
   const user = await syncUserFromClerk(env, session)
+
+  await env.DB.prepare(`
+    DELETE FROM vocabulary_item_context_sentences
+    WHERE vocabulary_item_id IN (
+      SELECT id
+      FROM vocabulary_items
+      WHERE user_id = ?1
+    )
+  `).bind(user.id).run()
 
   await env.DB.prepare(`
     DELETE FROM vocabulary_items

@@ -13,6 +13,8 @@ export const vocabularyItemSchema = z.object({
   id: z.string().min(1),
   sourceText: z.string().min(1),
   normalizedText: z.string().min(1),
+  contextSentences: z.array(z.string().min(1)).optional(),
+  contextSentence: z.string().min(1).optional(),
   lemma: z.string().min(1).optional(),
   matchTerms: z.array(z.string().min(1)).optional(),
   translatedText: z.string().min(1),

@@ -48,6 +48,10 @@ vi.mock("@/hooks/use-vocabulary-items", () => ({
           sourceText: "hello",
           normalizedText: "hello",
           translatedText: "你好",
+          contextSentences: [
+            "We said hello before the meeting.",
+            "The second hello example is here.",
+          ],
           kind: "word",
           sourceLang: "en",
           targetLang: "zh-CN",
@@ -293,5 +297,12 @@ describe("vocabulary sheet", () => {
 
     expect(setVocabularyItemMasteredMock).toHaveBeenCalledTimes(1)
     expect(setVocabularyItemMasteredMock).toHaveBeenCalledWith("voc_delete_2", false)
+  })
+
+  it("shows the saved context sentence when an item has one", () => {
+    render(<VocabularySheet open onOpenChange={vi.fn()} />)
+
+    expect(screen.getByText("\"We said hello before the meeting.\"")).toBeInTheDocument()
+    expect(screen.getByText("\"The second hello example is here.\"")).toBeInTheDocument()
   })
 })

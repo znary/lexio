@@ -22,6 +22,7 @@ type ParagraphOwner = Element | ShadowRoot
 const ZERO_WIDTH_CHAR_REGEX = /\u200B/g
 const WHITESPACE_REGEX = /\s+/g
 const PARAGRAPH_SEPARATOR = "\n\n"
+const SENTENCE_BOUNDARY_REGEX = /(?<=[.!?。！？])\s+|\n+/u
 const PARAGRAPH_LIKE_TAGS = new Set([
   "P",
   "LI",
@@ -418,6 +419,55 @@ export function buildContextSnapshot(selection: SelectionSnapshot | null): Conte
     text: paragraphs.join(PARAGRAPH_SEPARATOR),
     paragraphs,
   }
+}
+
+function splitContextParagraphIntoSentences(paragraph: string): string[] {
+  if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
+    try {
+      const segmenter = new Intl.Segmenter(undefined, { granularity: "sentence" })
+      const segments = Array.from(
+        segmenter.segment(paragraph),
+        segment => normalizeParagraphText(segment.segment),
+      )
+        .filter(Boolean)
+
+      if (segments.length > 0) {
+        return segments
+      }
+    }
+    catch {
+      // Fall through to the regex fallback when sentence segmentation is unavailable.
+    }
+  }
+
+  return paragraph
+    .split(SENTENCE_BOUNDARY_REGEX)
+    .map(segment => normalizeParagraphText(segment))
+    .filter(Boolean)
+}
+
+export function extractSelectionContextSentence(
+  selectionText: string | null | undefined,
+  context: ContextSnapshot | null | undefined,
+): string | null {
+  const normalizedSelection = normalizeParagraphText(normalizeSelectedText(selectionText))
+  if (!normalizedSelection) {
+    return null
+  }
+
+  const paragraphs = (context?.paragraphs ?? [])
+    .map(paragraph => normalizeParagraphText(paragraph))
+    .filter(Boolean)
+
+  if (paragraphs.length === 0) {
+    return null
+  }
+
+  const matchingParagraph = paragraphs.find(paragraph => paragraph.includes(normalizedSelection)) ?? paragraphs[0]
+  const matchingSentence = splitContextParagraphIntoSentences(matchingParagraph)
+    .find(sentence => sentence.includes(normalizedSelection))
+
+  return matchingSentence ?? matchingParagraph
 }
 
 export function truncateContextTextForCustomAction(

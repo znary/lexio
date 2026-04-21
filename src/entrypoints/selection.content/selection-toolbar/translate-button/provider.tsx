@@ -41,6 +41,7 @@ import { shadowWrapper } from "../.."
 import { SelectionToolbarErrorAlert } from "../../components/selection-toolbar-error-alert"
 import { SelectionToolbarFooterContent } from "../../components/selection-toolbar-footer-content"
 import { SelectionToolbarTitleContent } from "../../components/selection-toolbar-title-content"
+import { extractSelectionContextSentence } from "../../utils"
 import {
   isSelectionToolbarVisibleAtom,
   selectionSessionAtom,
@@ -344,6 +345,7 @@ export function SelectionTranslationProvider({
   const { resolveContextMenuSelectionRequest } = useSelectionContextMenuRequestResolver(selectionSession)
   const selectionText = activeSession?.selectionSnapshot.text ?? null
   const paragraphsText = activeSession?.contextSnapshot.text ?? selectionText
+  const contextSentence = extractSelectionContextSentence(selectionText, activeSession?.contextSnapshot)
   const titleText = document.title || null
   const cleanedSelectionText = useMemo(
     () => prepareTranslationText(selectionText),
@@ -722,6 +724,7 @@ export function SelectionTranslationProvider({
           const savedItem = await saveTranslatedSelectionToVocabulary({
             sourceText: selectionText,
             translatedText: nextTranslatedText,
+            contextSentence,
             sourceLang: translateRequest.language.sourceCode,
             targetLang: translateRequest.language.targetCode,
             settings: vocabularySettings,
@@ -770,7 +773,7 @@ export function SelectionTranslationProvider({
         })
       }
     }
-  }, [resetTranslationState, selectionText, sourceSurface, translateRequest, updateTranslationResumeSnapshot, vocabularySettings])
+  }, [contextSentence, resetTranslationState, selectionText, sourceSurface, translateRequest, updateTranslationResumeSnapshot, vocabularySettings])
 
   const startTranslation = useEffectEvent((runId: number, options?: { forceRefresh?: boolean, translationRunKey: string }) => {
     void runTranslation(runId, options)
