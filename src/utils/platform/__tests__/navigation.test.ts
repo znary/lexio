@@ -44,11 +44,13 @@ describe("platform navigation", () => {
     buildPlatformWebsiteUrlMock.mockReturnValueOnce("https://example.com/extension-sync?extensionId=test-extension-id")
 
     const url = await openPlatformExtensionSyncTab()
+    const searchParams = buildPlatformWebsiteUrlMock.mock.calls[0][1] as URLSearchParams
 
     expect(buildPlatformWebsiteUrlMock).toHaveBeenCalledWith(
       "/extension-sync",
       expect.any(URLSearchParams),
     )
+    expect(searchParams.get("extensionId")).toBe("test-extension-id")
     expect(tabsCreateMock).toHaveBeenCalledWith({
       url: "https://example.com/extension-sync?extensionId=test-extension-id",
     })

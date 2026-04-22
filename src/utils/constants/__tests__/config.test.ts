@@ -38,4 +38,11 @@ describe("dEFAULT_CONFIG", () => {
 
     expect(DEFAULT_CONFIG.translate.translationNodeStyle.preset).toBe("weakened")
   })
+
+  it("blacklists the official website by default", async () => {
+    const { DEFAULT_CONFIG } = await import("../config")
+    const { OFFICIAL_SITE_HOSTNAMES } = await import("../url")
+
+    expect(DEFAULT_CONFIG.siteControl.blacklistPatterns).toEqual(OFFICIAL_SITE_HOSTNAMES)
+  })
 })

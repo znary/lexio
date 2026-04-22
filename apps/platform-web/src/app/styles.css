@@ -1864,6 +1864,7 @@ mark {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 16px;
+  align-items: center;
 }
 
 .permission-icon {
@@ -1882,7 +1883,7 @@ mark {
 
 .permission-item strong {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 0;
   font-family: "Manrope", sans-serif;
   font-size: 17px;
   font-weight: 700;

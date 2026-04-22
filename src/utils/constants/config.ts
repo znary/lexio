@@ -8,6 +8,7 @@ import { DEFAULT_BACKGROUND_OPACITY, DEFAULT_DISPLAY_MODE, DEFAULT_FONT_FAMILY, 
 import { DEFAULT_AUTO_TRANSLATE_SHORTCUT_KEY, DEFAULT_BATCH_CONFIG, DEFAULT_MIN_CHARACTERS_PER_NODE, DEFAULT_MIN_WORDS_PER_NODE, DEFAULT_PRELOAD_MARGIN, DEFAULT_PRELOAD_THRESHOLD, DEFAULT_REQUEST_CAPACITY, DEFAULT_REQUEST_RATE } from "./translate"
 import { TRANSLATION_NODE_STYLE_ON_INSTALLED } from "./translation-node-style"
 import { DEFAULT_TTS_CONFIG } from "./tts"
+import { OFFICIAL_SITE_HOSTNAMES } from "./url"
 import { DEFAULT_VOCABULARY_SETTINGS } from "./vocabulary"
 
 export const CONFIG_STORAGE_KEY = "config"
@@ -145,7 +146,7 @@ export const DEFAULT_CONFIG: Config = {
   },
   siteControl: {
     mode: "blacklist",
-    blacklistPatterns: [],
+    blacklistPatterns: OFFICIAL_SITE_HOSTNAMES,
     whitelistPatterns: [],
   },
   vocabulary: DEFAULT_VOCABULARY_SETTINGS,

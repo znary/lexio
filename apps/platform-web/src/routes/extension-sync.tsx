@@ -1,5 +1,5 @@
 import { useAuth, useUser } from "@clerk/clerk-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { getExtensionIdFromLocation } from "../app/env"
 import {
@@ -41,7 +41,7 @@ function getAuthorizeButtonLabel(
 }
 
 export function ExtensionSyncPage() {
-  const { getToken, isSignedIn } = useAuth()
+  const { getToken, isLoaded, isSignedIn } = useAuth()
   const { user } = useUser()
   const { copy } = useSitePreferences()
   const commonCopy = copy.common
@@ -53,6 +53,14 @@ export function ExtensionSyncPage() {
     : APP_ROUTES.signIn
   const [status, setStatus] = useState<SyncStatus>("idle")
   const [message, setMessage] = useState("")
+
+  useEffect(() => {
+    if (!isLoaded || hasSignedInSession) {
+      return
+    }
+
+    window.location.replace(signInHref)
+  }, [hasSignedInSession, isLoaded, signInHref])
 
   async function syncExtension() {
     if (!hasSignedInSession) {
@@ -156,7 +164,6 @@ export function ExtensionSyncPage() {
                 </div>
                 <div>
                   <strong>{extensionSyncCopy.permissions.wordBankTitle}</strong>
-                  <p>{extensionSyncCopy.permissions.wordBankBody}</p>
                 </div>
               </div>
 
@@ -166,7 +173,6 @@ export function ExtensionSyncPage() {
                 </div>
                 <div>
                   <strong>{extensionSyncCopy.permissions.profileTitle}</strong>
-                  <p>{extensionSyncCopy.permissions.profileBody}</p>
                 </div>
               </div>
 
@@ -176,31 +182,22 @@ export function ExtensionSyncPage() {
                 </div>
                 <div>
                   <strong>{extensionSyncCopy.permissions.sessionTitle}</strong>
-                  <p>{extensionSyncCopy.permissions.sessionBody}</p>
                 </div>
               </div>
             </div>
           </section>
 
           <div className="extension-auth-actions">
-            {hasSignedInSession
-              ? (
-                  <button
-                    type="button"
-                    className="primary-button primary-button--full"
-                    onClick={() => {
-                      void syncExtension()
-                    }}
-                    disabled={status === "syncing"}
-                  >
-                    {getAuthorizeButtonLabel(status, hasSignedInSession, extensionSyncCopy)}
-                  </button>
-                )
-              : (
-                  <a className="primary-link primary-link--full" href={signInHref}>
-                    {getAuthorizeButtonLabel(status, hasSignedInSession, extensionSyncCopy)}
-                  </a>
-                )}
+            <button
+              type="button"
+              className="primary-button primary-button--full"
+              onClick={() => {
+                void syncExtension()
+              }}
+              disabled={status === "syncing" || !hasSignedInSession}
+            >
+              {getAuthorizeButtonLabel(status, hasSignedInSession, extensionSyncCopy)}
+            </button>
 
             <a className="secondary-link secondary-link--centered" href={APP_ROUTES.home}>
               {commonCopy.actions.cancel}
