@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Lexio - Practice Mode</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Manrope:wght@500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-surface-variant": "#3f4948",
+                    "primary": "#004341",
+                    "tertiary-fixed": "#a3f69c",
+                    "surface-tint": "#1f6866",
+                    "error": "#ba1a1a",
+                    "on-primary-fixed": "#00201f",
+                    "on-background": "#191c1e",
+                    "outline": "#6f7978",
+                    "on-tertiary-container": "#87d982",
+                    "surface-dim": "#d8dadc",
+                    "surface-container-highest": "#e0e3e5",
+                    "surface-container-low": "#f2f4f6",
+                    "on-secondary": "#ffffff",
+                    "on-error": "#ffffff",
+                    "inverse-primary": "#8ed3cf",
+                    "background": "#f7f9fb",
+                    "outline-variant": "#bec9c7",
+                    "surface-container-high": "#e6e8ea",
+                    "secondary-fixed": "#d4e5ef",
+                    "on-primary-fixed-variant": "#00504e",
+                    "tertiary": "#00460e",
+                    "on-primary-container": "#8ed2cf",
+                    "on-surface": "#191c1e",
+                    "inverse-on-surface": "#eff1f3",
+                    "on-tertiary-fixed-variant": "#005312",
+                    "on-secondary-container": "#55656d",
+                    "tertiary-container": "#076018",
+                    "surface-container": "#eceef0",
+                    "inverse-surface": "#2d3133",
+                    "on-secondary-fixed": "#0d1e25",
+                    "on-primary": "#ffffff",
+                    "surface-variant": "#e0e3e5",
+                    "secondary-fixed-dim": "#b8c9d3",
+                    "on-error-container": "#93000a",
+                    "primary-container": "#0a5c5a",
+                    "surface": "#f7f9fb",
+                    "secondary-container": "#d1e2ec",
+                    "primary-fixed-dim": "#8ed3cf",
+                    "primary-fixed": "#aaefec",
+                    "tertiary-fixed-dim": "#88d982",
+                    "surface-bright": "#f7f9fb",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary-fixed-variant": "#394951",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary": "#506169",
+                    "on-tertiary-fixed": "#002204",
+                    "error-container": "#ffdad6"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {},
+            "fontFamily": {
+                    "headline": [
+                            "Manrope"
+                    ],
+                    "body": [
+                            "Inter"
+                    ],
+                    "label": [
+                            "Inter"
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        :root {
+            --app-header-offset: 8.5rem;
+            --app-footer-offset: 7.5rem;
+            --sentence-max-width: min(100%, 20ch);
+        }
+
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        /* Ambient shadow for subtle depth */
+        .ambient-shadow {
+            box-shadow: 0 20px 40px rgba(0, 67, 65, 0.06);
+        }
+        
+        /* Cursor animation */
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        .cursor-blink {
+            animation: blink 1s step-end infinite;
+        }
+
+        .practice-shell {
+            height: calc(100vh - var(--app-header-offset) - var(--app-footer-offset));
+            min-height: calc(100vh - var(--app-header-offset) - var(--app-footer-offset));
+        }
+
+        .practice-copy {
+            gap: clamp(1.5rem, 4vh, 3rem);
+        }
+
+        .practice-sentence {
+            max-width: var(--sentence-max-width);
+            font-size: clamp(2rem, min(4.8vw, 6.4vh), 4.5rem);
+            line-height: 1.18;
+            letter-spacing: -0.03em;
+            text-wrap: balance;
+        }
+
+        .practice-input {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 0.08em;
+            margin-inline: 0.16em;
+            white-space: nowrap;
+            vertical-align: baseline;
+        }
+
+        .practice-caret {
+            width: 0.08em;
+            height: 0.9em;
+            margin-left: 0.04em;
+            border-radius: 999px;
+        }
+
+        .practice-underline {
+            bottom: -0.16em;
+            height: 0.09em;
+        }
+
+        @media (max-height: 820px) and (min-width: 769px) {
+            .practice-sentence {
+                font-size: clamp(1.875rem, min(4.2vw, 5.2vh), 3.75rem);
+            }
+        }
+
+        @media (max-width: 768px) {
+            :root {
+                --app-header-offset: 7rem;
+                --app-footer-offset: 8.5rem;
+                --sentence-max-width: min(100%, 16.5ch);
+            }
+
+            .practice-sentence {
+                font-size: clamp(1.5rem, min(6.8vw, 4.6vh), 2.5rem);
+                line-height: 1.24;
+            }
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body min-h-screen flex flex-col antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,67,65,0.06)]">
+<div class="flex justify-between items-center px-12 py-6 w-full max-w-screen-2xl mx-auto">
+<!-- Brand -->
+<div class="text-2xl font-bold text-slate-900 dark:text-slate-50 font-['Manrope']">
+                Lexio
+            </div>
+<!-- Navigation -->
+<nav class="hidden md:flex items-center gap-8 font-['Manrope'] tracking-tight font-semibold">
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-[#0A5C5A] transition-all duration-200 active:scale-95 transition-transform duration-150" href="#">Word Bank</a>
+<a class="text-[#0A5C5A] font-bold border-b-2 border-[#0A5C5A] pb-1 hover:text-[#0A5C5A] transition-all duration-200 active:scale-95 transition-transform duration-150" href="#">Practice</a>
+</nav>
+<!-- Trailing Actions -->
+<div class="flex items-center gap-4 text-[#0A5C5A] dark:text-[#0A5C5A]">
+<button aria-label="Profile" class="hover:bg-surface-container-high p-2 rounded-full transition-colors active:scale-95 duration-150">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="practice-shell flex-grow flex flex-col justify-center items-center pt-32 pb-24 px-6 md:px-12 max-w-5xl mx-auto w-full relative" data-practice-canvas>
+<!-- Practice Area -->
+<div class="practice-copy w-full flex flex-col items-center justify-center text-center" data-practice-copy>
+<!-- The Sentence -->
+<div class="practice-sentence w-full font-headline font-semibold text-on-surface" data-practice-sentence>
+<span class="text-on-surface-variant">The discovery was a moment of pure</span>
+<!-- The Input Area -->
+<span class="practice-input relative text-[#0A5C5A]">Sere<span class="practice-caret inline-block bg-[#0A5C5A] cursor-blink align-middle"></span><span class="text-surface-dim">ndipity</span><span class="practice-underline absolute left-0 right-0 bg-[#0A5C5A]/40 rounded-full"></span></span>
+<span class="text-on-surface-variant">, occurring when I least expected it.</span>
+</div>
+<!-- Source/Context -->
+<div class="flex items-center gap-2 text-on-surface-variant font-medium text-xs md:text-base opacity-70" data-practice-source>
+<span class="material-symbols-outlined text-lg" data-icon="menu_book">menu_book</span>
+<span>The Economist - Oct 2023</span>
+</div>
+</div>
+</main>
+<!-- Bottom Stats Bar -->
+<footer class="fixed bottom-0 w-full z-40 bg-surface-container-low/90 backdrop-blur-md border-t-0 py-4 md:py-6 px-6 md:px-16 grid grid-cols-3 md:flex md:flex-wrap justify-items-start md:justify-between items-center gap-x-4 gap-y-4 md:gap-6 text-xs md:text-sm font-medium text-on-surface-variant">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-lg opacity-70" data-icon="schedule">schedule</span>
+<span>Time</span>
+<span class="text-on-surface font-semibold ml-2 font-headline">02:14</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-lg opacity-70" data-icon="keyboard">keyboard</span>
+<span>Input</span>
+<span class="text-on-surface font-semibold ml-2 font-headline">142</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-lg opacity-70" data-icon="speed">speed</span>
+<span>Speed</span>
+<span class="text-on-surface font-semibold ml-2 font-headline">64 wpm</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-lg opacity-70" data-icon="check_circle">check_circle</span>
+<span>Correct</span>
+<span class="text-on-surface font-semibold ml-2 font-headline">18</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-lg opacity-70 text-tertiary" data-icon="track_changes">track_changes</span>
+<span>Accuracy</span>
+<span class="text-tertiary font-semibold ml-2 font-headline">98%</span>
+</div>
+</footer>
+<script>
+        (() => {
+            const sentence = document.querySelector("[data-practice-sentence]");
+            const canvas = document.querySelector("[data-practice-canvas]");
+            const copy = document.querySelector("[data-practice-copy]");
+            const header = document.querySelector("header");
+            const footer = document.querySelector("footer");
+
+            if (!sentence || !canvas || !copy) {
+                return;
+            }
+
+            const DESKTOP_MIN_FONT_SIZE = 24;
+            const MOBILE_MIN_FONT_SIZE = 18;
+            const DESKTOP_MAX_FONT_SIZE = 72;
+            const MOBILE_MAX_FONT_SIZE = 40;
+
+            const syncCanvasHeight = () => {
+                const headerHeight = header?.offsetHeight ?? 0;
+                const footerHeight = footer?.offsetHeight ?? 0;
+                const availableHeight = window.innerHeight - headerHeight - footerHeight;
+
+                canvas.style.height = `${availableHeight}px`;
+                canvas.style.minHeight = `${availableHeight}px`;
+
+                return availableHeight;
+            };
+
+            const fitSentence = () => {
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+                const isMobile = viewportWidth < 768;
+                const availableHeight = syncCanvasHeight();
+                const minFontSize = isMobile ? MOBILE_MIN_FONT_SIZE : DESKTOP_MIN_FONT_SIZE;
+                const preferredSize = isMobile
+                    ? Math.min(viewportWidth * 0.078, viewportHeight * 0.048, MOBILE_MAX_FONT_SIZE)
+                    : Math.min(viewportWidth * 0.055, viewportHeight * 0.075, DESKTOP_MAX_FONT_SIZE);
+
+                let fontSize = Math.max(minFontSize, preferredSize);
+                sentence.style.fontSize = `${fontSize}px`;
+
+                while (copy.scrollHeight > availableHeight && fontSize > minFontSize) {
+                    fontSize -= 2;
+                    sentence.style.fontSize = `${fontSize}px`;
+                }
+            };
+
+            window.addEventListener("load", fitSentence);
+            window.addEventListener("resize", fitSentence);
+        })();
+    </script>
+</body></html>

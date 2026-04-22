@@ -73,9 +73,10 @@ describe("pushSyncData", () => {
     })
 
     const statements = batchMock.mock.calls[0][0] as Array<{ sql: string }>
-    expect(statements).toHaveLength(7)
+    expect(statements).toHaveLength(8)
     expect(statements.some(statement => statement.sql.includes("DELETE FROM vocabulary_item_context_sentences"))).toBe(true)
     expect(statements.some(statement => statement.sql.includes("DELETE FROM vocabulary_items"))).toBe(true)
+    expect(statements.some(statement => statement.sql.includes("DELETE FROM vocabulary_practice_states"))).toBe(true)
     const insertStatement = statements.find(statement => statement.sql.includes("INSERT INTO vocabulary_items"))
     const contextInsertStatements = statements.filter(statement => statement.sql.includes("INSERT INTO vocabulary_item_context_sentences"))
     expect(insertStatement?.sql).toContain("source_text")

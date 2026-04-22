@@ -452,6 +452,11 @@ mark {
   cursor: pointer;
 }
 
+.icon-button.is-active {
+  border-color: rgba(0, 67, 65, 0.28);
+  background: rgba(170, 239, 236, 0.36);
+}
+
 .feedback-callout {
   min-height: 58px;
   padding: 14px 18px;
@@ -761,6 +766,10 @@ mark {
   height: 18px;
 }
 
+.detail-speaker-icon--spinning {
+  animation: word-bank-icon-spin 1s linear infinite;
+}
+
 .word-bank-layout {
   display: grid;
   grid-template-columns: minmax(320px, 0.62fr) minmax(0, 1.38fr);
@@ -1017,6 +1026,18 @@ mark {
   font-size: 18px;
   line-height: 1.58;
   font-style: italic;
+}
+
+.context-block__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.context-block__quote {
+  margin: 0;
+  flex: 1 1 auto;
 }
 
 .context-block--muted {
@@ -1390,6 +1411,127 @@ mark {
   flex: 0 0 auto;
 }
 
+.practice-confirmation {
+  width: min(100%, 980px);
+  display: grid;
+  gap: 72px;
+  justify-items: center;
+  text-align: center;
+}
+
+.practice-confirmation__copy {
+  display: grid;
+  gap: 22px;
+}
+
+.practice-confirmation__word {
+  margin: 0;
+  font-family: "Manrope", sans-serif;
+  font-size: clamp(92px, 9vw, 156px);
+  font-weight: 800;
+  letter-spacing: -0.08em;
+  line-height: 0.9;
+}
+
+.practice-confirmation__definition {
+  max-width: 980px;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: clamp(24px, 2vw, 34px);
+  line-height: 1.45;
+}
+
+.practice-confirmation__actions-block {
+  display: grid;
+  gap: 28px;
+  justify-items: center;
+}
+
+.practice-confirmation__prompt {
+  margin: 0;
+  font-family: "Manrope", sans-serif;
+  font-size: clamp(30px, 2.3vw, 46px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.practice-confirmation__actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 22px;
+}
+
+.practice-confirmation__button {
+  min-width: 280px;
+  padding: 20px 28px;
+  border: 1px solid rgba(190, 201, 199, 0.8);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 20px 40px rgba(0, 67, 65, 0.04);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--primary);
+  font-family: "Manrope", sans-serif;
+  font-size: clamp(22px, 1.8vw, 30px);
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.practice-confirmation__button:hover:enabled {
+  transform: translateY(-1px);
+  box-shadow: 0 24px 42px rgba(0, 67, 65, 0.08);
+}
+
+.practice-confirmation__button:active:enabled {
+  transform: translateY(0);
+}
+
+.practice-confirmation__button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.practice-confirmation__button--primary {
+  border-color: rgba(0, 67, 65, 0.12);
+  background: linear-gradient(135deg, rgba(0, 67, 65, 0.98) 0%, rgba(10, 92, 90, 0.96) 100%);
+  color: #ffffff;
+}
+
+.practice-confirmation__button-index {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(0, 67, 65, 0.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Inter", sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.practice-confirmation__button--primary .practice-confirmation__button-index {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.practice-confirmation__error {
+  margin: 0;
+  color: var(--error);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
 .practice-finish-card,
 .practice-state-card {
   width: min(100%, 820px);
@@ -1552,6 +1694,16 @@ mark {
   }
   75% {
     transform: translateX(6px);
+  }
+}
+
+@keyframes word-bank-icon-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -2090,11 +2242,21 @@ mark {
 :root[data-theme="dark"] .practice-settings-panel__row p,
 :root[data-theme="dark"] .practice-stage__eyebrow,
 :root[data-theme="dark"] .practice-stage__source,
+:root[data-theme="dark"] .practice-confirmation__definition,
 :root[data-theme="dark"] .practice-finish-card__summary span,
 :root[data-theme="dark"] .practice-stats-bar__item,
 :root[data-theme="dark"] .extension-auth-note,
 :root[data-theme="dark"] .extension-auth-feedback {
   color: var(--text-muted);
+}
+
+:root[data-theme="dark"] .practice-confirmation__button {
+  border-color: rgba(121, 140, 147, 0.36);
+  background: rgba(23, 34, 40, 0.92);
+}
+
+:root[data-theme="dark"] .practice-confirmation__button-index {
+  background: rgba(105, 198, 193, 0.14);
 }
 
 :root[data-theme="dark"] .practice-settings-panel__value {
@@ -2289,6 +2451,18 @@ mark {
     font-size: clamp(24px, 5vw, 40px);
   }
 
+  .practice-confirmation {
+    gap: 48px;
+  }
+
+  .practice-confirmation__actions {
+    width: 100%;
+  }
+
+  .practice-confirmation__button {
+    width: min(100%, 420px);
+  }
+
   .practice-finish-card,
   .practice-state-card {
     padding: 34px 28px;
@@ -2417,6 +2591,36 @@ mark {
 
   .practice-sentence-display {
     font-size: clamp(34px, 10vw, 54px);
+  }
+
+  .practice-confirmation {
+    gap: 36px;
+  }
+
+  .practice-confirmation__word {
+    font-size: clamp(64px, 18vw, 96px);
+  }
+
+  .practice-confirmation__definition {
+    font-size: 19px;
+  }
+
+  .practice-confirmation__prompt {
+    font-size: 24px;
+  }
+
+  .practice-confirmation__button {
+    min-width: 0;
+    width: 100%;
+    padding: 18px 20px;
+    border-radius: 18px;
+    font-size: 20px;
+  }
+
+  .practice-confirmation__button-index {
+    width: 34px;
+    height: 34px;
+    font-size: 17px;
   }
 
   .practice-stage__source {

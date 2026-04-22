@@ -25,7 +25,7 @@ async function loadVocabularyContextSentenceRows(env: Env, userId: string) {
              vocabulary_item_context_sentences.created_at DESC
   `).bind(userId).all()
 
-  return (rows.results ?? []) as Parameters<typeof mergeVocabularyContextSentenceRows>[1]
+  return (rows.results ?? []) as unknown as Parameters<typeof mergeVocabularyContextSentenceRows>[1]
 }
 
 async function replaceVocabularyContextSentences(env: Env, itemId: string, item: Record<string, unknown>, baseTimestamp: number) {
@@ -85,7 +85,7 @@ export async function handleVocabularyList(_request: Request, env: Env, session:
     ORDER BY last_seen_at DESC, updated_at DESC
   `).bind(user.id).all()
 
-  const items = (rows.results ?? []).map(row => deserializeVocabularyItem(row as Parameters<typeof deserializeVocabularyItem>[0]))
+  const items = (rows.results ?? []).map(row => deserializeVocabularyItem(row as unknown as Parameters<typeof deserializeVocabularyItem>[0]))
   const contextSentenceRows = await loadVocabularyContextSentenceRows(env, user.id)
 
   return json({ items: mergeVocabularyContextSentenceRows(items, contextSentenceRows) })
@@ -216,6 +216,11 @@ export async function handleVocabularyDelete(request: Request, env: Env, session
   const user = await syncUserFromClerk(env, session)
 
   await env.DB.prepare(`
+    DELETE FROM vocabulary_practice_states
+    WHERE user_id = ?1 AND item_id = ?2
+  `).bind(user.id, itemId).run()
+
+  await env.DB.prepare(`
     DELETE FROM vocabulary_item_context_sentences
     WHERE vocabulary_item_id = ?1
   `).bind(itemId).run()
@@ -234,6 +239,11 @@ export async function handleVocabularyDelete(request: Request, env: Env, session
 
 export async function handleVocabularyClear(_request: Request, env: Env, session: SessionContext) {
   const user = await syncUserFromClerk(env, session)
+
+  await env.DB.prepare(`
+    DELETE FROM vocabulary_practice_states
+    WHERE user_id = ?1
+  `).bind(user.id).run()
 
   await env.DB.prepare(`
     DELETE FROM vocabulary_item_context_sentences

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
@@ -38,8 +38,9 @@ describe("copy-chrome-output-to-icloud.sh", () => {
     writeFileSync(buildScript, `#!/usr/bin/env bash
 set -euo pipefail
 rm -rf "$ROOT_DIR_OVERRIDE/.output/chrome-mv3"
-mkdir -p "$ROOT_DIR_OVERRIDE/.output/chrome-mv3"
+mkdir -p "$ROOT_DIR_OVERRIDE/.output/chrome-mv3/_locales/en"
 printf 'fresh-output' > "$ROOT_DIR_OVERRIDE/.output/chrome-mv3/version.txt"
+printf '{ "message": "Hello" }' > "$ROOT_DIR_OVERRIDE/.output/chrome-mv3/_locales/en/messages.json"
 printf 'built' > "$ROOT_DIR_OVERRIDE/build-ran.txt"
 `)
     chmodSync(buildScript, 0o755)
@@ -58,6 +59,9 @@ printf 'built' > "$ROOT_DIR_OVERRIDE/build-ran.txt"
     expect(output).toContain(destinationDir)
     expect(readFileSync(join(repoRoot, "build-ran.txt"), "utf8")).toBe("built")
     expect(readFileSync(join(destinationDir, "version.txt"), "utf8")).toBe("fresh-output")
+    expect(readFileSync(join(destinationDir, "_locales", "en", "messages.json"), "utf8")).toContain("Hello")
     expect(existsSync(join(destinationDir, "old.txt"))).toBe(false)
+    expect(existsSync(join(destinationDir, "chrome-mv3"))).toBe(false)
+    expect(readdirSync(iCloudRoot).filter(name => name.startsWith(".lexio-chrome-mv3.tmp.")).length).toBe(0)
   })
 })

@@ -15,6 +15,7 @@ import { handleHealthCheck } from "./routes/health"
 import { handleLlmChatCompletions } from "./routes/llm"
 import { handleMe } from "./routes/me"
 import { handlePaddleWebhook } from "./routes/paddle"
+import { handlePracticeSession, handleVocabularyPracticeResult } from "./routes/practice"
 import { handleSyncPull, handleSyncPush } from "./routes/sync"
 import { handleTranslateText } from "./routes/translate"
 import {
@@ -31,6 +32,7 @@ type PlatformEnv = Env
 const PLATFORM_TOKEN_HEADER = "x-lexio-platform-token"
 const PLATFORM_TOKEN_EXPIRES_AT_HEADER = "x-lexio-platform-token-expires-at"
 const VOCABULARY_ITEM_PATH_REGEX = /^\/v1\/vocabulary\/([^/]+)$/
+const VOCABULARY_ITEM_PRACTICE_RESULT_PATH_REGEX = /^\/v1\/vocabulary\/([^/]+)\/practice-result$/
 const CHAT_THREAD_PATH_REGEX = /^\/v1\/chat\/threads\/([^/]+)$/
 const CHAT_THREAD_MESSAGES_PATH_REGEX = /^\/v1\/chat\/threads\/([^/]+)\/messages$/
 const CHAT_THREAD_MESSAGE_STREAM_PATH_REGEX = /^\/v1\/chat\/threads\/([^/]+)\/messages\/stream$/
@@ -123,6 +125,11 @@ const handler: ExportedHandler<PlatformEnv> = {
       }
 
       // Vocabulary API
+      if (request.method === "GET" && url.pathname === "/v1/practice") {
+        response = await handlePracticeSession(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
       if (request.method === "GET" && url.pathname === "/v1/vocabulary") {
         response = await handleVocabularyList(request, env, session)
         return withRefreshedExtensionSession(response, session, env)
@@ -145,6 +152,12 @@ const handler: ExportedHandler<PlatformEnv> = {
 
       if (request.method === "DELETE" && url.pathname === "/v1/vocabulary") {
         response = await handleVocabularyClear(request, env, session)
+        return withRefreshedExtensionSession(response, session, env)
+      }
+
+      const vocabularyPracticeResultMatch = request.method === "POST" && url.pathname.match(VOCABULARY_ITEM_PRACTICE_RESULT_PATH_REGEX)
+      if (vocabularyPracticeResultMatch) {
+        response = await handleVocabularyPracticeResult(request, env, session, vocabularyPracticeResultMatch[1])
         return withRefreshedExtensionSession(response, session, env)
       }
 

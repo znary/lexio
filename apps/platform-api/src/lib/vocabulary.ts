@@ -81,7 +81,7 @@ function normalizeContextEntry(
     return null
   }
 
-  const sourceUrl = normalizeSourceUrl(entry.sourceUrl)
+  const sourceUrl = normalizeSourceUrl(entry?.sourceUrl)
   return sourceUrl
     ? { sentence, sourceUrl }
     : { sentence }
@@ -141,8 +141,8 @@ function readContextEntryArray(item: VocabularyItemRecord, key: string): Vocabul
 
     const record = entry as Record<string, unknown>
     const normalizedEntry = normalizeContextEntry({
-      sentence: typeof record.sentence === "string" ? record.sentence : null,
-      sourceUrl: typeof record.sourceUrl === "string" ? record.sourceUrl : null,
+      sentence: typeof record.sentence === "string" ? record.sentence : undefined,
+      sourceUrl: typeof record.sourceUrl === "string" ? record.sourceUrl : undefined,
     })
 
     return normalizedEntry ? [normalizedEntry] : []

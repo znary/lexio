@@ -93,6 +93,11 @@ interface SiteCopy {
     sourceAdded: string
     mastered: string
     pronunciationUnavailable: string
+    speakWord: string
+    speakSentence: string
+    stopSpeaking: string
+    speechLoading: string
+    speechFailed: string
     statusSignedOut: string
     statusLoading: string
     statusNoMatch: string
@@ -183,6 +188,9 @@ interface SiteCopy {
     emptyBadge: string
     emptyTitle: string
     emptyDescription: string
+    clearedBadge: string
+    clearedTitle: string
+    clearedDescription: string
     typingSoundTitle: string
     typingSoundDescription: string
     modeTitle: string
@@ -201,10 +209,14 @@ interface SiteCopy {
     time: string
     input: string
     correct: string
+    confirmPrompt: string
+    confirmMastered: string
+    confirmReviewAgain: string
+    decisionError: string
   }
 }
 
-const siteCopyByLocale = {
+const siteCopyByLocale: Record<SiteLocale, SiteCopy> = {
   "en-US": {
     common: {
       labels: {
@@ -276,6 +288,11 @@ const siteCopyByLocale = {
       sourceAdded: "Source / Added",
       mastered: "Mastered",
       pronunciationUnavailable: "Pronunciation unavailable",
+      speakWord: "Speak word",
+      speakSentence: "Speak sentence",
+      stopSpeaking: "Stop audio",
+      speechLoading: "Loading audio",
+      speechFailed: "Could not play audio",
       statusSignedOut: "Sign in to load your saved words.",
       statusLoading: "Loading your saved words…",
       statusNoMatch: "No words match this search.",
@@ -366,6 +383,9 @@ const siteCopyByLocale = {
       emptyBadge: "Word Bank",
       emptyTitle: "Your Word Bank is empty",
       emptyDescription: "Save a word from the extension first, then come back here to practice it.",
+      clearedBadge: "Practice Queue",
+      clearedTitle: "Your queue is clear",
+      clearedDescription: "Everything in your Word Bank is marked as mastered right now.",
       typingSoundTitle: "Typing sound",
       typingSoundDescription: "Subtle key clicks for correct and wrong input.",
       modeTitle: "Mode",
@@ -384,6 +404,10 @@ const siteCopyByLocale = {
       time: "Time",
       input: "Input",
       correct: "Correct",
+      confirmPrompt: "Mastered this word?",
+      confirmMastered: "Mastered",
+      confirmReviewAgain: "Review Again",
+      decisionError: "Could not save your choice. Try again.",
     },
   },
   "zh-CN": {
@@ -457,6 +481,11 @@ const siteCopyByLocale = {
       sourceAdded: "来源 / 添加时间",
       mastered: "已掌握",
       pronunciationUnavailable: "暂时没有发音",
+      speakWord: "播放单词",
+      speakSentence: "播放句子",
+      stopSpeaking: "停止播放",
+      speechLoading: "正在加载音频",
+      speechFailed: "播放失败，请稍后重试",
       statusSignedOut: "登录后才能加载你的单词本。",
       statusLoading: "正在加载你的单词本…",
       statusNoMatch: "没有匹配这个搜索词的单词。",
@@ -547,6 +576,9 @@ const siteCopyByLocale = {
       emptyBadge: "单词本",
       emptyTitle: "你的单词本还是空的",
       emptyDescription: "先在扩展里保存一个词，再回来这里开始练习。",
+      clearedBadge: "练习队列",
+      clearedTitle: "当前没有要练的词",
+      clearedDescription: "你单词本里的词现在都已经标成已掌握了。",
       typingSoundTitle: "打字声音",
       typingSoundDescription: "输入正确或错误时给一点很轻的反馈音。",
       modeTitle: "模式",
@@ -565,6 +597,10 @@ const siteCopyByLocale = {
       time: "用时",
       input: "输入",
       correct: "正确",
+      confirmPrompt: "Mastered this word?",
+      confirmMastered: "Mastered",
+      confirmReviewAgain: "Review Again",
+      decisionError: "保存你的选择失败了，请重试。",
     },
   },
   "ja-JP": {
@@ -638,6 +674,11 @@ const siteCopyByLocale = {
       sourceAdded: "出典 / 追加日",
       mastered: "習得済み",
       pronunciationUnavailable: "発音はまだありません",
+      speakWord: "単語を再生",
+      speakSentence: "文を再生",
+      stopSpeaking: "再生を停止",
+      speechLoading: "音声を読み込み中",
+      speechFailed: "音声を再生できませんでした",
       statusSignedOut: "単語帳を読み込むにはサインインが必要です。",
       statusLoading: "単語帳を読み込んでいます…",
       statusNoMatch: "この検索に一致する単語はありません。",
@@ -728,6 +769,9 @@ const siteCopyByLocale = {
       emptyBadge: "単語帳",
       emptyTitle: "単語帳はまだ空です",
       emptyDescription: "まず拡張で単語を保存してから、ここに戻って練習してください。",
+      clearedBadge: "練習キュー",
+      clearedTitle: "今は練習する単語がありません",
+      clearedDescription: "単語帳の項目は現在すべて習得済みとして扱われています。",
       typingSoundTitle: "打鍵音",
       typingSoundDescription: "正解とミスにだけ、控えめな入力音をつけます。",
       modeTitle: "モード",
@@ -746,9 +790,13 @@ const siteCopyByLocale = {
       time: "時間",
       input: "入力",
       correct: "正解",
+      confirmPrompt: "Mastered this word?",
+      confirmMastered: "Mastered",
+      confirmReviewAgain: "Review Again",
+      decisionError: "選択を保存できませんでした。もう一度試してください。",
     },
   },
-} satisfies Record<SiteLocale, SiteCopy>
+}
 
 interface SitePreferencesValue {
   locale: SiteLocale

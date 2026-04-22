@@ -1,16 +1,19 @@
 import type { VocabularyContextEntry, VocabularyItem } from "../app/platform-api"
 import { useAuth } from "@clerk/clerk-react"
-import { useDeferredValue, useEffect, useMemo, useState } from "react"
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react"
 import {
   ChevronDownIcon,
   PlayTriangleIcon,
   PracticeSparkIcon,
   SearchIcon,
   SpeakerIcon,
+  SpinnerIcon,
+  StopSquareIcon,
 } from "../app/icons"
 import { getPlatformVocabularyItems } from "../app/platform-api"
 import { APP_ROUTES, getPracticeHref, getPracticeItemHref } from "../app/routes"
 import { useSitePreferences } from "../app/site-preferences"
+import { usePlatformTextToSpeech } from "../app/use-platform-text-to-speech"
 
 const WWW_PREFIX_RE = /^www\./
 
@@ -61,11 +64,43 @@ function getSourceLabel(item: VocabularyItem, unavailableLabel: string, fallback
   }
 }
 
+function SpeakControlButton({
+  ariaLabel,
+  state,
+  onClick,
+}: {
+  ariaLabel: string
+  state: "idle" | "fetching" | "playing"
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className={`icon-button${state === "playing" ? " is-active" : ""}`}
+      aria-label={ariaLabel}
+      onClick={onClick}
+    >
+      {state === "fetching"
+        ? <SpinnerIcon className="detail-speaker-icon detail-speaker-icon--spinning" />
+        : state === "playing"
+          ? <StopSquareIcon className="detail-speaker-icon" />
+          : <SpeakerIcon className="detail-speaker-icon" />}
+    </button>
+  )
+}
+
 export function WordBankPage() {
   const { getToken, isSignedIn } = useAuth()
   const { copy, formatDate } = useSitePreferences()
   const commonCopy = copy.common
   const wordBankCopy = copy.wordBank
+  const {
+    activePlaybackKey,
+    getAriaLabel,
+    play,
+    stop,
+    state: playbackState,
+  } = usePlatformTextToSpeech(wordBankCopy)
   const hasSignedInSession = Boolean(isSignedIn)
   const [items, setItems] = useState<VocabularyItem[]>([])
   const [selectedId, setSelectedId] = useState("")
@@ -176,6 +211,26 @@ export function WordBankPage() {
   const practiceHref = getPracticeHref()
   const selectedPracticeHref = selectedItem ? getPracticeItemHref(selectedItem.id) : practiceHref
 
+  useEffect(() => {
+    stop()
+  }, [selectedItemId, stop])
+
+  const handleSpeak = useCallback((playbackKey: string, text: string, language?: string) => {
+    void play({
+      playbackKey,
+      text,
+      language,
+    })
+  }, [play])
+
+  function getButtonState(playbackKey: string): "idle" | "fetching" | "playing" {
+    if (activePlaybackKey !== playbackKey) {
+      return "idle"
+    }
+
+    return playbackState
+  }
+
   return (
     <div className="word-bank-page">
       <header className="word-bank-toolbar">
@@ -255,13 +310,11 @@ export function WordBankPage() {
                       <div className="word-bank-meta">
                         <span className="word-chip">{getItemPartOfSpeech(selectedItem)}</span>
                         <span>{getItemPhonetic(selectedItem)}</span>
-                        <button
-                          type="button"
-                          className="icon-button"
-                          aria-label={wordBankCopy.pronunciationUnavailable}
-                        >
-                          <SpeakerIcon className="detail-speaker-icon" />
-                        </button>
+                        <SpeakControlButton
+                          ariaLabel={getAriaLabel(wordBankCopy.speakWord, `${selectedItem.id}:word`)}
+                          state={getButtonState(`${selectedItem.id}:word`)}
+                          onClick={() => handleSpeak(`${selectedItem.id}:word`, selectedItem.sourceText, selectedItem.sourceLang)}
+                        />
                       </div>
                     </div>
 
@@ -296,9 +349,18 @@ export function WordBankPage() {
                                 key={`${entry.sentence}-${entry.sourceUrl ?? "no-source"}`}
                                 className={`context-block${index === 1 ? " context-block--muted" : ""}`}
                               >
-                                &quot;
-                                {entry.sentence}
-                                &quot;
+                                <div className="context-block__row">
+                                  <p className="context-block__quote">
+                                    &quot;
+                                    {entry.sentence}
+                                    &quot;
+                                  </p>
+                                  <SpeakControlButton
+                                    ariaLabel={getAriaLabel(wordBankCopy.speakSentence, `${selectedItem.id}:context:${index}`)}
+                                    state={getButtonState(`${selectedItem.id}:context:${index}`)}
+                                    onClick={() => handleSpeak(`${selectedItem.id}:context:${index}`, entry.sentence, selectedItem.sourceLang)}
+                                  />
+                                </div>
                               </blockquote>
                             ))}
                           </div>

@@ -1,5 +1,11 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from "react"
-import type { VocabularyContextEntry, VocabularyItem } from "../app/platform-api"
+import type {
+  PracticeResultResponse,
+  VocabularyContextEntry,
+  VocabularyItem,
+  VocabularyPracticeDecision,
+  VocabularyPracticeState,
+} from "../app/platform-api"
 import type { SiteLocale } from "../app/site-preferences"
 import { useAuth } from "@clerk/clerk-react"
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
@@ -13,7 +19,7 @@ import {
   TargetIcon,
   TuningIcon,
 } from "../app/icons"
-import { getPlatformVocabularyItems } from "../app/platform-api"
+import { getPlatformPracticeSession, submitPlatformPracticeResult } from "../app/platform-api"
 import { APP_ROUTES } from "../app/routes"
 import { useSitePreferences } from "../app/site-preferences"
 
@@ -29,7 +35,7 @@ const WORD_BOUNDARY_RE = /[A-Za-z0-9]/u
 const WWW_PREFIX_RE = /^www\./u
 
 type PracticeLoadState = "loading" | "ready" | "needs-sign-in" | "error"
-type PracticeStage = "word" | "sentence"
+type PracticeStage = "word" | "sentence" | "confirm" | "complete"
 type FeedbackState = "idle" | "correct" | "wrong"
 
 interface PracticeContextMatch {
@@ -182,6 +188,79 @@ function buildPracticeQueueEntry(item: VocabularyItem, sourceFallbackLabel: stri
   return { item, context: null }
 }
 
+function sortBankPracticeItems(
+  items: VocabularyItem[],
+  practiceStateByItemId: ReadonlyMap<string, VocabularyPracticeState>,
+): VocabularyItem[] {
+  const reviewAgainItems: Array<{ item: VocabularyItem, state: VocabularyPracticeState }> = []
+  const remainingItems: VocabularyItem[] = []
+
+  for (const item of items) {
+    if (item.masteredAt != null) {
+      continue
+    }
+
+    const practiceState = practiceStateByItemId.get(item.id)
+    if (practiceState?.lastDecision === "review-again") {
+      reviewAgainItems.push({ item, state: practiceState })
+      continue
+    }
+
+    remainingItems.push(item)
+  }
+
+  reviewAgainItems.sort((left, right) => {
+    if (right.state.updatedAt !== left.state.updatedAt) {
+      return right.state.updatedAt - left.state.updatedAt
+    }
+
+    return right.state.lastPracticedAt - left.state.lastPracticedAt
+  })
+
+  return [...reviewAgainItems.map(entry => entry.item), ...remainingItems]
+}
+
+function buildPracticeQueue(
+  items: VocabularyItem[],
+  requestedItem: VocabularyItem | null,
+  practiceItemId: string,
+  practiceStateByItemId: ReadonlyMap<string, VocabularyPracticeState>,
+  sourceFallbackLabel: string,
+): PracticeQueueEntry[] {
+  if (practiceItemId) {
+    return requestedItem
+      ? [buildPracticeQueueEntry(requestedItem, sourceFallbackLabel)]
+      : []
+  }
+
+  return sortBankPracticeItems(items, practiceStateByItemId).map(item => buildPracticeQueueEntry(item, sourceFallbackLabel))
+}
+
+function moveQueueEntryToEnd(queue: PracticeQueueEntry[], index: number): PracticeQueueEntry[] {
+  if (index < 0 || index >= queue.length) {
+    return queue
+  }
+
+  const nextQueue = [...queue]
+  const [currentEntry] = nextQueue.splice(index, 1)
+  nextQueue.push(currentEntry)
+  return nextQueue
+}
+
+function upsertPracticeState(
+  states: VocabularyPracticeState[],
+  nextState: VocabularyPracticeState,
+): VocabularyPracticeState[] {
+  const stateIndex = states.findIndex(state => state.itemId === nextState.itemId)
+  if (stateIndex === -1) {
+    return [...states, nextState]
+  }
+
+  const nextStates = [...states]
+  nextStates[stateIndex] = nextState
+  return nextStates
+}
+
 function formatElapsedTime(milliseconds: number): string {
   const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000))
   const minutes = Math.floor(totalSeconds / 60)
@@ -233,6 +312,62 @@ function PracticeWordDisplay({ target, typedCount }: { target: string, typedCoun
           ? <span className="practice-word-display__rest">{restText}</span>
           : null}
       </span>
+    </div>
+  )
+}
+
+function PracticeConfirmationDisplay({
+  item,
+  decisionError,
+  isDecisionPending,
+  prompt,
+  masteredLabel,
+  reviewAgainLabel,
+  onMastered,
+  onReviewAgain,
+}: {
+  item: VocabularyItem
+  decisionError: string
+  isDecisionPending: boolean
+  prompt: string
+  masteredLabel: string
+  reviewAgainLabel: string
+  onMastered: () => void
+  onReviewAgain: () => void
+}) {
+  return (
+    <div className="practice-confirmation" onPointerDown={event => event.stopPropagation()}>
+      <div className="practice-confirmation__copy">
+        <h1 className="practice-confirmation__word">{item.sourceText}</h1>
+        <p className="practice-confirmation__definition">{getVocabularyDefinition(item)}</p>
+      </div>
+
+      <div className="practice-confirmation__actions-block">
+        <h2 className="practice-confirmation__prompt">{prompt}</h2>
+        <div className="practice-confirmation__actions">
+          <button
+            type="button"
+            className="practice-confirmation__button practice-confirmation__button--primary"
+            disabled={isDecisionPending}
+            onClick={onMastered}
+          >
+            <span className="practice-confirmation__button-index">1</span>
+            <span>{masteredLabel}</span>
+          </button>
+          <button
+            type="button"
+            className="practice-confirmation__button"
+            disabled={isDecisionPending}
+            onClick={onReviewAgain}
+          >
+            <span className="practice-confirmation__button-index">2</span>
+            <span>{reviewAgainLabel}</span>
+          </button>
+        </div>
+        {decisionError
+          ? <p className="practice-confirmation__error">{decisionError}</p>
+          : null}
+      </div>
     </div>
   )
 }
@@ -306,6 +441,8 @@ export function PracticePage() {
   const hasSignedInSession = Boolean(isSignedIn)
 
   const [items, setItems] = useState<VocabularyItem[]>([])
+  const [practiceStates, setPracticeStates] = useState<VocabularyPracticeState[]>([])
+  const [sessionQueue, setSessionQueue] = useState<PracticeQueueEntry[]>([])
   const [loadState, setLoadState] = useState<PracticeLoadState>("loading")
   const [loadError, setLoadError] = useState("")
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -316,16 +453,19 @@ export function PracticePage() {
   const [feedbackState, setFeedbackState] = useState<FeedbackState>("idle")
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(true)
+  const [decisionError, setDecisionError] = useState("")
+  const [isDecisionPending, setIsDecisionPending] = useState(false)
 
   const inputRef = useRef<HTMLInputElement | null>(null)
   const feedbackTimerRef = useRef<number | null>(null)
   const advanceTimerRef = useRef<number | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
+  const hasInitializedSessionRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
 
-    async function loadVocabularyItems() {
+    async function loadPracticeSession() {
       if (!isLoaded) {
         setLoadState("loading")
         return
@@ -333,6 +473,8 @@ export function PracticePage() {
 
       if (!hasSignedInSession) {
         setItems([])
+        setPracticeStates([])
+        setSessionQueue([])
         setLoadError("")
         setLoadState("needs-sign-in")
         return
@@ -346,12 +488,14 @@ export function PracticePage() {
           throw new Error("Could not read your Lexio session.")
         }
 
-        const nextItems = await getPlatformVocabularyItems(token)
+        const nextSession = await getPlatformPracticeSession(token)
         if (cancelled) {
           return
         }
 
-        setItems(nextItems.filter(item => item.deletedAt == null))
+        hasInitializedSessionRef.current = false
+        setItems(nextSession.items.filter(item => item.deletedAt == null))
+        setPracticeStates(nextSession.practiceStates)
         setLoadState("ready")
       }
       catch (error) {
@@ -360,12 +504,14 @@ export function PracticePage() {
         }
 
         setItems([])
+        setPracticeStates([])
+        setSessionQueue([])
         setLoadError(error instanceof Error ? error.message : practiceCopy.errorTitle)
         setLoadState("error")
       }
     }
 
-    void loadVocabularyItems()
+    void loadPracticeSession()
 
     return () => {
       cancelled = true
@@ -380,34 +526,19 @@ export function PracticePage() {
     return items.find(item => item.id === practiceItemId) ?? null
   }, [items, practiceItemId])
 
-  const queue = useMemo(() => {
-    if (practiceItemId) {
-      return requestedItem
-        ? [buildPracticeQueueEntry(requestedItem, commonCopy.labels.lexioContext)]
-        : []
-    }
+  const practiceStateByItemId = useMemo(() => {
+    return new Map(practiceStates.map(state => [state.itemId, state]))
+  }, [practiceStates])
 
-    return items.map(item => buildPracticeQueueEntry(item, commonCopy.labels.lexioContext))
-  }, [commonCopy.labels.lexioContext, items, practiceItemId, requestedItem])
-
-  const queueSignature = useMemo(() => {
-    return queue.map(entry => entry.item.id).join(":")
-  }, [queue])
-
-  const activeEntry = queue[currentIndex] ?? null
-  const isPracticeComplete = loadState === "ready" && queue.length > 0 && currentIndex >= queue.length
-  const activeTarget = activeEntry
-    ? stage === "sentence" && activeEntry.context
-      ? activeEntry.context.matchedText
-      : activeEntry.item.sourceText
-    : ""
-  const activeLanguage = activeEntry
-    ? getLanguageLabel(activeEntry.item.sourceLang, getDefaultEnglishLabel(locale))
-    : getDefaultEnglishLabel(locale)
-  const nextWords = useMemo(() => {
-    return queue.slice(currentIndex + 1, currentIndex + 4).map(entry => entry.item.sourceText)
-  }, [currentIndex, queue])
-  const elapsedMilliseconds = metrics.startedAt ? now - metrics.startedAt : 0
+  const queueSeed = useMemo(() => {
+    return buildPracticeQueue(
+      items,
+      requestedItem,
+      practiceItemId,
+      practiceStateByItemId,
+      commonCopy.labels.lexioContext,
+    )
+  }, [commonCopy.labels.lexioContext, items, practiceItemId, practiceStateByItemId, requestedItem])
 
   function clearTransientTimers() {
     if (feedbackTimerRef.current != null) {
@@ -424,6 +555,67 @@ export function PracticePage() {
   function focusComposer() {
     inputRef.current?.focus({ preventScroll: true })
   }
+
+  function resetTransientSessionState(nextQueue: PracticeQueueEntry[]) {
+    clearTransientTimers()
+    setSessionQueue(nextQueue)
+    setCurrentIndex(0)
+    setStage(nextQueue.length > 0 ? "word" : "complete")
+    setTypedCount(0)
+    setMetrics(createFreshMetrics())
+    setFeedbackState("idle")
+    setNow(Date.now())
+    setSettingsOpen(false)
+    setDecisionError("")
+    setIsDecisionPending(false)
+    focusComposer()
+  }
+
+  // useEffectEvent is the intended reset path here; this rule treats it like a plain effect.
+  /* eslint-disable react-hooks-extra/no-direct-set-state-in-use-effect */
+  const syncNowFromEffect = useEffectEvent(() => {
+    setNow(Date.now())
+  })
+
+  const initializePracticeSessionFromEffect = useEffectEvent((nextQueue: PracticeQueueEntry[]) => {
+    resetTransientSessionState(nextQueue)
+  })
+  /* eslint-enable react-hooks-extra/no-direct-set-state-in-use-effect */
+
+  function resetPracticeSession() {
+    resetTransientSessionState(queueSeed)
+  }
+
+  useEffect(() => {
+    if (loadState !== "ready") {
+      hasInitializedSessionRef.current = false
+      return
+    }
+
+    if (hasInitializedSessionRef.current) {
+      return
+    }
+
+    hasInitializedSessionRef.current = true
+    initializePracticeSessionFromEffect(queueSeed)
+  }, [initializePracticeSessionFromEffect, loadState, queueSeed])
+
+  const activeEntry = sessionQueue[currentIndex] ?? null
+  const isPracticeComplete = stage === "complete"
+  const activeTarget = activeEntry
+    ? stage === "sentence" && activeEntry.context
+      ? activeEntry.context.matchedText
+      : (stage === "word" ? activeEntry.item.sourceText : "")
+    : ""
+  const activeLanguage = activeEntry
+    ? getLanguageLabel(activeEntry.item.sourceLang, getDefaultEnglishLabel(locale))
+    : getDefaultEnglishLabel(locale)
+  const nextWords = useMemo(() => {
+    return sessionQueue.slice(currentIndex + 1, currentIndex + 4).map(entry => entry.item.sourceText)
+  }, [currentIndex, sessionQueue])
+  const elapsedMilliseconds = metrics.startedAt ? now - metrics.startedAt : 0
+  const hasSavedItems = items.length > 0
+  const hasLiveSession = sessionQueue.length > 0 || isPracticeComplete
 
   function playTypingTone(tone: "correct" | "wrong") {
     if (!soundEnabled) {
@@ -471,12 +663,41 @@ export function PracticePage() {
     }, FEEDBACK_RESET_MS)
   }
 
+  function showConfirmationStage() {
+    clearTransientTimers()
+    setStage("confirm")
+    setTypedCount(0)
+    setFeedbackState("idle")
+    setDecisionError("")
+    focusComposer()
+  }
+
+  function moveToNextEntry(nextQueue: PracticeQueueEntry[], nextIndex: number) {
+    clearTransientTimers()
+    setSessionQueue(nextQueue)
+    setTypedCount(0)
+    setFeedbackState("idle")
+    setDecisionError("")
+
+    if (nextIndex >= nextQueue.length) {
+      setNow(Date.now())
+      setCurrentIndex(nextQueue.length)
+      setStage("complete")
+      return
+    }
+
+    setCurrentIndex(nextIndex)
+    setStage("word")
+    focusComposer()
+  }
+
   function advancePractice() {
     if (!activeEntry) {
       return
     }
 
     if (stage === "word" && activeEntry.context) {
+      clearTransientTimers()
       setStage("sentence")
       setTypedCount(0)
       setFeedbackState("idle")
@@ -489,13 +710,13 @@ export function PracticePage() {
         ...currentMetrics,
         skippedSentenceCount: currentMetrics.skippedSentenceCount + 1,
       }))
+      showConfirmationStage()
+      return
     }
 
-    setCurrentIndex(index => index + 1)
-    setStage("word")
-    setTypedCount(0)
-    setFeedbackState("idle")
-    focusComposer()
+    if (stage === "sentence") {
+      showConfirmationStage()
+    }
   }
 
   function scheduleAdvance() {
@@ -509,44 +730,79 @@ export function PracticePage() {
     }, ADVANCE_DELAY_MS)
   }
 
-  // useEffectEvent is the intended reset path here; this rule treats it like a plain effect.
-  /* eslint-disable react-hooks-extra/no-direct-set-state-in-use-effect */
-  const syncNowFromEffect = useEffectEvent(() => {
-    setNow(Date.now())
-  })
+  async function getRequiredToken(): Promise<string> {
+    const token = await getToken()
+    if (!token) {
+      throw new Error("Could not read your Lexio session.")
+    }
 
-  const resetPracticeSessionFromEffect = useEffectEvent(() => {
-    clearTransientTimers()
-    setCurrentIndex(0)
-    setStage("word")
-    setTypedCount(0)
-    setMetrics(createFreshMetrics())
-    setFeedbackState("idle")
-    setNow(Date.now())
-    setSettingsOpen(false)
-    focusComposer()
-  })
-  /* eslint-enable react-hooks-extra/no-direct-set-state-in-use-effect */
-
-  function resetPracticeSession() {
-    clearTransientTimers()
-    setCurrentIndex(0)
-    setStage("word")
-    setTypedCount(0)
-    setMetrics(createFreshMetrics())
-    setFeedbackState("idle")
-    setNow(Date.now())
-    setSettingsOpen(false)
-    focusComposer()
+    return token
   }
 
-  useEffect(() => {
-    if (loadState !== "ready") {
+  function applyPracticeDecisionResponse(
+    entry: PracticeQueueEntry,
+    decision: VocabularyPracticeDecision,
+    response: PracticeResultResponse,
+  ) {
+    setPracticeStates(currentStates => upsertPracticeState(currentStates, response.practiceState))
+
+    if (decision === "mastered") {
+      setItems(currentItems => currentItems.map(item => item.id === entry.item.id
+        ? {
+            ...item,
+            masteredAt: response.masteredAt,
+            updatedAt: response.practiceState.updatedAt,
+          }
+        : item))
+    }
+  }
+
+  async function handlePracticeDecision(decision: VocabularyPracticeDecision) {
+    if (loadState !== "ready" || !activeEntry || stage !== "confirm" || isDecisionPending) {
       return
     }
 
-    resetPracticeSessionFromEffect()
-  }, [loadState, queueSignature])
+    setIsDecisionPending(true)
+    setDecisionError("")
+    const practicedAt = Date.now()
+
+    try {
+      const token = await getRequiredToken()
+      const response = await submitPlatformPracticeResult(token, activeEntry.item.id, {
+        decision,
+        practicedAt,
+      })
+
+      applyPracticeDecisionResponse(activeEntry, decision, response)
+
+      if (decision === "mastered") {
+        moveToNextEntry(sessionQueue, currentIndex + 1)
+        return
+      }
+
+      if (practiceMode === "single") {
+        clearTransientTimers()
+        setSessionQueue(sessionQueue)
+        setCurrentIndex(0)
+        setStage("word")
+        setTypedCount(0)
+        setFeedbackState("idle")
+        setDecisionError("")
+        focusComposer()
+        return
+      }
+
+      const nextQueue = moveQueueEntryToEnd(sessionQueue, currentIndex)
+      const nextIndex = Math.min(currentIndex, Math.max(0, nextQueue.length - 1))
+      moveToNextEntry(nextQueue, nextIndex)
+    }
+    catch (error) {
+      setDecisionError(error instanceof Error && error.message ? error.message : practiceCopy.decisionError)
+    }
+    finally {
+      setIsDecisionPending(false)
+    }
+  }
 
   useEffect(() => {
     if (!metrics.startedAt || isPracticeComplete) {
@@ -561,7 +817,7 @@ export function PracticePage() {
     return () => {
       window.clearInterval(intervalId)
     }
-  }, [isPracticeComplete, metrics.startedAt])
+  }, [isPracticeComplete, metrics.startedAt, syncNowFromEffect])
 
   useEffect(() => {
     if (loadState !== "ready" || !activeEntry || isPracticeComplete) {
@@ -588,7 +844,7 @@ export function PracticePage() {
   }, [])
 
   function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
-    if (loadState !== "ready" || !activeEntry || isPracticeComplete) {
+    if (loadState !== "ready" || isPracticeComplete) {
       return
     }
 
@@ -604,6 +860,24 @@ export function PracticePage() {
       else {
         resetPracticeSession()
       }
+      return
+    }
+
+    if (stage === "confirm") {
+      if (event.key === "1") {
+        event.preventDefault()
+        void handlePracticeDecision("mastered")
+        return
+      }
+
+      if (event.key === "2") {
+        event.preventDefault()
+        void handlePracticeDecision("review-again")
+      }
+      return
+    }
+
+    if (!activeEntry) {
       return
     }
 
@@ -705,7 +979,22 @@ export function PracticePage() {
     )
   }
 
-  if (queue.length === 0) {
+  if (!hasLiveSession && !practiceItemId && queueSeed.length === 0 && hasSavedItems) {
+    return (
+      <div className="practice-page practice-page--state">
+        <section className="practice-state-card">
+          <div className="practice-state-card__badge">{practiceCopy.clearedBadge}</div>
+          <h1>{practiceCopy.clearedTitle}</h1>
+          <p>{practiceCopy.clearedDescription}</p>
+          <div className="practice-state-card__actions">
+            <a className="primary-button" href={APP_ROUTES.wordBank}>{commonCopy.actions.openWordBank}</a>
+          </div>
+        </section>
+      </div>
+    )
+  }
+
+  if (!hasLiveSession && queueSeed.length === 0) {
     return (
       <div className="practice-page practice-page--state">
         <section className="practice-state-card">
@@ -742,7 +1031,7 @@ export function PracticePage() {
           <div className="practice-session__meta">
             <span>{activeLanguage}</span>
             <span className="practice-session__meta-divider" />
-            <span>{`${Math.min(currentIndex + 1, queue.length)} / ${queue.length}`}</span>
+            <span>{`${Math.min(currentIndex + 1, sessionQueue.length)} / ${sessionQueue.length}`}</span>
           </div>
         </div>
 
@@ -784,7 +1073,7 @@ export function PracticePage() {
                   <p>
                     {practiceMode === "single"
                       ? practiceCopy.singleCompleteDescription
-                      : formatBankCompletionDescription(locale, queue.length)}
+                      : formatBankCompletionDescription(locale, sessionQueue.length)}
                   </p>
                   <div className="practice-finish-card__summary">
                     <div>
@@ -840,7 +1129,7 @@ export function PracticePage() {
                               : null}
                           </div>
                         )
-                      : activeEntry.context
+                      : stage === "sentence" && activeEntry.context
                         ? (
                             <div className="practice-stage__body practice-stage__body--sentence">
                               <PracticeSentenceDisplay context={activeEntry.context} typedCount={typedCount} />
@@ -850,7 +1139,18 @@ export function PracticePage() {
                               </div>
                             </div>
                           )
-                        : null}
+                        : (
+                            <PracticeConfirmationDisplay
+                              item={activeEntry.item}
+                              decisionError={decisionError}
+                              isDecisionPending={isDecisionPending}
+                              prompt={practiceCopy.confirmPrompt}
+                              masteredLabel={practiceCopy.confirmMastered}
+                              reviewAgainLabel={practiceCopy.confirmReviewAgain}
+                              onMastered={() => { void handlePracticeDecision("mastered") }}
+                              onReviewAgain={() => { void handlePracticeDecision("review-again") }}
+                            />
+                          )}
                   </div>
                 )
               : null}

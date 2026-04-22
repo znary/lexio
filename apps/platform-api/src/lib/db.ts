@@ -568,8 +568,8 @@ export async function pullSyncData(env: Env, userId: string): Promise<SyncPayloa
   return {
     settings: settingsRow?.settings_json ? JSON.parse(settingsRow.settings_json) as Record<string, unknown> : null,
     vocabularyItems: mergeVocabularyContextSentenceRows(
-      (vocabularyRows.results ?? []).map(row => deserializeVocabularyItem(row as Parameters<typeof deserializeVocabularyItem>[0])),
-      (vocabularyContextSentenceRows.results ?? []) as Parameters<typeof mergeVocabularyContextSentenceRows>[1],
+      (vocabularyRows.results ?? []).map(row => deserializeVocabularyItem(row as unknown as Parameters<typeof deserializeVocabularyItem>[0])),
+      (vocabularyContextSentenceRows.results ?? []) as unknown as Parameters<typeof mergeVocabularyContextSentenceRows>[1],
     ),
   }
 }
@@ -651,6 +651,15 @@ export async function pushSyncData(env: Env, userId: string, payload: SyncPayloa
                 )),
             ]
           }),
+          env.DB.prepare(`
+            DELETE FROM vocabulary_practice_states
+            WHERE user_id = ?1
+              AND item_id NOT IN (
+                SELECT id
+                FROM vocabulary_items
+                WHERE user_id = ?1
+              )
+          `).bind(userId),
         ]
       : []),
     env.DB.prepare(`

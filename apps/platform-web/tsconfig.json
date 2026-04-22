@@ -3,8 +3,13 @@
     "target": "ES2022",
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "baseUrl": ".",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "paths": {
+      "@/*": ["../../src/*"]
+    },
+    "ignoreDeprecations": "6.0",
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true

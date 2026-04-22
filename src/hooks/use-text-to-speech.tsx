@@ -13,6 +13,7 @@ import { getRandomUUID } from "@/utils/crypto-polyfill"
 import { logger } from "@/utils/logger"
 import { sendMessage } from "@/utils/message"
 import { splitTextByUtf8Bytes } from "@/utils/server/edge-tts/chunk"
+import { getTTSFriendlyErrorDescription, toSignedValue } from "@/utils/tts/shared"
 
 interface PlayAudioParams {
   text: string
@@ -27,10 +28,6 @@ interface SynthesizedAudioChunk {
 }
 
 const TTS_ERROR_TOAST_ID = "tts-synthesize-error"
-
-function toSignedValue(value: number, unit: "%" | "Hz"): string {
-  return `${value >= 0 ? "+" : ""}${value}${unit}`
-}
 
 export function selectTTSVoice(
   ttsConfig: TTSConfig,
@@ -73,26 +70,6 @@ async function resolveVoiceForText(
   })
 
   return selectTTSVoice(ttsConfig, detectedLanguage)
-}
-
-function getTTSFriendlyErrorDescription(error: Error): string | undefined {
-  if (error.message.includes("Edge TTS returned empty audio data")) {
-    return "Speech generation returned empty audio. Please try again."
-  }
-
-  if (error.message.includes("empty audio payload")) {
-    return "Speech generation returned empty audio. Please try again."
-  }
-
-  if (error.message.includes("[SYNTH_RATE_LIMITED]")) {
-    return "Too many TTS requests. Please try again in a moment."
-  }
-
-  if (error.message.includes("[NETWORK_ERROR]") || error.message.includes("[TOKEN_FETCH_FAILED]") || error.message.includes("[TOKEN_INVALID]")) {
-    return "Edge TTS is temporarily unavailable. Please check your network and retry."
-  }
-
-  return error.message || undefined
 }
 
 async function synthesizeEdgeTTSAudioChunk(

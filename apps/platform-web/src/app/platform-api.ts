@@ -31,6 +31,32 @@ export interface VocabularyItem {
   contextSentence?: string
 }
 
+export type VocabularyPracticeDecision = "mastered" | "review-again"
+
+export interface VocabularyPracticeState {
+  itemId: string
+  lastPracticedAt: number
+  lastDecision: VocabularyPracticeDecision
+  reviewAgainCount: number
+  updatedAt: number
+}
+
+export interface PracticeSessionPayload {
+  items: VocabularyItem[]
+  practiceStates: VocabularyPracticeState[]
+}
+
+export interface PracticeResultPayload {
+  decision: VocabularyPracticeDecision
+  practicedAt: number
+}
+
+export interface PracticeResultResponse {
+  ok: true
+  masteredAt: number | null
+  practiceState: VocabularyPracticeState
+}
+
 function isVocabularyContextEntry(value: unknown): value is VocabularyContextEntry {
   if (!value || typeof value !== "object") {
     return false
@@ -66,11 +92,32 @@ function isVocabularyItem(value: unknown): value is VocabularyItem {
   )
 }
 
-async function platformFetch(path: string, token: string): Promise<Response> {
+function isVocabularyPracticeDecision(value: unknown): value is VocabularyPracticeDecision {
+  return value === "mastered" || value === "review-again"
+}
+
+function isVocabularyPracticeState(value: unknown): value is VocabularyPracticeState {
+  if (!value || typeof value !== "object") {
+    return false
+  }
+
+  const candidate = value as VocabularyPracticeState
+  return (
+    typeof candidate.itemId === "string"
+    && typeof candidate.lastPracticedAt === "number"
+    && isVocabularyPracticeDecision(candidate.lastDecision)
+    && typeof candidate.reviewAgainCount === "number"
+    && typeof candidate.updatedAt === "number"
+  )
+}
+
+async function platformFetch(path: string, token: string, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers)
+  headers.set("Authorization", `Bearer ${token}`)
+
   const response = await fetch(`${resolvePlatformApiUrl()}${path}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    ...init,
+    headers,
   })
 
   if (response.status === 401) {
@@ -94,4 +141,33 @@ export async function getPlatformVocabularyItems(token: string): Promise<Vocabul
   }
 
   return payload.items.filter(isVocabularyItem)
+}
+
+export async function getPlatformPracticeSession(token: string): Promise<PracticeSessionPayload> {
+  const response = await platformFetch("/v1/practice", token)
+  const payload = await response.json() as {
+    items?: unknown
+    practiceStates?: unknown
+  }
+
+  return {
+    items: Array.isArray(payload.items) ? payload.items.filter(isVocabularyItem) : [],
+    practiceStates: Array.isArray(payload.practiceStates) ? payload.practiceStates.filter(isVocabularyPracticeState) : [],
+  }
+}
+
+export async function submitPlatformPracticeResult(
+  token: string,
+  itemId: string,
+  payload: PracticeResultPayload,
+): Promise<PracticeResultResponse> {
+  const response = await platformFetch(`/v1/vocabulary/${encodeURIComponent(itemId)}/practice-result`, token, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify(payload),
+  })
+
+  return await response.json() as PracticeResultResponse
 }

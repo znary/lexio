@@ -10,6 +10,8 @@ const handleChatThreadCreateMock = vi.fn()
 const handleChatThreadMessagesMock = vi.fn()
 const handleChatThreadMessageStreamMock = vi.fn()
 const handleChatThreadDeleteMock = vi.fn()
+const handlePracticeSessionMock = vi.fn()
+const handleVocabularyPracticeResultMock = vi.fn()
 
 vi.mock("../lib/auth", () => ({
   mintExtensionToken: vi.fn(),
@@ -58,6 +60,11 @@ vi.mock("../routes/chat", () => ({
   handleChatThreadDelete: (...args: unknown[]) => handleChatThreadDeleteMock(...args),
 }))
 
+vi.mock("../routes/practice", () => ({
+  handlePracticeSession: (...args: unknown[]) => handlePracticeSessionMock(...args),
+  handleVocabularyPracticeResult: (...args: unknown[]) => handleVocabularyPracticeResultMock(...args),
+}))
+
 vi.mock("../routes/vocabulary", () => ({
   handleVocabularyClear: vi.fn(),
   handleVocabularyCreate: vi.fn(),
@@ -95,7 +102,7 @@ describe("platform handler translation routing", () => {
     }))
 
     const { default: handler } = await import("../index")
-    const response = await handler.fetch(
+    const response = await handler.fetch!(
       new Request("https://example.com/v1/translate", {
         method: "POST",
         headers: {
@@ -124,7 +131,7 @@ describe("platform handler translation routing", () => {
     }))
 
     const { default: handler } = await import("../index")
-    const response = await handler.fetch(
+    const response = await handler.fetch!(
       new Request("https://example.com/v1/llm/chat/completions", {
         method: "POST",
         headers: {
@@ -151,7 +158,7 @@ describe("platform handler translation routing", () => {
     }))
 
     const { default: handler } = await import("../index")
-    const response = await handler.fetch(
+    const response = await handler.fetch!(
       new Request("https://example.com/v1/openai/chat/completions", {
         method: "POST",
         headers: {
@@ -171,7 +178,7 @@ describe("platform handler translation routing", () => {
 
   it("does not expose the old /v1/translate/stream route", async () => {
     const { default: handler } = await import("../index")
-    const response = await handler.fetch(
+    const response = await handler.fetch!(
       new Request("https://example.com/v1/translate/stream", {
         method: "POST",
       }),
@@ -194,7 +201,7 @@ describe("platform handler translation routing", () => {
     }))
 
     const { default: handler } = await import("../index")
-    const response = await handler.fetch(
+    const response = await handler.fetch!(
       new Request("https://example.com/v1/chat/threads", {
         method: "GET",
       }),
@@ -204,6 +211,60 @@ describe("platform handler translation routing", () => {
 
     expect(response.status).toBe(200)
     expect(handleChatThreadListMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("routes GET /v1/practice to the practice session handler", async () => {
+    handlePracticeSessionMock.mockResolvedValue(new Response(JSON.stringify({
+      items: [],
+      practiceStates: [],
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const { default: handler } = await import("../index")
+    const response = await handler.fetch!(
+      new Request("https://example.com/v1/practice", {
+        method: "GET",
+      }),
+      {} as never,
+      {} as never,
+    )
+
+    expect(response.status).toBe(200)
+    expect(handlePracticeSessionMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("routes POST /v1/vocabulary/:id/practice-result to the practice result handler", async () => {
+    handleVocabularyPracticeResultMock.mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const { default: handler } = await import("../index")
+    const response = await handler.fetch!(
+      new Request("https://example.com/v1/vocabulary/voc_1/practice-result", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          decision: "mastered",
+          practicedAt: 123,
+        }),
+      }),
+      {} as never,
+      {} as never,
+    )
+
+    expect(response.status).toBe(200)
+    expect(handleVocabularyPracticeResultMock).toHaveBeenCalledTimes(1)
   })
 
   it("routes POST /v1/chat/threads to the chat thread create handler", async () => {
@@ -219,7 +280,7 @@ describe("platform handler translation routing", () => {
     }))
 
     const { default: handler } = await import("../index")
-    const response = await handler.fetch(
+    const response = await handler.fetch!(
       new Request("https://example.com/v1/chat/threads", {
         method: "POST",
         headers: {
@@ -247,7 +308,7 @@ describe("platform handler translation routing", () => {
     }))
 
     const { default: handler } = await import("../index")
-    const response = await handler.fetch(
+    const response = await handler.fetch!(
       new Request("https://example.com/v1/chat/threads/thread_1/messages", {
         method: "GET",
       }),
@@ -268,7 +329,7 @@ describe("platform handler translation routing", () => {
     }))
 
     const { default: handler } = await import("../index")
-    const response = await handler.fetch(
+    const response = await handler.fetch!(
       new Request("https://example.com/v1/chat/threads/thread_1/messages/stream", {
         method: "POST",
         headers: {
@@ -295,7 +356,7 @@ describe("platform handler translation routing", () => {
     }))
 
     const { default: handler } = await import("../index")
-    const response = await handler.fetch(
+    const response = await handler.fetch!(
       new Request("https://example.com/v1/chat/threads/thread_1", {
         method: "DELETE",
       }),
@@ -309,14 +370,14 @@ describe("platform handler translation routing", () => {
 
   it("does not expose the old /v1/ai routes", async () => {
     const { default: handler } = await import("../index")
-    const generateResponse = await handler.fetch(
+    const generateResponse = await handler.fetch!(
       new Request("https://example.com/v1/ai/generate", {
         method: "POST",
       }),
       {} as never,
       {} as never,
     )
-    const streamResponse = await handler.fetch(
+    const streamResponse = await handler.fetch!(
       new Request("https://example.com/v1/ai/stream", {
         method: "POST",
       }),
@@ -331,21 +392,21 @@ describe("platform handler translation routing", () => {
   it("does not expose the old task routes", async () => {
     const { default: handler } = await import("../index")
 
-    const createResponse = await handler.fetch(
+    const createResponse = await handler.fetch!(
       new Request("https://example.com/v1/translate/tasks", {
         method: "POST",
       }),
       {} as never,
       {} as never,
     )
-    const streamResponse = await handler.fetch(
+    const streamResponse = await handler.fetch!(
       new Request("https://example.com/v1/translate/tasks/task_1/stream", {
         method: "GET",
       }),
       {} as never,
       {} as never,
     )
-    const cancelResponse = await handler.fetch(
+    const cancelResponse = await handler.fetch!(
       new Request("https://example.com/v1/translate/tasks/task_1/cancel", {
         method: "POST",
       }),
@@ -371,7 +432,7 @@ describe("platform handler translation routing", () => {
     }))
 
     const { default: handler } = await import("../index")
-    const response = await handler.fetch(
+    const response = await handler.fetch!(
       new Request("https://example.com/v1/vocabulary/meta", {
         method: "GET",
       }),

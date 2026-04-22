@@ -124,6 +124,23 @@ export function SpeakerIcon(props: IconProps) {
   )
 }
 
+export function StopSquareIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <rect x="5.5" y="5.5" width="13" height="13" rx="2.6" />
+    </BaseIcon>
+  )
+}
+
+export function SpinnerIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M12 4.2a7.8 7.8 0 1 1-5.5 2.3" />
+      <path d="M12 4.2v3.1" />
+    </BaseIcon>
+  )
+}
+
 export function PracticeSparkIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>
