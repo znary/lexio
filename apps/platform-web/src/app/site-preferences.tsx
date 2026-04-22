@@ -917,15 +917,24 @@ export function SitePreferencesProvider({ children }: { children: ReactNode }) {
           return fallback ?? "English"
         }
 
-        const [languageCodePart, regionCodePart] = normalizedCode.split(LANGUAGE_CODE_SEGMENT_RE)
-        const displayNames = typeof Intl.DisplayNames === "function"
-          ? new Intl.DisplayNames([locale], { type: "language" })
-          : null
-        const languageLabel = displayNames?.of(languageCodePart) ?? languageCodePart.toUpperCase()
+        if (normalizedCode.toLowerCase() === "auto") {
+          return fallback ?? "English"
+        }
 
-        return regionCodePart
-          ? `${languageLabel} (${regionCodePart.toUpperCase()})`
-          : languageLabel
+        const [languageCodePart, regionCodePart] = normalizedCode.split(LANGUAGE_CODE_SEGMENT_RE)
+        try {
+          const displayNames = typeof Intl.DisplayNames === "function"
+            ? new Intl.DisplayNames([locale], { type: "language" })
+            : null
+          const languageLabel = displayNames?.of(languageCodePart) ?? languageCodePart.toUpperCase()
+
+          return regionCodePart
+            ? `${languageLabel} (${regionCodePart.toUpperCase()})`
+            : languageLabel
+        }
+        catch {
+          return fallback ?? normalizedCode.toUpperCase()
+        }
       },
     }
   }, [copy, locale, resolvedTheme, themeMode])
