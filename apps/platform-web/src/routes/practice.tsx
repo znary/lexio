@@ -1,7 +1,8 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from "react"
 import type { VocabularyContextEntry, VocabularyItem } from "../app/platform-api"
+import type { SiteLocale } from "../app/site-preferences"
 import { useAuth } from "@clerk/clerk-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 import {
   BookIcon,
   CheckCircleIcon,
@@ -14,6 +15,7 @@ import {
 } from "../app/icons"
 import { getPlatformVocabularyItems } from "../app/platform-api"
 import { APP_ROUTES } from "../app/routes"
+import { useSitePreferences } from "../app/site-preferences"
 
 const PRACTICE_ITEM_QUERY_KEY = "item"
 const FEEDBACK_RESET_MS = 160
@@ -25,7 +27,6 @@ const DOUBLE_QUOTE_RE = /[“”]/gu
 const DASH_RE = /[–—]/gu
 const WORD_BOUNDARY_RE = /[A-Za-z0-9]/u
 const WWW_PREFIX_RE = /^www\./u
-const LANGUAGE_SEGMENT_RE = /[-_]/u
 
 type PracticeLoadState = "loading" | "ready" | "needs-sign-in" | "error"
 type PracticeStage = "word" | "sentence"
@@ -141,21 +142,21 @@ function findSentenceMatch(sentence: string, item: VocabularyItem): Omit<Practic
   return null
 }
 
-function buildSourceLabel(sourceUrl?: string): string {
+function buildSourceLabel(sourceUrl: string | undefined, fallbackLabel: string): string {
   if (!sourceUrl) {
-    return "Lexio Context"
+    return fallbackLabel
   }
 
   try {
     const hostname = new URL(sourceUrl).hostname.replace(WWW_PREFIX_RE, "")
-    return hostname || "Lexio Context"
+    return hostname || fallbackLabel
   }
   catch {
-    return "Lexio Context"
+    return fallbackLabel
   }
 }
 
-function buildPracticeQueueEntry(item: VocabularyItem): PracticeQueueEntry {
+function buildPracticeQueueEntry(item: VocabularyItem, sourceFallbackLabel: string): PracticeQueueEntry {
   for (const entry of getVocabularyContexts(item)) {
     const sentence = entry.sentence.trim()
     if (!sentence) {
@@ -173,7 +174,7 @@ function buildPracticeQueueEntry(item: VocabularyItem): PracticeQueueEntry {
         ...match,
         sentence,
         sourceUrl: entry.sourceUrl,
-        sourceLabel: buildSourceLabel(entry.sourceUrl),
+        sourceLabel: buildSourceLabel(entry.sourceUrl, sourceFallbackLabel),
       },
     }
   }
@@ -208,23 +209,6 @@ function formatSpeed(correctCount: number, milliseconds: number): string {
   return `${wordsPerMinute} wpm`
 }
 
-function getLanguageLabel(languageCode: string): string {
-  const normalizedCode = languageCode.trim()
-  if (!normalizedCode) {
-    return "English"
-  }
-
-  const [languageCodePart, regionCodePart] = normalizedCode.split(LANGUAGE_SEGMENT_RE)
-  const displayNames = typeof Intl.DisplayNames === "function"
-    ? new Intl.DisplayNames(["en"], { type: "language" })
-    : null
-  const languageLabel = displayNames?.of(languageCodePart) ?? languageCodePart.toUpperCase()
-
-  return regionCodePart
-    ? `${languageLabel} (${regionCodePart.toUpperCase()})`
-    : languageLabel
-}
-
 function createFreshMetrics(): PracticeMetrics {
   return {
     startedAt: null,
@@ -253,6 +237,42 @@ function PracticeWordDisplay({ target, typedCount }: { target: string, typedCoun
   )
 }
 
+function getDefaultEnglishLabel(locale: SiteLocale): string {
+  switch (locale) {
+    case "zh-CN":
+      return "英语"
+    case "ja-JP":
+      return "英語"
+    case "en-US":
+    default:
+      return "English"
+  }
+}
+
+function formatBankCompletionDescription(locale: SiteLocale, count: number): string {
+  switch (locale) {
+    case "zh-CN":
+      return `这一轮一共完成了 ${count} 个已保存${count === 1 ? "词条" : "词条"}。`
+    case "ja-JP":
+      return `今回のセッションでは保存済みの${count}語を終えました。`
+    case "en-US":
+    default:
+      return `You finished ${count} saved ${count === 1 ? "word" : "words"} in this session.`
+  }
+}
+
+function formatSkippedSentenceDescription(locale: SiteLocale, count: number): string {
+  switch (locale) {
+    case "zh-CN":
+      return `有 ${count} 个词因为没有精确匹配的远程语境，跳过了句子阶段。`
+    case "ja-JP":
+      return `${count}語は一致するリモート文脈がなかったため、文脈ステージをスキップしました。`
+    case "en-US":
+    default:
+      return `${count} ${count === 1 ? "word skipped" : "words skipped"} the sentence stage because no exact remote context matched.`
+  }
+}
+
 function PracticeSentenceDisplay({ context, typedCount }: { context: PracticeContextMatch, typedCount: number }) {
   const beforeText = context.sentence.slice(0, context.matchStart)
   const afterText = context.sentence.slice(context.matchEnd)
@@ -279,6 +299,9 @@ function PracticeSentenceDisplay({ context, typedCount }: { context: PracticeCon
 
 export function PracticePage() {
   const { getToken, isLoaded, isSignedIn } = useAuth()
+  const { copy, getLanguageLabel, locale } = useSitePreferences()
+  const commonCopy = copy.common
+  const practiceCopy = copy.practice
   const practiceItemId = useMemo(() => getPracticeItemIdFromLocation(), [])
   const practiceMode = practiceItemId ? "single" : "bank"
   const hasSignedInSession = Boolean(isSignedIn)
@@ -338,7 +361,7 @@ export function PracticePage() {
         }
 
         setItems([])
-        setLoadError(error instanceof Error ? error.message : "Could not load your practice queue.")
+        setLoadError(error instanceof Error ? error.message : practiceCopy.errorTitle)
         setLoadState("error")
       }
     }
@@ -348,7 +371,7 @@ export function PracticePage() {
     return () => {
       cancelled = true
     }
-  }, [getToken, hasSignedInSession, isLoaded])
+  }, [getToken, hasSignedInSession, isLoaded, practiceCopy.errorTitle])
 
   const requestedItem = useMemo(() => {
     if (!practiceItemId) {
@@ -360,11 +383,13 @@ export function PracticePage() {
 
   const queue = useMemo(() => {
     if (practiceItemId) {
-      return requestedItem ? [buildPracticeQueueEntry(requestedItem)] : []
+      return requestedItem
+        ? [buildPracticeQueueEntry(requestedItem, commonCopy.labels.lexioContext)]
+        : []
     }
 
-    return items.map(buildPracticeQueueEntry)
-  }, [items, practiceItemId, requestedItem])
+    return items.map(item => buildPracticeQueueEntry(item, commonCopy.labels.lexioContext))
+  }, [commonCopy.labels.lexioContext, items, practiceItemId, requestedItem])
 
   const queueSignature = useMemo(() => {
     return queue.map(entry => entry.item.id).join(":")
@@ -377,7 +402,9 @@ export function PracticePage() {
       ? activeEntry.context.matchedText
       : activeEntry.item.sourceText
     : ""
-  const activeLanguage = activeEntry ? getLanguageLabel(activeEntry.item.sourceLang) : "English"
+  const activeLanguage = activeEntry
+    ? getLanguageLabel(activeEntry.item.sourceLang, getDefaultEnglishLabel(locale))
+    : getDefaultEnglishLabel(locale)
   const nextWords = useMemo(() => {
     return queue.slice(currentIndex + 1, currentIndex + 4).map(entry => entry.item.sourceText)
   }, [currentIndex, queue])
@@ -483,6 +510,25 @@ export function PracticePage() {
     }, ADVANCE_DELAY_MS)
   }
 
+  // useEffectEvent is the intended reset path here; this rule treats it like a plain effect.
+  /* eslint-disable react-hooks-extra/no-direct-set-state-in-use-effect */
+  const syncNowFromEffect = useEffectEvent(() => {
+    setNow(Date.now())
+  })
+
+  const resetPracticeSessionFromEffect = useEffectEvent(() => {
+    clearTransientTimers()
+    setCurrentIndex(0)
+    setStage("word")
+    setTypedCount(0)
+    setMetrics(createFreshMetrics())
+    setFeedbackState("idle")
+    setNow(Date.now())
+    setSettingsOpen(false)
+    focusComposer()
+  })
+  /* eslint-enable react-hooks-extra/no-direct-set-state-in-use-effect */
+
   function resetPracticeSession() {
     clearTransientTimers()
     setCurrentIndex(0)
@@ -500,17 +546,17 @@ export function PracticePage() {
       return
     }
 
-    resetPracticeSession()
-  }, [loadState, queueSignature, resetPracticeSession])
+    resetPracticeSessionFromEffect()
+  }, [loadState, queueSignature])
 
   useEffect(() => {
     if (!metrics.startedAt || isPracticeComplete) {
       return
     }
 
-    setNow(Date.now())
+    syncNowFromEffect()
     const intervalId = window.setInterval(() => {
-      setNow(Date.now())
+      syncNowFromEffect()
     }, 250)
 
     return () => {
@@ -523,15 +569,24 @@ export function PracticePage() {
       return
     }
 
-    focusComposer()
-  }, [activeEntry, focusComposer, isPracticeComplete, loadState, stage])
+    inputRef.current?.focus({ preventScroll: true })
+  }, [activeEntry, isPracticeComplete, loadState, stage])
 
   useEffect(() => {
     return () => {
-      clearTransientTimers()
+      if (feedbackTimerRef.current != null) {
+        window.clearTimeout(feedbackTimerRef.current)
+        feedbackTimerRef.current = null
+      }
+
+      if (advanceTimerRef.current != null) {
+        window.clearTimeout(advanceTimerRef.current)
+        advanceTimerRef.current = null
+      }
+
       audioContextRef.current?.close().catch(() => undefined)
     }
-  }, [clearTransientTimers])
+  }, [])
 
   function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
     if (loadState !== "ready" || !activeEntry || isPracticeComplete) {
@@ -593,9 +648,9 @@ export function PracticePage() {
     return (
       <div className="practice-page practice-page--state">
         <section className="practice-state-card">
-          <div className="practice-state-card__badge">Practice</div>
-          <h1>Loading your practice queue</h1>
-          <p>Fetching your saved words and context sentences from Lexio.</p>
+          <div className="practice-state-card__badge">{practiceCopy.loadingBadge}</div>
+          <h1>{practiceCopy.loadingTitle}</h1>
+          <p>{practiceCopy.loadingDescription}</p>
         </section>
       </div>
     )
@@ -605,12 +660,12 @@ export function PracticePage() {
     return (
       <div className="practice-page practice-page--state">
         <section className="practice-state-card">
-          <div className="practice-state-card__badge">Lexio Account</div>
-          <h1>Sign in to start practice</h1>
-          <p>Your typing session uses the same remote Word Bank data that the extension syncs to Lexio.</p>
+          <div className="practice-state-card__badge">{practiceCopy.signInBadge}</div>
+          <h1>{practiceCopy.signInTitle}</h1>
+          <p>{practiceCopy.signInDescription}</p>
           <div className="practice-state-card__actions">
-            <a className="primary-button" href={APP_ROUTES.signIn}>Sign In</a>
-            <a className="ghost-button" href={APP_ROUTES.wordBank}>Open Word Bank</a>
+            <a className="primary-button" href={APP_ROUTES.signIn}>{commonCopy.actions.signIn}</a>
+            <a className="ghost-button" href={APP_ROUTES.wordBank}>{commonCopy.actions.openWordBank}</a>
           </div>
         </section>
       </div>
@@ -621,14 +676,14 @@ export function PracticePage() {
     return (
       <div className="practice-page practice-page--state">
         <section className="practice-state-card">
-          <div className="practice-state-card__badge">Practice Error</div>
-          <h1>Could not load your practice queue</h1>
-          <p>{loadError || "Refresh the page and try again."}</p>
+          <div className="practice-state-card__badge">{practiceCopy.errorBadge}</div>
+          <h1>{practiceCopy.errorTitle}</h1>
+          <p>{loadError || commonCopy.actions.reload}</p>
           <div className="practice-state-card__actions">
             <button type="button" className="primary-button" onClick={() => window.location.reload()}>
-              Reload
+              {commonCopy.actions.reload}
             </button>
-            <a className="ghost-button" href={APP_ROUTES.wordBank}>Back to Word Bank</a>
+            <a className="ghost-button" href={APP_ROUTES.wordBank}>{commonCopy.actions.backToWordBank}</a>
           </div>
         </section>
       </div>
@@ -639,12 +694,12 @@ export function PracticePage() {
     return (
       <div className="practice-page practice-page--state">
         <section className="practice-state-card">
-          <div className="practice-state-card__badge">Single Word</div>
-          <h1>This word is no longer in your Word Bank</h1>
-          <p>Open your library, pick another word, or start a full-bank session.</p>
+          <div className="practice-state-card__badge">{practiceCopy.missingItemBadge}</div>
+          <h1>{practiceCopy.missingItemTitle}</h1>
+          <p>{practiceCopy.missingItemDescription}</p>
           <div className="practice-state-card__actions">
-            <a className="primary-button" href={APP_ROUTES.wordBank}>Open Word Bank</a>
-            <a className="ghost-button" href={APP_ROUTES.practice}>Practice All Words</a>
+            <a className="primary-button" href={APP_ROUTES.wordBank}>{commonCopy.actions.openWordBank}</a>
+            <a className="ghost-button" href={APP_ROUTES.practice}>{commonCopy.actions.practiceAllWords}</a>
           </div>
         </section>
       </div>
@@ -655,11 +710,11 @@ export function PracticePage() {
     return (
       <div className="practice-page practice-page--state">
         <section className="practice-state-card">
-          <div className="practice-state-card__badge">Word Bank</div>
-          <h1>Your Word Bank is empty</h1>
-          <p>Save a word from the extension first, then come back here to practice it.</p>
+          <div className="practice-state-card__badge">{practiceCopy.emptyBadge}</div>
+          <h1>{practiceCopy.emptyTitle}</h1>
+          <p>{practiceCopy.emptyDescription}</p>
           <div className="practice-state-card__actions">
-            <a className="primary-button" href={APP_ROUTES.wordBank}>Open Word Bank</a>
+            <a className="primary-button" href={APP_ROUTES.wordBank}>{commonCopy.actions.openWordBank}</a>
           </div>
         </section>
       </div>
@@ -673,7 +728,7 @@ export function PracticePage() {
           <div className="practice-session__actions">
             <button type="button" className="practice-session__utility" onClick={resetPracticeSession}>
               <RestartIcon className="practice-session__utility-icon" />
-              <span>Restart</span>
+              <span>{commonCopy.actions.restart}</span>
             </button>
             <button
               type="button"
@@ -681,7 +736,7 @@ export function PracticePage() {
               onClick={() => setSettingsOpen(open => !open)}
             >
               <TuningIcon className="practice-session__utility-icon" />
-              <span>Settings</span>
+              <span>{commonCopy.actions.settings}</span>
             </button>
           </div>
 
@@ -697,24 +752,24 @@ export function PracticePage() {
               <div className="practice-settings-panel">
                 <div className="practice-settings-panel__row">
                   <div>
-                    <strong>Typing sound</strong>
-                    <p>Subtle key clicks for correct and wrong input.</p>
+                    <strong>{practiceCopy.typingSoundTitle}</strong>
+                    <p>{practiceCopy.typingSoundDescription}</p>
                   </div>
                   <button
                     type="button"
                     className={`practice-toggle${soundEnabled ? " is-on" : ""}`}
                     onClick={() => setSoundEnabled(enabled => !enabled)}
                   >
-                    {soundEnabled ? "On" : "Off"}
+                    {soundEnabled ? commonCopy.actions.soundOn : commonCopy.actions.soundOff}
                   </button>
                 </div>
                 <div className="practice-settings-panel__row">
                   <div>
-                    <strong>Mode</strong>
-                    <p>{practiceMode === "single" ? "Current word only" : "Whole Word Bank queue"}</p>
+                    <strong>{practiceCopy.modeTitle}</strong>
+                    <p>{practiceMode === "single" ? practiceCopy.modeSingleDescription : practiceCopy.modeBankDescription}</p>
                   </div>
                   <span className="practice-settings-panel__value">
-                    {practiceMode === "single" ? "Single" : "Bank"}
+                    {practiceMode === "single" ? practiceCopy.singleModeLabel : practiceCopy.bankModeLabel}
                   </span>
                 </div>
               </div>
@@ -725,39 +780,39 @@ export function PracticePage() {
           {isPracticeComplete
             ? (
                 <div className="practice-finish-card">
-                  <div className="practice-finish-card__badge">Session Complete</div>
-                  <h1>{practiceMode === "single" ? "Word finished." : "Practice complete."}</h1>
+                  <div className="practice-finish-card__badge">{practiceCopy.sessionCompleteBadge}</div>
+                  <h1>{practiceMode === "single" ? practiceCopy.singleCompleteTitle : practiceCopy.bankCompleteTitle}</h1>
                   <p>
                     {practiceMode === "single"
-                      ? "You have finished both stages for this word."
-                      : `You finished ${queue.length} saved ${queue.length === 1 ? "word" : "words"} in this session.`}
+                      ? practiceCopy.singleCompleteDescription
+                      : formatBankCompletionDescription(locale, queue.length)}
                   </p>
                   <div className="practice-finish-card__summary">
                     <div>
-                      <span>Accuracy</span>
+                      <span>{practiceCopy.accuracy}</span>
                       <strong>{formatAccuracy(metrics.correctCount, metrics.inputCount)}</strong>
                     </div>
                     <div>
-                      <span>Speed</span>
+                      <span>{practiceCopy.speed}</span>
                       <strong>{formatSpeed(metrics.correctCount, elapsedMilliseconds)}</strong>
                     </div>
                     <div>
-                      <span>Time</span>
+                      <span>{practiceCopy.time}</span>
                       <strong>{formatElapsedTime(elapsedMilliseconds)}</strong>
                     </div>
                   </div>
                   {metrics.skippedSentenceCount > 0
                     ? (
                         <p className="practice-finish-card__note">
-                          {`${metrics.skippedSentenceCount} ${metrics.skippedSentenceCount === 1 ? "word skipped" : "words skipped"} the sentence stage because no exact remote context matched.`}
+                          {formatSkippedSentenceDescription(locale, metrics.skippedSentenceCount)}
                         </p>
                       )
                     : null}
                   <div className="practice-finish-card__actions">
                     <button type="button" className="primary-button" onClick={resetPracticeSession}>
-                      Practice Again
+                      {commonCopy.actions.practiceAgain}
                     </button>
-                    <a className="ghost-button" href={APP_ROUTES.wordBank}>Back to Word Bank</a>
+                    <a className="ghost-button" href={APP_ROUTES.wordBank}>{commonCopy.actions.backToWordBank}</a>
                   </div>
                 </div>
               )
@@ -768,7 +823,7 @@ export function PracticePage() {
                       ? (
                           <div className="practice-stage__body practice-stage__body--word">
                             <div className="practice-stage__eyebrow">
-                              {activeEntry.item.kind === "phrase" ? "Current Phrase" : "Current Word"}
+                              {activeEntry.item.kind === "phrase" ? practiceCopy.currentPhrase : practiceCopy.currentWord}
                             </div>
                             <PracticeWordDisplay target={activeTarget} typedCount={typedCount} />
                             <p className="practice-stage__definition">
@@ -812,7 +867,7 @@ export function PracticePage() {
           autoComplete="off"
           spellCheck={false}
           inputMode="text"
-          aria-label="Typing input"
+          aria-label={practiceCopy.currentWord}
           onChange={() => {}}
           onKeyDown={handleComposerKeyDown}
         />
@@ -821,27 +876,27 @@ export function PracticePage() {
       <footer className="practice-stats-bar">
         <div className="practice-stats-bar__item">
           <ClockIcon className="practice-stats-bar__icon" />
-          <span>Time</span>
+          <span>{practiceCopy.time}</span>
           <strong>{formatElapsedTime(elapsedMilliseconds)}</strong>
         </div>
         <div className="practice-stats-bar__item">
           <KeyboardIcon className="practice-stats-bar__icon" />
-          <span>Input</span>
+          <span>{practiceCopy.input}</span>
           <strong>{metrics.inputCount}</strong>
         </div>
         <div className="practice-stats-bar__item">
           <SpeedIcon className="practice-stats-bar__icon" />
-          <span>Speed</span>
+          <span>{practiceCopy.speed}</span>
           <strong>{formatSpeed(metrics.correctCount, elapsedMilliseconds)}</strong>
         </div>
         <div className="practice-stats-bar__item">
           <CheckCircleIcon className="practice-stats-bar__icon" />
-          <span>Correct</span>
+          <span>{practiceCopy.correct}</span>
           <strong>{metrics.correctCount}</strong>
         </div>
         <div className="practice-stats-bar__item practice-stats-bar__item--accuracy">
           <TargetIcon className="practice-stats-bar__icon" />
-          <span>Accuracy</span>
+          <span>{practiceCopy.accuracy}</span>
           <strong>{formatAccuracy(metrics.correctCount, metrics.inputCount)}</strong>
         </div>
       </footer>

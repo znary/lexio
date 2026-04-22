@@ -3,6 +3,7 @@
 import type { ReactNode } from "react"
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { SitePreferencesProvider } from "../../app/site-preferences"
 
 const syncPlatformAuthToExtensionMock = vi.fn()
 const toastSuccessMock = vi.fn()
@@ -31,6 +32,10 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+function renderWithSitePreferences(children: ReactNode) {
+  return render(<SitePreferencesProvider>{children}</SitePreferencesProvider>)
+}
+
 describe("extension sync page", () => {
   it("waits for manual confirmation before syncing the token", async () => {
     useAuthMock.mockReturnValue({
@@ -52,7 +57,7 @@ describe("extension sync page", () => {
     syncPlatformAuthToExtensionMock.mockResolvedValue(undefined)
 
     const { ExtensionSyncPage } = await import("../extension-sync")
-    render(<ExtensionSyncPage />)
+    renderWithSitePreferences(<ExtensionSyncPage />)
 
     expect(syncPlatformAuthToExtensionMock).not.toHaveBeenCalled()
 
@@ -93,7 +98,7 @@ describe("extension sync page", () => {
     syncPlatformAuthToExtensionMock.mockRejectedValue(new Error("No token"))
 
     const { ExtensionSyncPage } = await import("../extension-sync")
-    render(<ExtensionSyncPage />)
+    renderWithSitePreferences(<ExtensionSyncPage />)
 
     fireEvent.click(screen.getByRole("button", { name: "Authorize Access" }))
 
@@ -124,7 +129,7 @@ describe("extension sync page", () => {
     syncPlatformAuthToExtensionMock.mockResolvedValue(undefined)
 
     const { ExtensionSyncPage } = await import("../extension-sync")
-    render(<ExtensionSyncPage />)
+    renderWithSitePreferences(<ExtensionSyncPage />)
 
     fireEvent.click(screen.getByRole("button", { name: "Authorize Access" }))
 

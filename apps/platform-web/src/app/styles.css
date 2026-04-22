@@ -17,6 +17,23 @@
   --border-soft: rgba(190, 201, 199, 0.36);
   --success: #00460e;
   --success-soft: rgba(163, 246, 156, 0.36);
+  --danger: #93000a;
+  --surface-overlay: rgba(255, 255, 255, 0.92);
+  --surface-overlay-strong: rgba(255, 255, 255, 0.98);
+  --surface-overlay-soft: rgba(255, 255, 255, 0.88);
+  --surface-muted-overlay: rgba(242, 244, 246, 0.88);
+  --surface-primary-overlay: rgba(170, 239, 236, 0.18);
+  --surface-primary-overlay-strong: rgba(170, 239, 236, 0.3);
+  --surface-danger-overlay: rgba(255, 218, 214, 0.72);
+  --page-backdrop:
+    radial-gradient(circle at top left, rgba(209, 226, 236, 0.52), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(170, 239, 236, 0.18), transparent 30%);
+  --header-shadow: 0 1px 0 rgba(190, 201, 199, 0.16);
+  --nav-text: #7487a4;
+  --input-placeholder: rgba(63, 73, 72, 0.56);
+  --focus-ring: 0 0 0 3px rgba(170, 239, 236, 0.45);
+  --practice-session-background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 249, 251, 0.96) 100%);
+  --practice-stats-background: rgba(242, 244, 246, 0.92);
   --shadow-soft: 0 20px 40px rgba(0, 67, 65, 0.06);
   --shadow-card: 0 18px 34px rgba(0, 67, 65, 0.05);
   --radius-card: 32px;
@@ -25,6 +42,44 @@
   --radius-pill: 999px;
   --content-width: 1720px;
   font-family: "Inter", system-ui, sans-serif;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0c1216;
+  --surface: #121a1f;
+  --surface-low: #172228;
+  --surface-mid: #1b272d;
+  --surface-high: #233138;
+  --primary: #83dad5;
+  --primary-strong: #69c6c1;
+  --primary-soft: #173c3a;
+  --text: #edf4f5;
+  --text-muted: #a5b5bc;
+  --text-soft: #c3d0d4;
+  --border: rgba(121, 140, 147, 0.24);
+  --border-soft: rgba(121, 140, 147, 0.3);
+  --success: #7ed795;
+  --success-soft: rgba(80, 142, 92, 0.26);
+  --danger: #ff8c85;
+  --surface-overlay: rgba(11, 18, 22, 0.88);
+  --surface-overlay-strong: rgba(15, 23, 28, 0.96);
+  --surface-overlay-soft: rgba(19, 28, 33, 0.9);
+  --surface-muted-overlay: rgba(23, 34, 40, 0.88);
+  --surface-primary-overlay: rgba(105, 198, 193, 0.14);
+  --surface-primary-overlay-strong: rgba(105, 198, 193, 0.2);
+  --surface-danger-overlay: rgba(126, 38, 29, 0.34);
+  --page-backdrop:
+    radial-gradient(circle at top left, rgba(25, 83, 88, 0.34), transparent 26%),
+    radial-gradient(circle at bottom right, rgba(64, 92, 115, 0.2), transparent 32%);
+  --header-shadow: 0 1px 0 rgba(121, 140, 147, 0.18);
+  --nav-text: #afbec5;
+  --input-placeholder: rgba(175, 190, 197, 0.56);
+  --focus-ring: 0 0 0 3px rgba(105, 198, 193, 0.2);
+  --practice-session-background: linear-gradient(180deg, rgba(15, 23, 28, 0.96) 0%, rgba(11, 18, 22, 0.98) 100%);
+  --practice-stats-background: rgba(15, 23, 28, 0.92);
+  --shadow-soft: 0 20px 40px rgba(0, 0, 0, 0.26);
+  --shadow-card: 0 18px 34px rgba(0, 0, 0, 0.22);
 }
 
 * {
@@ -50,9 +105,7 @@ body::before {
   content: "";
   position: fixed;
   inset: 0;
-  background:
-    radial-gradient(circle at top left, rgba(209, 226, 236, 0.52), transparent 24%),
-    radial-gradient(circle at bottom right, rgba(170, 239, 236, 0.18), transparent 30%);
+  background: var(--page-backdrop);
   pointer-events: none;
   z-index: -2;
 }
@@ -85,13 +138,13 @@ textarea {
 
 input::placeholder,
 textarea::placeholder {
-  color: rgba(63, 73, 72, 0.56);
+  color: var(--input-placeholder);
 }
 
 input:focus,
 textarea:focus {
   border-color: rgba(0, 67, 65, 0.36);
-  box-shadow: 0 0 0 3px rgba(170, 239, 236, 0.45);
+  box-shadow: var(--focus-ring);
 }
 
 mark {
@@ -122,9 +175,9 @@ mark {
   top: 0;
   z-index: 10;
   width: 100%;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--surface-overlay);
   backdrop-filter: blur(24px);
-  box-shadow: 0 1px 0 rgba(190, 201, 199, 0.16);
+  box-shadow: var(--header-shadow);
 }
 
 .site-header__inner,
@@ -135,9 +188,9 @@ mark {
 
 .site-header__inner {
   height: 88px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 28px;
 }
 
@@ -158,12 +211,13 @@ mark {
   display: flex;
   align-items: center;
   gap: 40px;
+  justify-self: center;
 }
 
 .site-nav a {
   position: relative;
   padding: 8px 0;
-  color: #7487a4;
+  color: var(--nav-text);
   font-size: 16px;
   font-weight: 500;
   transition: color 180ms ease;
@@ -189,6 +243,46 @@ mark {
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  justify-self: end;
+}
+
+.site-preferences {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.site-preference-chip {
+  min-width: 132px;
+  min-height: 44px;
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--surface-overlay-strong);
+  box-shadow: 0 8px 18px rgba(0, 67, 65, 0.04);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.site-preference-chip__icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.site-preference-chip select {
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  cursor: pointer;
 }
 
 .account-link,
@@ -214,7 +308,7 @@ mark {
   display: grid;
   place-items: center;
   border: 1px solid rgba(0, 67, 65, 0.14);
-  background: rgba(255, 255, 255, 0.98);
+  background: var(--surface-overlay-strong);
 }
 
 .account-glyph {
@@ -333,7 +427,7 @@ mark {
 .toolbar-button {
   padding: 15px 20px;
   border: 1px solid var(--border-soft);
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--surface-overlay-soft);
   color: var(--text);
   box-shadow: 0 8px 18px rgba(0, 67, 65, 0.04);
 }
@@ -353,7 +447,7 @@ mark {
   width: 42px;
   height: 42px;
   border: 1px solid rgba(0, 67, 65, 0.12);
-  background: rgba(170, 239, 236, 0.18);
+  background: var(--surface-primary-overlay);
   color: var(--primary);
   cursor: pointer;
 }
@@ -374,8 +468,8 @@ mark {
 }
 
 .feedback-callout--error {
-  background: rgba(255, 218, 214, 0.72);
-  color: #93000a;
+  background: var(--surface-danger-overlay);
+  color: var(--danger);
 }
 
 .feedback-callout--syncing {
@@ -619,7 +713,7 @@ mark {
   padding: 0 18px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-control);
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--surface-overlay-soft);
   box-shadow: 0 10px 20px rgba(0, 67, 65, 0.04);
   display: flex;
   align-items: center;
@@ -729,7 +823,7 @@ mark {
 .word-bank-item:hover,
 .word-bank-item.is-active {
   border-color: var(--primary);
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--surface-overlay-strong);
 }
 
 .word-state {
@@ -910,7 +1004,7 @@ mark {
   padding: 26px 30px 28px;
   border-left: 4px solid rgba(0, 67, 65, 0.22);
   border-radius: 20px;
-  background: rgba(242, 244, 246, 0.72);
+  background: var(--surface-muted-overlay);
   font-size: 18px;
   line-height: 1.58;
   font-style: italic;
@@ -967,7 +1061,7 @@ mark {
   min-height: calc(100vh - 238px);
   padding: 34px 40px 40px;
   border-radius: 36px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 249, 251, 0.96) 100%);
+  background: var(--practice-session-background);
   box-shadow: var(--shadow-soft);
   overflow: hidden;
   display: grid;
@@ -1074,7 +1168,7 @@ mark {
   margin-left: auto;
   padding: 18px 20px;
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--surface-overlay);
   box-shadow: 0 18px 34px rgba(0, 67, 65, 0.08);
   display: grid;
   gap: 16px;
@@ -1119,7 +1213,7 @@ mark {
   padding: 12px 16px;
   border-radius: 999px;
   border: 1px solid rgba(0, 67, 65, 0.12);
-  background: rgba(236, 238, 240, 0.9);
+  background: var(--surface-muted-overlay);
   color: var(--text-muted);
   font-family: "Manrope", sans-serif;
   font-size: 14px;
@@ -1297,7 +1391,7 @@ mark {
   width: min(100%, 820px);
   padding: 46px 44px;
   border-radius: 30px;
-  background: rgba(255, 255, 255, 0.98);
+  background: var(--surface-overlay-strong);
   box-shadow: 0 22px 44px rgba(0, 67, 65, 0.08);
   display: grid;
   gap: 22px;
@@ -1348,7 +1442,7 @@ mark {
 .practice-finish-card__summary div {
   padding: 18px;
   border-radius: 22px;
-  background: rgba(242, 244, 246, 0.88);
+  background: var(--surface-muted-overlay);
   display: grid;
   gap: 8px;
 }
@@ -1394,7 +1488,7 @@ mark {
   left: 0;
   z-index: 20;
   padding: 22px 56px;
-  background: rgba(242, 244, 246, 0.92);
+  background: var(--practice-stats-background);
   backdrop-filter: blur(18px);
   box-shadow: 0 -1px 0 rgba(190, 201, 199, 0.28);
   display: grid;
@@ -1465,7 +1559,7 @@ mark {
 .pricing-hero {
   padding: 42px;
   border-radius: 32px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--surface-overlay);
   box-shadow: var(--shadow-card);
   display: grid;
   gap: 18px;
@@ -1629,7 +1723,7 @@ mark {
 
 .signin-panel {
   padding: 20px;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--surface-overlay-strong);
 }
 
 .signin-panel--centered {
@@ -1662,7 +1756,7 @@ mark {
 .extension-auth-card {
   width: min(100%, 462px);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.98);
+  background: var(--surface-overlay-strong);
   box-shadow: var(--shadow-soft);
   overflow: hidden;
 }
@@ -1778,7 +1872,7 @@ mark {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--surface-overlay);
   box-shadow: 0 6px 12px rgba(0, 67, 65, 0.06);
 }
 
@@ -1878,7 +1972,7 @@ mark {
 .success-card {
   width: min(100%, 680px);
   padding: 44px;
-  background: rgba(255, 255, 255, 0.98);
+  background: var(--surface-overlay-strong);
   display: grid;
   gap: 18px;
 }
@@ -1903,6 +1997,145 @@ mark {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
+}
+
+:root[data-theme="dark"] .site-nav a.is-active::after {
+  background: rgba(131, 218, 213, 0.76);
+}
+
+:root[data-theme="dark"] .account-icon {
+  border-color: rgba(131, 218, 213, 0.2);
+}
+
+:root[data-theme="dark"] .account-glyph {
+  color: rgba(131, 218, 213, 0.82);
+}
+
+:root[data-theme="dark"] .feature-stage {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme="dark"] .quote-panel,
+:root[data-theme="dark"] .typing-panel,
+:root[data-theme="dark"] .word-bank-list,
+:root[data-theme="dark"] .permission-card {
+  background: var(--surface-low);
+}
+
+:root[data-theme="dark"] .feature-icon--cool {
+  background: rgba(59, 88, 101, 0.34);
+}
+
+:root[data-theme="dark"] .feature-icon--warm,
+:root[data-theme="dark"] .saved-pill,
+:root[data-theme="dark"] .mastered-badge {
+  background: rgba(80, 142, 92, 0.22);
+}
+
+:root[data-theme="dark"] .word-bank-detail__glow {
+  background: rgba(105, 198, 193, 0.16);
+}
+
+:root[data-theme="dark"] .context-block {
+  border-left-color: rgba(131, 218, 213, 0.26);
+}
+
+:root[data-theme="dark"] .context-block--muted {
+  border-left-color: rgba(121, 140, 147, 0.32);
+}
+
+:root[data-theme="dark"] .detail-footer {
+  border-top-color: rgba(121, 140, 147, 0.24);
+}
+
+:root[data-theme="dark"] .typing-line__rest,
+:root[data-theme="dark"] .word-state,
+:root[data-theme="dark"] .practice-word-display__visual,
+:root[data-theme="dark"] .practice-stage__queue {
+  color: rgba(118, 136, 144, 0.68);
+}
+
+:root[data-theme="dark"] .practice-word-display__rest {
+  color: rgba(118, 136, 144, 0.76);
+}
+
+:root[data-theme="dark"] .practice-sentence-display__lead,
+:root[data-theme="dark"] .practice-sentence-display__trail {
+  color: rgba(237, 244, 245, 0.88);
+}
+
+:root[data-theme="dark"] .practice-sentence-display__rest {
+  color: rgba(118, 136, 144, 0.82);
+}
+
+:root[data-theme="dark"] .practice-sentence-display__underline {
+  background: rgba(105, 198, 193, 0.3);
+}
+
+:root[data-theme="dark"] .practice-session::before {
+  background: radial-gradient(circle, rgba(105, 198, 193, 0.18) 0%, rgba(105, 198, 193, 0) 72%);
+}
+
+:root[data-theme="dark"] .practice-session::after {
+  background: radial-gradient(circle, rgba(74, 112, 138, 0.22) 0%, rgba(74, 112, 138, 0) 74%);
+}
+
+:root[data-theme="dark"] .practice-session__utility,
+:root[data-theme="dark"] .practice-session__meta,
+:root[data-theme="dark"] .practice-settings-panel__row p,
+:root[data-theme="dark"] .practice-stage__eyebrow,
+:root[data-theme="dark"] .practice-stage__source,
+:root[data-theme="dark"] .practice-finish-card__summary span,
+:root[data-theme="dark"] .practice-stats-bar__item,
+:root[data-theme="dark"] .extension-auth-note,
+:root[data-theme="dark"] .extension-auth-feedback {
+  color: var(--text-muted);
+}
+
+:root[data-theme="dark"] .practice-settings-panel__value {
+  background: rgba(105, 198, 193, 0.14);
+}
+
+:root[data-theme="dark"] .practice-stats-bar {
+  box-shadow: 0 -1px 0 rgba(121, 140, 147, 0.18);
+}
+
+:root[data-theme="dark"] .pricing-card--featured {
+  background: linear-gradient(180deg, rgba(18, 26, 31, 0.98) 0%, rgba(24, 58, 56, 0.76) 100%);
+  border-color: rgba(131, 218, 213, 0.14);
+}
+
+:root[data-theme="dark"] .feedback-callout {
+  background: rgba(23, 34, 40, 0.95);
+  color: var(--text-muted);
+}
+
+:root[data-theme="dark"] .feedback-callout--success {
+  background: rgba(80, 142, 92, 0.22);
+  color: var(--success);
+}
+
+:root[data-theme="dark"] .feedback-callout--syncing {
+  background: rgba(105, 198, 193, 0.16);
+  color: var(--primary);
+}
+
+:root[data-theme="dark"] .signin-copy {
+  background: linear-gradient(160deg, rgba(12, 56, 60, 0.98), rgba(12, 74, 72, 0.82));
+}
+
+:root[data-theme="dark"] .extension-auth-page::before {
+  background:
+    radial-gradient(circle at top left, rgba(22, 71, 76, 0.32), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(52, 88, 112, 0.16), transparent 28%);
+}
+
+:root[data-theme="dark"] .permission-icon {
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .site-footer {
+  color: rgba(175, 190, 197, 0.82);
 }
 
 @media (max-width: 1100px) {
@@ -1958,8 +2191,8 @@ mark {
   .site-header__inner {
     height: auto;
     padding: 16px 0;
-    flex-direction: column;
-    align-items: flex-start;
+    grid-template-columns: 1fr;
+    justify-items: stretch;
   }
 
   .site-nav,
@@ -1968,12 +2201,22 @@ mark {
     width: 100%;
   }
 
+  .site-preferences {
+    width: 100%;
+  }
+
+  .site-preference-chip {
+    flex: 1 1 160px;
+  }
+
   .site-nav {
     gap: 24px;
   }
 
   .site-actions {
     justify-content: space-between;
+    align-items: flex-start;
+    justify-self: stretch;
   }
 
   .hero-section {
@@ -2080,6 +2323,14 @@ mark {
   .site-nav a,
   .account-link {
     font-size: 16px;
+  }
+
+  .site-preference-chip {
+    width: 100%;
+  }
+
+  .site-preference-chip select {
+    width: 100%;
   }
 
   .site-footer__links {

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import type { SiteLocale, ThemeMode } from "./site-preferences"
 import { SignedIn, SignedOut, UserButton } from "@clerk/clerk-react"
 import { CheckoutSuccessPage } from "../routes/checkout-success"
 import { ExtensionSyncPage } from "../routes/extension-sync"
@@ -7,14 +8,10 @@ import { PracticePage } from "../routes/practice"
 import { PricingPage } from "../routes/pricing"
 import { SignInPage } from "../routes/sign-in"
 import { WordBankPage } from "../routes/word-bank"
-import { AccountOutlineIcon } from "./icons"
+import { AccountOutlineIcon, GlobeIcon, MoonIcon } from "./icons"
 import { PlatformAuthBridge } from "./platform-auth-bridge"
 import { APP_ROUTES, normalizePathname } from "./routes"
-
-const SITE_NAV_LINKS = [
-  { href: APP_ROUTES.wordBank, label: "Word Bank" },
-  { href: APP_ROUTES.practice, label: "Practice" },
-] as const
+import { useSitePreferences } from "./site-preferences"
 
 interface ResolvedPage {
   content: ReactNode
@@ -43,19 +40,34 @@ function resolvePage(pathname: string): ResolvedPage {
 }
 
 function SiteHeader({ pathname, variant }: { pathname: string, variant: "hero" | "library" }) {
+  const {
+    copy,
+    locale,
+    localeOptions,
+    setLocale,
+    setThemeMode,
+    themeMode,
+    themeModeOptions,
+  } = useSitePreferences()
+  const siteNavLinks = [
+    { href: APP_ROUTES.wordBank, label: copy.common.navigation.wordBank },
+    { href: APP_ROUTES.practice, label: copy.common.navigation.practice },
+  ] as const
   const signedOutActions = variant === "library"
     ? (
         <>
-          <a className="account-icon" href={APP_ROUTES.signIn} aria-label="Open sign in">
+          <a className="account-icon" href={APP_ROUTES.signIn} aria-label={copy.common.actions.signIn}>
             <AccountOutlineIcon className="account-glyph" />
           </a>
-          <a className="primary-link primary-link--compact" href={APP_ROUTES.signIn}>Sign In</a>
+          <a className="primary-link primary-link--compact" href={APP_ROUTES.signIn}>
+            {copy.common.actions.signIn}
+          </a>
         </>
       )
     : (
         <>
-          <a className="account-link" href={APP_ROUTES.signIn}>Sign In</a>
-          <a className="account-icon" href={APP_ROUTES.signIn} aria-label="Open sign in">
+          <a className="account-link" href={APP_ROUTES.signIn}>{copy.common.actions.signIn}</a>
+          <a className="account-icon" href={APP_ROUTES.signIn} aria-label={copy.common.actions.signIn}>
             <AccountOutlineIcon className="account-glyph" />
           </a>
         </>
@@ -68,8 +80,8 @@ function SiteHeader({ pathname, variant }: { pathname: string, variant: "hero" |
           <span className="brand-wordmark">Lexio</span>
         </a>
 
-        <nav className="site-nav" aria-label="Primary">
-          {SITE_NAV_LINKS.map(link => (
+        <nav className="site-nav" aria-label={copy.common.navigation.practice}>
+          {siteNavLinks.map(link => (
             <a
               key={link.href}
               href={link.href}
@@ -81,6 +93,14 @@ function SiteHeader({ pathname, variant }: { pathname: string, variant: "hero" |
         </nav>
 
         <div className="site-actions">
+          <SitePreferenceControls
+            locale={locale}
+            onLocaleChange={setLocale}
+            themeMode={themeMode}
+            onThemeModeChange={setThemeMode}
+            localeOptions={localeOptions}
+            themeModeOptions={themeModeOptions}
+          />
           <SignedOut>{signedOutActions}</SignedOut>
           <SignedIn>
             <div className="account-user">
@@ -93,16 +113,70 @@ function SiteHeader({ pathname, variant }: { pathname: string, variant: "hero" |
   )
 }
 
+function SitePreferenceControls({
+  locale,
+  localeOptions,
+  onLocaleChange,
+  onThemeModeChange,
+  themeMode,
+  themeModeOptions,
+}: {
+  locale: SiteLocale
+  localeOptions: ReadonlyArray<{ value: SiteLocale, label: string }>
+  onLocaleChange: (locale: SiteLocale) => void
+  onThemeModeChange: (mode: ThemeMode) => void
+  themeMode: ThemeMode
+  themeModeOptions: Array<{ value: ThemeMode, label: string }>
+}) {
+  const { copy } = useSitePreferences()
+
+  return (
+    <div className="site-preferences">
+      <label className="site-preference-chip">
+        <GlobeIcon className="site-preference-chip__icon" />
+        <select
+          aria-label={copy.common.labels.languageMenu}
+          value={locale}
+          onChange={event => onLocaleChange(event.target.value as SiteLocale)}
+        >
+          {localeOptions.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="site-preference-chip">
+        <MoonIcon className="site-preference-chip__icon" />
+        <select
+          aria-label={copy.common.labels.themeMenu}
+          value={themeMode}
+          onChange={event => onThemeModeChange(event.target.value as ThemeMode)}
+        >
+          {themeModeOptions.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  )
+}
+
 function SiteFooter() {
+  const { copy } = useSitePreferences()
+
   return (
     <footer className="site-footer">
       <div className="site-footer__inner">
-        <p>© 2024 LEXIO. THE INTELLECTUAL SANCTUARY FOR FOCUSED LEARNING.</p>
+        <p>{copy.common.footer.note}</p>
         <div className="site-footer__links">
-          <a href={APP_ROUTES.home}>Privacy</a>
-          <a href={APP_ROUTES.home}>Terms</a>
-          <a href={APP_ROUTES.home}>Methodology</a>
-          <a href={APP_ROUTES.home}>Support</a>
+          <a href={APP_ROUTES.home}>{copy.common.footer.privacy}</a>
+          <a href={APP_ROUTES.home}>{copy.common.footer.terms}</a>
+          <a href={APP_ROUTES.home}>{copy.common.footer.methodology}</a>
+          <a href={APP_ROUTES.home}>{copy.common.footer.support}</a>
         </div>
       </div>
     </footer>

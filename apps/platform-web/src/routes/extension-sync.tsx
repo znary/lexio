@@ -11,28 +11,41 @@ import {
 } from "../app/icons"
 import { syncPlatformAuthToExtension } from "../app/platform-auth"
 import { APP_ROUTES } from "../app/routes"
+import { useSitePreferences } from "../app/site-preferences"
 
 type SyncStatus = "idle" | "syncing" | "success" | "error"
 
-function getAuthorizeButtonLabel(status: SyncStatus, isSignedIn: boolean): string {
+function getAuthorizeButtonLabel(
+  status: SyncStatus,
+  isSignedIn: boolean,
+  copy: {
+    authorizeButtonSignedOut: string
+    authorizeButtonIdle: string
+    authorizeButtonSyncing: string
+    authorizeButtonSuccess: string
+  },
+): string {
   if (!isSignedIn) {
-    return "Sign In to Continue"
+    return copy.authorizeButtonSignedOut
   }
 
   if (status === "syncing") {
-    return "Authorizing..."
+    return copy.authorizeButtonSyncing
   }
 
   if (status === "success") {
-    return "Authorized"
+    return copy.authorizeButtonSuccess
   }
 
-  return "Authorize Access"
+  return copy.authorizeButtonIdle
 }
 
 export function ExtensionSyncPage() {
   const { getToken, isSignedIn } = useAuth()
   const { user } = useUser()
+  const { copy } = useSitePreferences()
+  const commonCopy = copy.common
+  const extensionSyncCopy = copy.extensionSync
   const hasSignedInSession = Boolean(isSignedIn)
   const extensionId = getExtensionIdFromLocation()
   const signInHref = extensionId
@@ -50,10 +63,10 @@ export function ExtensionSyncPage() {
 
     try {
       setStatus("syncing")
-      setMessage("Sending your current Lexio session to the extension.")
+      setMessage(extensionSyncCopy.sendingSession)
       const token = await getToken()
       if (!token) {
-        throw new Error("Clerk did not return a session token.")
+        throw new Error(extensionSyncCopy.tokenMissing)
       }
 
       await syncPlatformAuthToExtension(token, {
@@ -64,12 +77,12 @@ export function ExtensionSyncPage() {
       })
 
       setStatus("success")
-      setMessage("Extension connected.")
-      toast.success("Extension connected.")
+      setMessage(extensionSyncCopy.connected)
+      toast.success(extensionSyncCopy.connectedToast)
     }
     catch (error) {
       setStatus("error")
-      const nextMessage = error instanceof Error ? error.message : "Extension sync failed"
+      const nextMessage = error instanceof Error ? error.message : extensionSyncCopy.syncFailed
       setMessage(nextMessage)
       toast.error(nextMessage)
     }
@@ -91,11 +104,8 @@ export function ExtensionSyncPage() {
             </div>
 
             <div className="extension-auth-copy extension-auth-copy--success">
-              <h1>Extension Connected</h1>
-              <p>
-                Lexio has sent your current sign-in session to the extension. You can return to
-                the extension now.
-              </p>
+              <h1>{extensionSyncCopy.successTitle}</h1>
+              <p>{extensionSyncCopy.successDescription}</p>
             </div>
 
             <div className="extension-auth-actions">
@@ -104,12 +114,12 @@ export function ExtensionSyncPage() {
                 className="primary-button primary-button--full"
                 onClick={closePage}
               >
-                Close This Page
+                {commonCopy.actions.closeThisPage}
               </button>
             </div>
 
             <p className="extension-auth-success-note">
-              If this tab stays open, close it manually and continue in the extension popup.
+              {extensionSyncCopy.successNote}
             </p>
           </div>
         </div>
@@ -128,19 +138,16 @@ export function ExtensionSyncPage() {
               <ExtensionDocumentIcon className="extension-auth-icon__glyph" />
             </div>
             <div className="extension-auth-connector" />
-            <div className="extension-auth-brand">FS</div>
+            <div className="extension-auth-brand">LX</div>
           </div>
 
           <div className="extension-auth-copy">
-            <h1>Authorize Extension</h1>
-            <p>
-              Allow the Lexio browser extension to use your current sign-in session and sync words
-              into your Lexio account.
-            </p>
+            <h1>{extensionSyncCopy.authorizeTitle}</h1>
+            <p>{extensionSyncCopy.authorizeDescription}</p>
           </div>
 
           <section className="permission-card">
-            <h2>Requested Access</h2>
+            <h2>{extensionSyncCopy.requestedAccess}</h2>
 
             <div className="permission-list">
               <div className="permission-item">
@@ -148,8 +155,8 @@ export function ExtensionSyncPage() {
                   <BookIcon className="permission-icon__glyph" />
                 </div>
                 <div>
-                  <strong>Save words to your Word Bank</strong>
-                  <p>The extension can add saved words and definitions to the same Lexio account you are using here.</p>
+                  <strong>{extensionSyncCopy.permissions.wordBankTitle}</strong>
+                  <p>{extensionSyncCopy.permissions.wordBankBody}</p>
                 </div>
               </div>
 
@@ -158,8 +165,8 @@ export function ExtensionSyncPage() {
                   <ProfileCircleIcon className="permission-icon__glyph" />
                 </div>
                 <div>
-                  <strong>Basic account profile</strong>
-                  <p>The extension receives your display name, email address, and avatar for account identification.</p>
+                  <strong>{extensionSyncCopy.permissions.profileTitle}</strong>
+                  <p>{extensionSyncCopy.permissions.profileBody}</p>
                 </div>
               </div>
 
@@ -168,8 +175,8 @@ export function ExtensionSyncPage() {
                   <SyncCycleIcon className="permission-icon__glyph" />
                 </div>
                 <div>
-                  <strong>Current sign-in session</strong>
-                  <p>The extension receives a fresh Lexio session token so it can act on your behalf after you approve.</p>
+                  <strong>{extensionSyncCopy.permissions.sessionTitle}</strong>
+                  <p>{extensionSyncCopy.permissions.sessionBody}</p>
                 </div>
               </div>
             </div>
@@ -186,17 +193,17 @@ export function ExtensionSyncPage() {
                     }}
                     disabled={status === "syncing"}
                   >
-                    {getAuthorizeButtonLabel(status, hasSignedInSession)}
+                    {getAuthorizeButtonLabel(status, hasSignedInSession, extensionSyncCopy)}
                   </button>
                 )
               : (
                   <a className="primary-link primary-link--full" href={signInHref}>
-                    {getAuthorizeButtonLabel(status, hasSignedInSession)}
+                    {getAuthorizeButtonLabel(status, hasSignedInSession, extensionSyncCopy)}
                   </a>
                 )}
 
             <a className="secondary-link secondary-link--centered" href={APP_ROUTES.home}>
-              Cancel
+              {commonCopy.actions.cancel}
             </a>
           </div>
 
@@ -210,7 +217,7 @@ export function ExtensionSyncPage() {
 
           <p className="extension-auth-note">
             <LockIcon className="extension-auth-note__icon" />
-            <span>Secure authorization via The Focused Scholar</span>
+            <span>{extensionSyncCopy.secureNote}</span>
           </p>
         </div>
       </div>

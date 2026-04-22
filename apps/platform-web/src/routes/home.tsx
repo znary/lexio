@@ -1,23 +1,26 @@
 import { BookmarkPlusIcon, KeyboardIcon } from "../app/icons"
 import { APP_ROUTES } from "../app/routes"
+import { useSitePreferences } from "../app/site-preferences"
 
 export function HomePage() {
+  const { copy } = useSitePreferences()
+
   return (
     <div className="home-page">
       <section className="hero-section">
         <h1 className="hero-title">
-          Master the Art of
+          {copy.home.heroTitleLine1}
           <br />
-          Language with Precision
+          {copy.home.heroTitleLine2}
         </h1>
         <p className="hero-copy">
-          Elevate your vocabulary through contextual immersion.
+          {copy.home.heroBodyLine1}
           <br />
-          A focused sanctuary designed for scholars, writers, and curious minds.
+          {copy.home.heroBodyLine2}
         </p>
         <div className="hero-actions">
           <a className="primary-link" href={APP_ROUTES.practice}>
-            Start Practice
+            {copy.home.startPractice}
             {" "}
             <span aria-hidden="true">→</span>
           </a>
@@ -26,11 +29,8 @@ export function HomePage() {
 
       <section className="feature-stage">
         <header className="feature-stage__header">
-          <h2>A System for True Mastery</h2>
-          <p>
-            Move beyond flashcards. Cultivate deep understanding through curated tools designed
-            for focus and retention.
-          </p>
+          <h2>{copy.home.featureTitle}</h2>
+          <p>{copy.home.featureBody}</p>
         </header>
 
         <div className="feature-grid">
@@ -39,11 +39,8 @@ export function HomePage() {
               <div className="feature-icon feature-icon--cool" aria-hidden="true">
                 <BookmarkPlusIcon />
               </div>
-              <h3>Word Bank</h3>
-              <p>
-                Capture elusive words from your daily reading. Seamlessly integrate with our
-                browser extension to save vocabulary directly from any article or paper.
-              </p>
+              <h3>{copy.home.wordBankTitle}</h3>
+              <p>{copy.home.wordBankBody}</p>
             </div>
 
             <div className="quote-panel">
@@ -52,7 +49,7 @@ export function HomePage() {
                 <strong>Esoteric</strong>
                 <p>&quot;The author&apos;s esoteric references alienated the mainstream audience.&quot;</p>
               </div>
-              <div className="saved-pill">✓ Saved to Bank</div>
+              <div className="saved-pill">{copy.home.savedBadge}</div>
             </div>
           </article>
 
@@ -61,16 +58,13 @@ export function HomePage() {
               <div className="feature-icon feature-icon--warm" aria-hidden="true">
                 <KeyboardIcon />
               </div>
-              <h3>Tactile Practice</h3>
-              <p>
-                Engage muscle memory. Type definitions and contextual sentences in a
-                distraction-free, fluid interface.
-              </p>
+              <h3>{copy.home.tactileTitle}</h3>
+              <p>{copy.home.tactileBody}</p>
             </div>
 
             <div className="typing-panel">
               <p>
-                Define:
+                {copy.home.define}
                 {" "}
                 <strong>Ephemeral</strong>
               </p>

@@ -10,6 +10,7 @@ import {
 } from "../app/icons"
 import { getPlatformVocabularyItems } from "../app/platform-api"
 import { APP_ROUTES, getPracticeHref, getPracticeItemHref } from "../app/routes"
+import { useSitePreferences } from "../app/site-preferences"
 
 const WWW_PREFIX_RE = /^www\./
 
@@ -45,31 +46,26 @@ function getItemContexts(item: VocabularyItem): VocabularyContextEntry[] {
   return []
 }
 
-function formatDetailDate(timestamp: number): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(timestamp)
-}
-
-function getSourceLabel(item: VocabularyItem): string {
+function getSourceLabel(item: VocabularyItem, unavailableLabel: string, fallbackLabel: string): string {
   const firstSourceUrl = getItemContexts(item).find(entry => entry.sourceUrl)?.sourceUrl
   if (!firstSourceUrl) {
-    return "Source unavailable"
+    return unavailableLabel
   }
 
   try {
     const hostname = new URL(firstSourceUrl).hostname.replace(WWW_PREFIX_RE, "")
-    return hostname || "Lexio Capture"
+    return hostname || fallbackLabel
   }
   catch {
-    return "Lexio Capture"
+    return fallbackLabel
   }
 }
 
 export function WordBankPage() {
   const { getToken, isSignedIn } = useAuth()
+  const { copy, formatDate } = useSitePreferences()
+  const commonCopy = copy.common
+  const wordBankCopy = copy.wordBank
   const hasSignedInSession = Boolean(isSignedIn)
   const [items, setItems] = useState<VocabularyItem[]>([])
   const [selectedId, setSelectedId] = useState("")
@@ -152,30 +148,30 @@ export function WordBankPage() {
   const detailContexts = selectedItem ? getItemContexts(selectedItem).slice(0, 2) : []
   const normalizedQuery = deferredSearchText.trim()
   const listStatusMessage = !hasSignedInSession
-    ? "Sign in to load your saved words."
+    ? wordBankCopy.statusSignedOut
     : isLoading
-      ? "Loading your saved words…"
+      ? wordBankCopy.statusLoading
       : normalizedQuery
-        ? "No words match this search."
-        : "No saved words yet."
+        ? wordBankCopy.statusNoMatch
+        : wordBankCopy.statusEmpty
   const emptyState = !hasSignedInSession
     ? {
-        badge: "Lexio Account",
-        title: "Sign in to open your Word Bank",
-        description: "Your saved words only appear after you sign in with the same Lexio account used by the extension.",
+        badge: wordBankCopy.empty.accountBadge,
+        title: wordBankCopy.empty.accountTitle,
+        description: wordBankCopy.empty.accountDescription,
         actionHref: APP_ROUTES.signIn,
-        actionLabel: "Sign In",
+        actionLabel: wordBankCopy.empty.actionSignIn,
       }
     : normalizedQuery
       ? {
-          badge: "Search",
-          title: "No words match this search",
-          description: "Try a shorter search term or clear the search field.",
+          badge: wordBankCopy.empty.searchBadge,
+          title: wordBankCopy.empty.searchTitle,
+          description: wordBankCopy.empty.searchDescription,
         }
       : {
-          badge: "Word Bank",
-          title: "Your Word Bank is empty",
-          description: "Save a word from the extension first, then refresh this page to review it here.",
+          badge: wordBankCopy.empty.libraryBadge,
+          title: wordBankCopy.empty.libraryTitle,
+          description: wordBankCopy.empty.libraryDescription,
         }
   const practiceHref = getPracticeHref()
   const selectedPracticeHref = selectedItem ? getPracticeItemHref(selectedItem.id) : practiceHref
@@ -184,8 +180,8 @@ export function WordBankPage() {
     <div className="word-bank-page">
       <header className="word-bank-toolbar">
         <div>
-          <h1>Word Bank</h1>
-          <p>Your curated collection of vocabulary from the web.</p>
+          <h1>{wordBankCopy.title}</h1>
+          <p>{wordBankCopy.subtitle}</p>
         </div>
 
         <div className="word-bank-toolbar__actions">
@@ -195,18 +191,18 @@ export function WordBankPage() {
               type="text"
               value={searchText}
               onChange={event => setSearchText(event.target.value)}
-              placeholder="Search words..."
+              placeholder={wordBankCopy.searchPlaceholder}
             />
           </label>
 
           <button type="button" className="toolbar-button">
-            <span>Recently Added</span>
+            <span>{wordBankCopy.sortLabel}</span>
             <ChevronDownIcon className="toolbar-chevron" />
           </button>
 
           <a className="primary-button" href={practiceHref}>
             <PracticeSparkIcon className="toolbar-practice-icon" />
-            <span>Start Practice</span>
+            <span>{wordBankCopy.startPractice}</span>
           </a>
         </div>
       </header>
@@ -262,7 +258,7 @@ export function WordBankPage() {
                         <button
                           type="button"
                           className="icon-button"
-                          aria-label="Pronunciation unavailable"
+                          aria-label={wordBankCopy.pronunciationUnavailable}
                         >
                           <SpeakerIcon className="detail-speaker-icon" />
                         </button>
@@ -272,13 +268,13 @@ export function WordBankPage() {
                     <div className="detail-actions">
                       <a className="primary-button" href={selectedPracticeHref}>
                         <PlayTriangleIcon className="detail-play-icon" />
-                        <span>Practice Now</span>
+                        <span>{wordBankCopy.practiceNow}</span>
                       </a>
                       {selectedItem.masteredAt
                         ? (
                             <div className="mastered-badge">
                               <span aria-hidden="true">●</span>
-                              <span>Mastered</span>
+                              <span>{wordBankCopy.mastered}</span>
                             </div>
                           )
                         : null}
@@ -286,12 +282,12 @@ export function WordBankPage() {
                   </header>
 
                   <section className="detail-section">
-                    <h3>Definition</h3>
+                    <h3>{wordBankCopy.definition}</h3>
                     <p className="detail-definition">{getItemDefinition(selectedItem)}</p>
                   </section>
 
                   <section className="detail-section">
-                    <h3>In Context</h3>
+                    <h3>{wordBankCopy.inContext}</h3>
                     {detailContexts.length > 0
                       ? (
                           <div className="context-stack">
@@ -310,7 +306,7 @@ export function WordBankPage() {
                       : (
                           <div className="context-stack">
                             <blockquote className="context-block context-block--muted">
-                              No context sentence has been synced for this word yet.
+                              {wordBankCopy.missingContext}
                             </blockquote>
                           </div>
                         )}
@@ -318,12 +314,12 @@ export function WordBankPage() {
 
                   <footer className="detail-footer">
                     <div>
-                      <h3>Source / Added</h3>
+                      <h3>{wordBankCopy.sourceAdded}</h3>
                       <p>
                         <span aria-hidden="true">📖</span>
-                        <span>{getSourceLabel(selectedItem)}</span>
+                        <span>{getSourceLabel(selectedItem, commonCopy.labels.sourceUnavailable, commonCopy.labels.lexioCapture)}</span>
                         <span className="detail-separator">•</span>
-                        <span>{formatDetailDate(selectedItem.createdAt)}</span>
+                        <span>{formatDate(selectedItem.createdAt)}</span>
                       </p>
                     </div>
                   </footer>

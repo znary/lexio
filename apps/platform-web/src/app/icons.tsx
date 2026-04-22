@@ -44,6 +44,27 @@ export function ChevronDownIcon(props: IconProps) {
   )
 }
 
+export function GlobeIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M4.8 12h14.4" />
+      <path d="M12 4a12.4 12.4 0 0 1 0 16" />
+      <path d="M12 4a12.4 12.4 0 0 0 0 16" />
+    </BaseIcon>
+  )
+}
+
+export function MoonIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M16.7 14.6a5.9 5.9 0 0 1-7.3-7.3 7 7 0 1 0 7.3 7.3Z" />
+      <path d="M17.8 5.8v2.2" />
+      <path d="M16.7 6.9H19" />
+    </BaseIcon>
+  )
+}
+
 export function BookmarkPlusIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>
