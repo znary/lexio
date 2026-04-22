@@ -18,6 +18,7 @@ function normalizePath(path: string | undefined, fallback: string): string {
 
 export const PLATFORM_WEBSITE_PATHS = {
   signIn: normalizePath(import.meta.env.WXT_PLATFORM_SIGN_IN_PATH, "/sign-in"),
+  wordBank: normalizePath(import.meta.env.WXT_PLATFORM_WORD_BANK_PATH, "/word-bank"),
   pricing: normalizePath(import.meta.env.WXT_PLATFORM_PRICING_PATH, "/pricing"),
   extensionSync: normalizePath(import.meta.env.WXT_PLATFORM_EXTENSION_SYNC_PATH, "/extension-sync"),
 } as const

@@ -19,6 +19,7 @@ import { getRandomUUID } from "@/utils/crypto-polyfill"
 import { sendMessage } from "@/utils/message"
 import { createPlatformChatThread, deletePlatformChatThread, getPlatformChatThreadMessages, listPlatformChatThreads, streamPlatformChatThreadMessage } from "@/utils/platform/api"
 import { getSidepanelChatSnapshot, setSidepanelChatSnapshot } from "@/utils/platform/chat-cache"
+import { openPlatformWordBankTab } from "@/utils/platform/navigation"
 import { clearSidepanelChatDraft, getSidepanelChatDraft, setSidepanelChatDraft } from "@/utils/platform/sidepanel-chat-draft"
 import {
   buildCurrentWebPageSummaryRequestPayload,
@@ -32,7 +33,6 @@ import {
 import { SIDEPANEL_MARKDOWN_TEXT } from "./sidepanel-markdown"
 import { SidepanelWelcomeState } from "./sidepanel-welcome-state"
 import { ThreadHistorySheet } from "./thread-history-sheet"
-import { VocabularySheet } from "./vocabulary-sheet"
 
 interface ChatSessionState {
   sessionKey: string
@@ -524,7 +524,6 @@ export function ChatWorkspace({
   const [session, setSession] = useState<ChatSessionState>(() => createEmptySession())
   const [draftSession, setDraftSession] = useState<SidepanelChatDraft | null>(null)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
-  const [isVocabularyOpen, setIsVocabularyOpen] = useState(false)
   const [isSummarizingCurrentPage, setIsSummarizingCurrentPage] = useState(false)
   const [isLoadingThread, setIsLoadingThread] = useState(false)
   const [isRefreshingThreads, setIsRefreshingThreads] = useState(false)
@@ -947,13 +946,12 @@ export function ChatWorkspace({
             isSignedIn={isSignedIn}
             isSummarizingCurrentPage={isSummarizingCurrentPage}
             onOpenHistory={() => {
-              setIsVocabularyOpen(false)
               setIsHistoryOpen(true)
             }}
             onOpenSettings={() => void browser.runtime.openOptionsPage()}
             onOpenVocabulary={() => {
               setIsHistoryOpen(false)
-              setIsVocabularyOpen(true)
+              void openPlatformWordBankTab()
             }}
             onStartNewChat={handleStartNewChat}
             onSummarizeCurrentPage={() => {
@@ -1008,11 +1006,6 @@ export function ChatWorkspace({
           await handleDeleteThread(threadId)
         }}
         threads={threads}
-      />
-
-      <VocabularySheet
-        open={isVocabularyOpen}
-        onOpenChange={setIsVocabularyOpen}
       />
     </div>
   )

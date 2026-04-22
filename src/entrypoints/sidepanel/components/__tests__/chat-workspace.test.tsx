@@ -39,9 +39,11 @@ const {
 const {
   openPlatformExtensionSyncTabMock,
   openPlatformPricingTabMock,
+  openPlatformWordBankTabMock,
 } = vi.hoisted(() => ({
   openPlatformExtensionSyncTabMock: vi.fn(),
   openPlatformPricingTabMock: vi.fn(),
+  openPlatformWordBankTabMock: vi.fn(),
 }))
 
 vi.mock("@/utils/platform/api", () => ({
@@ -113,6 +115,7 @@ vi.mock("@/utils/message", () => ({
 vi.mock("@/utils/platform/navigation", () => ({
   openPlatformExtensionSyncTab: (...args: unknown[]) => openPlatformExtensionSyncTabMock(...args),
   openPlatformPricingTab: (...args: unknown[]) => openPlatformPricingTabMock(...args),
+  openPlatformWordBankTab: (...args: unknown[]) => openPlatformWordBankTabMock(...args),
 }))
 
 vi.mock("#imports", () => ({
@@ -131,10 +134,6 @@ vi.mock("#imports", () => ({
 
 vi.mock("@/components/platform/platform-quick-access", () => ({
   PlatformQuickAccess: () => <button type="button" aria-label="Open account menu">Account</button>,
-}))
-
-vi.mock("../vocabulary-sheet", () => ({
-  VocabularySheet: ({ open }: { open: boolean }) => (open ? <div>Vocabulary sheet</div> : null),
 }))
 
 function createThread(overrides: Partial<{
@@ -234,6 +233,8 @@ describe("chatWorkspace", () => {
     openPlatformExtensionSyncTabMock.mockResolvedValue("https://lexio.example.com/sign-in")
     openPlatformPricingTabMock.mockReset()
     openPlatformPricingTabMock.mockResolvedValue("https://lexio.example.com/pricing")
+    openPlatformWordBankTabMock.mockReset()
+    openPlatformWordBankTabMock.mockResolvedValue("https://lexio.example.com/word-bank")
   })
 
   it("renders a fresh chat session without crashing", async () => {
@@ -324,14 +325,14 @@ describe("chatWorkspace", () => {
     expect(await openTooltip(vocabularyTrigger!)).toHaveTextContent("options.vocabulary.title")
   })
 
-  it("opens the vocabulary sheet from the composer tools", async () => {
+  it("opens the website word bank from the composer tools", async () => {
     render(<ChatWorkspace isSignedIn isSessionLoading={false} sessionAccountKey="user-1" />)
 
     await screen.findByPlaceholderText("问任何问题")
 
     fireEvent.click(screen.getByRole("button", { name: "Open vocabulary" }))
 
-    expect(screen.getByText("Vocabulary sheet")).toBeInTheDocument()
+    expect(openPlatformWordBankTabMock).toHaveBeenCalledTimes(1)
   })
 
   it("shows a cached thread immediately while refreshing history in the background", async () => {

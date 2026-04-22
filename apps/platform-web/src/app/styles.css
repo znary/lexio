@@ -674,6 +674,8 @@ mark {
 }
 
 .word-bank-page {
+  --word-bank-sticky-top: 112px;
+  --word-bank-panel-max-height: calc(100vh - var(--word-bank-sticky-top) - 28px);
   display: grid;
   gap: 30px;
 }
@@ -767,10 +769,16 @@ mark {
 }
 
 .word-bank-list {
-  min-height: calc(100vh - 312px);
+  position: sticky;
+  top: var(--word-bank-sticky-top);
+  max-height: var(--word-bank-panel-max-height);
+  min-height: min(680px, var(--word-bank-panel-max-height));
   padding: 16px 14px;
   border-radius: 28px;
   background: var(--surface-low);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .word-bank-list__status {
@@ -840,8 +848,9 @@ mark {
 }
 
 .word-bank-detail {
-  position: relative;
-  min-height: calc(100vh - 312px);
+  position: sticky;
+  top: var(--word-bank-sticky-top);
+  min-height: min(680px, var(--word-bank-panel-max-height));
   padding: 48px 52px 38px;
   border-radius: 30px;
   background: var(--surface);
@@ -2159,6 +2168,14 @@ mark {
     flex-wrap: wrap;
   }
 
+  .word-bank-list,
+  .word-bank-detail {
+    position: static;
+    top: auto;
+    max-height: none;
+    min-height: auto;
+  }
+
   .search-field {
     min-width: min(100%, 320px);
   }
@@ -2239,6 +2256,7 @@ mark {
 
   .word-bank-list {
     min-height: auto;
+    overflow: visible;
   }
 
   .practice-page--state {

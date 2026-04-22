@@ -7,10 +7,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { MoreMenu } from "../more-menu"
 
-const { tabsCreateMock, getUrlMock, openMock, browserMock } = vi.hoisted(() => ({
+const { tabsCreateMock, getUrlMock, openMock, openPlatformWordBankTabMock, browserMock } = vi.hoisted(() => ({
   tabsCreateMock: vi.fn(),
   getUrlMock: vi.fn((path: string) => `chrome-extension://test${path}`),
   openMock: vi.fn(),
+  openPlatformWordBankTabMock: vi.fn(),
   browserMock: {
     runtime: {
       getURL: (path: string) => `chrome-extension://test${path}`,
@@ -39,6 +40,10 @@ vi.mock("#imports", () => ({
 
 vi.mock("wxt/browser", () => ({
   browser: browserMock,
+}))
+
+vi.mock("@/utils/platform/navigation", () => ({
+  openPlatformWordBankTab: (...args: unknown[]) => openPlatformWordBankTabMock(...args),
 }))
 
 vi.mock("@/components/ui/base-ui/dropdown-menu", async () => {
@@ -120,17 +125,17 @@ describe("more menu", () => {
     tabsCreateMock.mockReset()
     getUrlMock.mockClear()
     openMock.mockReset()
+    openPlatformWordBankTabMock.mockReset()
+    openPlatformWordBankTabMock.mockResolvedValue("https://lexio.example.com/word-bank")
   })
 
-  it("opens the vocabulary settings section on the general page", () => {
+  it("opens the website word bank", () => {
     render(<MoreMenu />)
 
     fireEvent.click(screen.getByRole("button", { name: "popup.more.title" }))
     fireEvent.click(screen.getByRole("button", { name: "popup.more.vocabulary" }))
 
-    expect(tabsCreateMock).toHaveBeenCalledWith({
-      url: "chrome-extension://test/options.html#/?section=vocabulary-settings",
-    })
+    expect(openPlatformWordBankTabMock).toHaveBeenCalledTimes(1)
   })
 
   it("opens the new website instead of the retired tutorial page", () => {

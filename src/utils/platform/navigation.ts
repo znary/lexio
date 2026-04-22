@@ -11,6 +11,13 @@ export async function openPlatformExtensionSyncTab(extensionId = browser.runtime
   return url
 }
 
+export async function openPlatformWordBankTab(): Promise<string> {
+  const url = buildPlatformWebsiteUrl(PLATFORM_WEBSITE_PATHS.wordBank)
+
+  await browser.tabs.create({ url })
+  return url
+}
+
 export async function openPlatformPricingTab(): Promise<string> {
   const url = buildPlatformWebsiteUrl(PLATFORM_WEBSITE_PATHS.pricing)
 
