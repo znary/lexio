@@ -1299,12 +1299,14 @@ mark {
 
 .practice-word-display__cursor,
 .practice-sentence-display__cursor {
+  display: inline-block;
   width: 3px;
   height: 0.96em;
   margin: 0 4px 0 3px;
   border-radius: 999px;
   background: var(--primary);
   box-shadow: 0 0 0 1px rgba(0, 67, 65, 0.08);
+  vertical-align: -0.08em;
   animation: practice-caret-blink 1s step-end infinite;
 }
 
@@ -1352,6 +1354,7 @@ mark {
   font-weight: 700;
   letter-spacing: -0.06em;
   line-height: 1.34;
+  overflow-wrap: anywhere;
 }
 
 .practice-sentence-display__lead,
@@ -1360,24 +1363,16 @@ mark {
 }
 
 .practice-sentence-display__focus {
-  position: relative;
-  display: inline-flex;
-  align-items: flex-end;
   color: var(--primary);
+  text-decoration-line: underline;
+  text-decoration-color: rgba(31, 104, 102, 0.34);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.12em;
+  text-decoration-skip-ink: none;
 }
 
 .practice-sentence-display__rest {
   color: rgba(190, 201, 199, 0.92);
-}
-
-.practice-sentence-display__underline {
-  position: absolute;
-  right: 0;
-  left: 0;
-  bottom: -0.08em;
-  height: 0.08em;
-  border-radius: 999px;
-  background: rgba(31, 104, 102, 0.34);
 }
 
 .practice-stage__source {
@@ -2078,8 +2073,8 @@ mark {
   color: rgba(118, 136, 144, 0.82);
 }
 
-:root[data-theme="dark"] .practice-sentence-display__underline {
-  background: rgba(105, 198, 193, 0.3);
+:root[data-theme="dark"] .practice-sentence-display__focus {
+  text-decoration-color: rgba(105, 198, 193, 0.3);
 }
 
 :root[data-theme="dark"] .practice-session::before {

@@ -290,7 +290,6 @@ function PracticeSentenceDisplay({ context, typedCount }: { context: PracticeCon
         {restText
           ? <span className="practice-sentence-display__rest">{restText}</span>
           : null}
-        <span className="practice-sentence-display__underline" />
       </span>
       <span className="practice-sentence-display__trail">{afterText}</span>
     </p>
