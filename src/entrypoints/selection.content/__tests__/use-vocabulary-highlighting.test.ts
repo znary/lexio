@@ -403,6 +403,91 @@ describe("shouldHighlightAcrossElements", () => {
     })
   })
 
+  it("highlights newly added content without reloading the vocabulary list", async () => {
+    const item = createVocabularyItem({
+      sourceText: "integration",
+      normalizedText: "integration",
+      kind: "word",
+      wordCount: 1,
+    })
+
+    getVocabularyItemsMock.mockResolvedValue([item])
+    document.body.innerHTML = `
+      <main>
+        <p>Integration is working.</p>
+      </main>
+    `
+
+    const container = document.createElement("div")
+    document.body.append(container)
+    render(createElement(VocabularyHighlightingHarness), { container })
+
+    await waitFor(() => {
+      const highlight = document.querySelector("p mark")
+      expect(highlight?.textContent).toBe("Integration")
+    })
+
+    expect(getVocabularyItemsMock).toHaveBeenCalledTimes(1)
+
+    const appendedParagraph = document.createElement("p")
+    appendedParagraph.textContent = "Another integration arrived later."
+    document.querySelector("main")?.append(appendedParagraph)
+
+    await waitFor(() => {
+      const highlights = [...document.querySelectorAll("main p mark")]
+      expect(highlights).toHaveLength(2)
+      expect(highlights[1]?.textContent).toBe("integration")
+    })
+
+    expect(getVocabularyItemsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("preserves the current selection when mutation-driven highlights run", async () => {
+    const item = createVocabularyItem({
+      sourceText: "integration",
+      normalizedText: "integration",
+      kind: "word",
+      wordCount: 1,
+    })
+
+    getVocabularyItemsMock.mockResolvedValue([item])
+    document.body.innerHTML = `
+      <main>
+        <p>Integration is working.</p>
+        <p>Keep this selection intact.</p>
+      </main>
+    `
+
+    const container = document.createElement("div")
+    document.body.append(container)
+    render(createElement(VocabularyHighlightingHarness), { container })
+
+    await waitFor(() => {
+      const highlight = document.querySelector("p mark")
+      expect(highlight?.textContent).toBe("Integration")
+    })
+
+    const selectionTextNode = document.querySelectorAll("main p")[1]?.firstChild
+    if (!(selectionTextNode instanceof Text)) {
+      throw new TypeError("Selection text node is missing")
+    }
+
+    selectText(selectionTextNode, 0, 4)
+    expect(window.getSelection()?.toString()).toBe("Keep")
+
+    const appendedParagraph = document.createElement("p")
+    appendedParagraph.textContent = "Late integration should still highlight."
+    document.querySelector("main")?.append(appendedParagraph)
+
+    await waitFor(() => {
+      const highlights = [...document.querySelectorAll("main p mark")]
+      expect(highlights).toHaveLength(2)
+      expect(highlights[1]?.textContent).toBe("integration")
+    })
+
+    expect(window.getSelection()?.toString()).toBe("Keep")
+  })
+
   it("keeps the hover card open while the cursor crosses the bridge between the highlight and the card", async () => {
     const item = createVocabularyItem({
       sourceText: "integration",
