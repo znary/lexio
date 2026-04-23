@@ -28,6 +28,7 @@ interface VocabularyRow {
 interface VocabularyContextSentenceRow {
   vocabulary_item_id: string
   sentence: string
+  translated_sentence: string | null
   source_url: string | null
   created_at: number
   last_seen_at: number
@@ -35,6 +36,7 @@ interface VocabularyContextSentenceRow {
 
 interface VocabularyContextEntryRecord {
   sentence: string
+  translatedSentence?: string
   sourceUrl?: string
 }
 
@@ -70,6 +72,12 @@ function normalizeSourceUrl(sourceUrl: string | null | undefined): string | null
     : null
 }
 
+function normalizeTranslatedSentence(translatedSentence: string | null | undefined): string | null {
+  return typeof translatedSentence === "string" && translatedSentence.trim()
+    ? translatedSentence.trim()
+    : null
+}
+
 function normalizeContextEntry(
   entry: Partial<VocabularyContextEntryRecord> | null | undefined,
 ): VocabularyContextEntryRecord | null {
@@ -82,9 +90,17 @@ function normalizeContextEntry(
   }
 
   const sourceUrl = normalizeSourceUrl(entry?.sourceUrl)
+  const translatedSentence = normalizeTranslatedSentence(entry?.translatedSentence)
   return sourceUrl
-    ? { sentence, sourceUrl }
-    : { sentence }
+    ? {
+        sentence,
+        sourceUrl,
+        ...(translatedSentence ? { translatedSentence } : {}),
+      }
+    : {
+        sentence,
+        ...(translatedSentence ? { translatedSentence } : {}),
+      }
 }
 
 function normalizeContextEntries(
@@ -106,6 +122,10 @@ function normalizeContextEntries(
     }
     else if (!existingEntry.sourceUrl && normalizedEntry.sourceUrl) {
       existingEntry.sourceUrl = normalizedEntry.sourceUrl
+    }
+
+    if (existingEntry && normalizedEntry.translatedSentence) {
+      existingEntry.translatedSentence = normalizedEntry.translatedSentence
     }
 
     if (uniqueEntries.length >= MAX_VOCABULARY_CONTEXT_SENTENCES) {
@@ -142,6 +162,7 @@ function readContextEntryArray(item: VocabularyItemRecord, key: string): Vocabul
     const record = entry as Record<string, unknown>
     const normalizedEntry = normalizeContextEntry({
       sentence: typeof record.sentence === "string" ? record.sentence : undefined,
+      translatedSentence: typeof record.translatedSentence === "string" ? record.translatedSentence : undefined,
       sourceUrl: typeof record.sourceUrl === "string" ? record.sourceUrl : undefined,
     })
 
@@ -175,6 +196,7 @@ export function buildVocabularyContextSentenceRows(
   return readVocabularyContextEntries(item).map((entry, index) => ({
     vocabulary_item_id: itemId,
     sentence: entry.sentence,
+    translated_sentence: entry.translatedSentence ?? null,
     source_url: entry.sourceUrl ?? null,
     created_at: baseTimestamp - index,
     last_seen_at: baseTimestamp - index,
@@ -191,6 +213,7 @@ export function mergeVocabularyContextSentenceRows(
     const currentEntries = groupedEntries.get(row.vocabulary_item_id) ?? []
     currentEntries.push({
       sentence: row.sentence,
+      ...(row.translated_sentence ? { translatedSentence: row.translated_sentence } : {}),
       ...(row.source_url ? { sourceUrl: row.source_url } : {}),
     })
     groupedEntries.set(row.vocabulary_item_id, currentEntries)

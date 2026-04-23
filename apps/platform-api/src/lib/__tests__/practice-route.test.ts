@@ -49,6 +49,7 @@ describe("practice routes", () => {
                   {
                     vocabulary_item_id: "voc_recent",
                     sentence: "The world keeps changing.",
+                    translated_sentence: "The world is always changing.",
                     source_url: "https://example.com/world",
                     created_at: 10,
                     last_seen_at: 10,
@@ -62,7 +63,7 @@ describe("practice routes", () => {
                     context_sentence: null,
                     lemma: null,
                     match_terms_json: "[]",
-                    translated_text: "世界",
+                    translated_text: "world",
                     phonetic: null,
                     part_of_speech: null,
                     definition: null,
@@ -97,11 +98,32 @@ describe("practice routes", () => {
     )
 
     expect(response.status).toBe(200)
-    const responseText = await response.text()
-    expect(responseText).toContain("\"practiceStates\": [")
-    expect(responseText).toContain("\"itemId\": \"voc_recent\"")
-    expect(responseText).toContain("\"lastDecision\": \"review-again\"")
-    expect(responseText).toContain("\"The world keeps changing.\"")
+    const payload = await response.json() as {
+      items: Array<{
+        contextEntries?: Array<{
+          sentence: string
+          translatedSentence?: string
+          sourceUrl?: string
+        }>
+      }>
+      practiceStates: Array<{
+        itemId: string
+        lastDecision: string
+      }>
+    }
+    expect(payload.practiceStates).toEqual([
+      expect.objectContaining({
+        itemId: "voc_recent",
+        lastDecision: "review-again",
+      }),
+    ])
+    expect(payload.items[0]?.contextEntries).toEqual([
+      expect.objectContaining({
+        sentence: "The world keeps changing.",
+        translatedSentence: "The world is always changing.",
+        sourceUrl: "https://example.com/world",
+      }),
+    ])
   })
 
   it("marks a practiced item as mastered and stores the practice state", async () => {

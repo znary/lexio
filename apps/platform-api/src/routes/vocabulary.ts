@@ -14,6 +14,7 @@ async function loadVocabularyContextSentenceRows(env: Env, userId: string) {
     SELECT
       vocabulary_item_context_sentences.vocabulary_item_id,
       vocabulary_item_context_sentences.sentence,
+      vocabulary_item_context_sentences.translated_sentence,
       vocabulary_item_context_sentences.source_url,
       vocabulary_item_context_sentences.created_at,
       vocabulary_item_context_sentences.last_seen_at
@@ -40,14 +41,16 @@ async function replaceVocabularyContextSentences(env: Env, itemId: string, item:
       INSERT INTO vocabulary_item_context_sentences (
         vocabulary_item_id,
         sentence,
+        translated_sentence,
         source_url,
         created_at,
         last_seen_at
       )
-      VALUES (?1, ?2, ?3, ?4, ?5)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6)
     `).bind(
       row.vocabulary_item_id,
       row.sentence,
+      row.translated_sentence,
       row.source_url,
       row.created_at,
       row.last_seen_at,

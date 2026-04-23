@@ -4,7 +4,7 @@ import type { SelectionToolbarInlineError } from "../inline-error"
 import type { BackgroundStructuredObjectStreamSnapshot, BackgroundTextStreamSnapshot, ThinkingSnapshot } from "@/types/background-stream"
 import type { LLMProviderConfig, ProviderConfig } from "@/types/config/provider"
 import type { SelectionToolbarCustomActionOutputField } from "@/types/config/selection-toolbar"
-import type { VocabularyItem } from "@/types/vocabulary"
+import type { VocabularyItem, VocabularySettings } from "@/types/vocabulary"
 import { i18n } from "#imports"
 import { ISO6393_TO_6391, LANG_CODE_TO_EN_NAME } from "@read-frog/definitions"
 import { IconAlertCircle, IconCheck, IconLoader2 } from "@tabler/icons-react"
@@ -24,6 +24,7 @@ import {
   shouldUseBuiltInDictionary,
 } from "@/utils/constants/built-in-dictionary-action"
 import { DEFAULT_DICTIONARY_ACTION_ID } from "@/utils/constants/custom-action"
+import { CONTENT_WRAPPER_CLASS, PARAGRAPH_ATTRIBUTE } from "@/utils/constants/dom-labels"
 import { prepareTranslationText } from "@/utils/host/translate/text-preparation"
 import { translateTextCore } from "@/utils/host/translate/translate-text"
 import { getOrCreateWebPageContext } from "@/utils/host/translate/webpage-context"
@@ -35,6 +36,7 @@ import {
   findVocabularyItemForSelection,
   saveTranslatedSelectionToVocabulary,
   setVocabularyItemMastered,
+  updateVocabularyItemContextTranslation,
   updateVocabularyItemDetails,
 } from "@/utils/vocabulary/service"
 import { shadowWrapper } from "../.."
@@ -68,6 +70,9 @@ interface TranslationResumeSnapshot {
   translatedText: string | undefined
   translationRunKey: string | null
 }
+
+const CONTEXT_TEXT_WHITESPACE_RE = /\s+/g
+const CONTEXT_SENTENCE_BOUNDARY_RE = /(?<=[.!?。！？])\s+|\n+/u
 
 function createTranslationRunKey({
   popoverSessionKey,
@@ -220,6 +225,202 @@ async function translateWithStandardProvider({
   })
 
   return translatedText
+}
+
+function normalizeContextSentenceText(value: string | null | undefined) {
+  return prepareTranslationText(value)?.replace(CONTEXT_TEXT_WHITESPACE_RE, " ") ?? ""
+}
+
+function splitContextParagraphIntoSentences(paragraph: string): string[] {
+  if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
+    try {
+      const segmenter = new Intl.Segmenter(undefined, { granularity: "sentence" })
+      const segments = Array.from(
+        segmenter.segment(paragraph),
+        segment => normalizeContextSentenceText(segment.segment),
+      ).filter(Boolean)
+
+      if (segments.length > 0) {
+        return segments
+      }
+    }
+    catch {
+      // Fall through to the regex fallback when sentence segmentation is unavailable.
+    }
+  }
+
+  return paragraph
+    .split(CONTEXT_SENTENCE_BOUNDARY_RE)
+    .map(segment => normalizeContextSentenceText(segment))
+    .filter(Boolean)
+}
+
+function getOriginalParagraphText(paragraphElement: HTMLElement) {
+  const clone = paragraphElement.cloneNode(true) as HTMLElement
+  clone.querySelectorAll(`.${CONTENT_WRAPPER_CLASS}`).forEach((wrapper) => {
+    wrapper.remove()
+  })
+  return normalizeContextSentenceText(clone.textContent)
+}
+
+function getTranslatedParagraphText(paragraphElement: HTMLElement): string | null {
+  const wrapperTexts = Array.from(paragraphElement.querySelectorAll<HTMLElement>(`.${CONTENT_WRAPPER_CLASS}`))
+    .map(wrapper => normalizeContextSentenceText(wrapper.textContent))
+    .filter(Boolean)
+
+  if (wrapperTexts.length > 0) {
+    return wrapperTexts.join(" ")
+  }
+
+  const nextSibling = paragraphElement.nextElementSibling
+  if (nextSibling instanceof HTMLElement && nextSibling.classList.contains(CONTENT_WRAPPER_CLASS)) {
+    return normalizeContextSentenceText(nextSibling.textContent)
+  }
+
+  return null
+}
+
+function resolveTranslatedSentenceFromParagraph(
+  sourceParagraph: string,
+  translatedParagraph: string,
+  contextSentence: string,
+): string | null {
+  const normalizedSourceParagraph = normalizeContextSentenceText(sourceParagraph)
+  const normalizedTranslatedParagraph = normalizeContextSentenceText(translatedParagraph)
+  const normalizedContextSentence = normalizeContextSentenceText(contextSentence)
+  if (!normalizedSourceParagraph || !normalizedTranslatedParagraph || !normalizedContextSentence) {
+    return null
+  }
+
+  const sourceSentences = splitContextParagraphIntoSentences(normalizedSourceParagraph)
+  const sentenceIndex = sourceSentences.findIndex(sentence => sentence === normalizedContextSentence)
+  if (sentenceIndex === -1) {
+    return normalizedSourceParagraph === normalizedContextSentence
+      ? normalizedTranslatedParagraph
+      : null
+  }
+
+  if (sourceSentences.length === 1) {
+    return normalizedTranslatedParagraph
+  }
+
+  const translatedSentences = splitContextParagraphIntoSentences(normalizedTranslatedParagraph)
+  if (translatedSentences.length === sourceSentences.length && translatedSentences[sentenceIndex]) {
+    return translatedSentences[sentenceIndex]
+  }
+
+  return null
+}
+
+function findTranslatedContextSentenceOnPage(contextSentence: string): string | null {
+  const normalizedContextSentence = normalizeContextSentenceText(contextSentence)
+  if (!normalizedContextSentence) {
+    return null
+  }
+
+  const paragraphElements = Array.from(document.querySelectorAll<HTMLElement>(`[${PARAGRAPH_ATTRIBUTE}]`))
+  for (const paragraphElement of paragraphElements) {
+    const sourceParagraph = getOriginalParagraphText(paragraphElement)
+    if (!sourceParagraph || !sourceParagraph.includes(normalizedContextSentence)) {
+      continue
+    }
+
+    const translatedParagraph = getTranslatedParagraphText(paragraphElement)
+    if (!translatedParagraph) {
+      continue
+    }
+
+    const translatedSentence = resolveTranslatedSentenceFromParagraph(
+      sourceParagraph,
+      translatedParagraph,
+      normalizedContextSentence,
+    )
+    if (translatedSentence) {
+      return translatedSentence
+    }
+  }
+
+  return null
+}
+
+async function persistVocabularyContextSentenceTranslation({
+  item,
+  contextSentence,
+  providerConfig,
+  sourceUrl,
+  translateRequest,
+}: {
+  item: VocabularyItem
+  contextSentence: string
+  providerConfig: ProviderConfig
+  sourceUrl: string
+  translateRequest: SelectionToolbarTranslateRequestSlice
+}) {
+  const normalizedContextSentence = normalizeContextSentenceText(contextSentence)
+  if (!normalizedContextSentence) {
+    return
+  }
+
+  const matchingEntry = item.contextEntries?.find(entry => normalizeContextSentenceText(entry.sentence) === normalizedContextSentence)
+  if (matchingEntry?.translatedSentence?.trim()) {
+    return
+  }
+
+  const translatedSentence = findTranslatedContextSentenceOnPage(normalizedContextSentence)
+    || await translateWithStandardProvider({
+      text: normalizedContextSentence,
+      providerConfig,
+      translateRequest,
+    })
+
+  if (!normalizeContextSentenceText(translatedSentence)) {
+    return
+  }
+
+  await updateVocabularyItemContextTranslation({
+    itemId: item.id,
+    contextSentence: normalizedContextSentence,
+    translatedSentence,
+    sourceUrl,
+  })
+}
+
+async function saveVocabularyEvidenceFromReuse({
+  contextSentence,
+  providerConfig,
+  selectionText,
+  sourceUrl,
+  translateRequest,
+  translatedText,
+  vocabularySettings,
+}: {
+  contextSentence: string | null
+  providerConfig: ProviderConfig
+  selectionText: string
+  sourceUrl: string
+  translateRequest: SelectionToolbarTranslateRequestSlice
+  translatedText: string
+  vocabularySettings: VocabularySettings
+}) {
+  const savedItem = await saveTranslatedSelectionToVocabulary({
+    sourceText: selectionText,
+    translatedText,
+    contextSentence: contextSentence ?? undefined,
+    sourceUrl,
+    sourceLang: translateRequest.language.sourceCode,
+    targetLang: translateRequest.language.targetCode,
+    settings: vocabularySettings,
+  })
+
+  if (savedItem && contextSentence) {
+    await persistVocabularyContextSentenceTranslation({
+      item: savedItem,
+      contextSentence,
+      providerConfig,
+      sourceUrl,
+      translateRequest,
+    })
+  }
 }
 
 function getDictionaryFieldValue(
@@ -532,6 +733,7 @@ export function SelectionTranslationProvider({
       ANALYTICS_FEATURE.SELECTION_TRANSLATION,
       sourceSurface,
     )
+    const providerConfig = translateRequest.providerConfig
 
     isTranslationInFlightRef.current = true
     updateTranslationResumeSnapshot({
@@ -592,6 +794,17 @@ export function SelectionTranslationProvider({
             ...analyticsContext,
             outcome: "success",
           })
+          if (providerConfig && isTranslateProviderConfig(providerConfig) && providerConfig.enabled) {
+            void saveVocabularyEvidenceFromReuse({
+              contextSentence,
+              providerConfig,
+              selectionText,
+              sourceUrl: window.location.href,
+              translateRequest,
+              translatedText: nextReusableItem.translatedText,
+              vocabularySettings,
+            }).catch(() => {})
+          }
           return
         }
       }
@@ -607,7 +820,6 @@ export function SelectionTranslationProvider({
       setVocabularyReuseState("miss")
     }
 
-    const providerConfig = translateRequest.providerConfig
     if (!providerConfig || !isTranslateProviderConfig(providerConfig)) {
       if (isActiveRun()) {
         setIsTranslating(false)
@@ -720,8 +932,9 @@ export function SelectionTranslationProvider({
       }
 
       if (selectionText && nextTranslatedText && isActiveRun()) {
+        let savedItem: VocabularyItem | null = null
         try {
-          const savedItem = await saveTranslatedSelectionToVocabulary({
+          savedItem = await saveTranslatedSelectionToVocabulary({
             sourceText: selectionText,
             translatedText: nextTranslatedText,
             contextSentence: contextSentence ?? undefined,
@@ -741,6 +954,16 @@ export function SelectionTranslationProvider({
             setSavedVocabularyItemId(null)
             setSavedVocabularyText(null)
           }
+        }
+
+        if (savedItem && contextSentence) {
+          void persistVocabularyContextSentenceTranslation({
+            item: savedItem,
+            contextSentence,
+            providerConfig,
+            sourceUrl: window.location.href,
+            translateRequest,
+          }).catch(() => {})
         }
       }
 

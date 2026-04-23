@@ -3,6 +3,7 @@ import { z } from "zod"
 export const vocabularyKindSchema = z.enum(["word", "phrase"])
 export const vocabularyContextEntrySchema = z.object({
   sentence: z.string().min(1),
+  translatedSentence: z.string().min(1).optional(),
   sourceUrl: z.string().min(1).optional(),
 })
 

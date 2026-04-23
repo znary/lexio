@@ -262,6 +262,7 @@ describe("vocabulary service", () => {
       sourceText: "article",
       translatedText: "文章",
       contextSentence: "I bookmarked this article yesterday.",
+      translatedContextSentence: "我昨天收藏了这篇文章。",
       sourceUrl: "https://example.com/article",
       sourceLang: "en",
       targetLang: "zh-CN",
@@ -277,6 +278,7 @@ describe("vocabulary service", () => {
       contextEntries: [
         {
           sentence: "I bookmarked this article yesterday.",
+          translatedSentence: "我昨天收藏了这篇文章。",
           sourceUrl: "https://example.com/article",
         },
       ],
@@ -284,9 +286,68 @@ describe("vocabulary service", () => {
     expect(savedItem?.contextEntries).toEqual([
       {
         sentence: "I bookmarked this article yesterday.",
+        translatedSentence: "我昨天收藏了这篇文章。",
         sourceUrl: "https://example.com/article",
       },
     ])
+  })
+
+  it("updates a matching context sentence with its translated sentence without duplicating it", async () => {
+    storageAdapterGetMock.mockResolvedValue([
+      {
+        id: "voc_existing",
+        sourceText: "hello",
+        normalizedText: "hello",
+        translatedText: "你好",
+        sourceLang: "en",
+        targetLang: "zh-CN",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 1,
+        lastSeenAt: 2,
+        hitCount: 3,
+        updatedAt: 4,
+        deletedAt: null,
+        contextEntries: [
+          {
+            sentence: "We said hello before the meeting.",
+            sourceUrl: "https://example.com/meeting",
+          },
+        ],
+        contextSentences: ["We said hello before the meeting."],
+      },
+    ])
+
+    const { updateVocabularyItemContextTranslation } = await import("../service")
+    const updatedItem = await updateVocabularyItemContextTranslation({
+      itemId: "voc_existing",
+      contextSentence: "We said hello before the meeting.",
+      translatedSentence: "开会前我们打过招呼。",
+      sourceUrl: "https://example.com/meeting",
+    })
+
+    expect(apiUpdateVocabularyItemMock).toHaveBeenCalledWith(expect.objectContaining({
+      id: "voc_existing",
+      contextEntries: [
+        {
+          sentence: "We said hello before the meeting.",
+          translatedSentence: "开会前我们打过招呼。",
+          sourceUrl: "https://example.com/meeting",
+        },
+      ],
+      contextSentences: ["We said hello before the meeting."],
+    }))
+    expect(updatedItem).toEqual(expect.objectContaining({
+      id: "voc_existing",
+      contextEntries: [
+        {
+          sentence: "We said hello before the meeting.",
+          translatedSentence: "开会前我们打过招呼。",
+          sourceUrl: "https://example.com/meeting",
+        },
+      ],
+      contextSentences: ["We said hello before the meeting."],
+    }))
   })
 
   it("moves a mastered item back to learning when the same selection is translated again", async () => {

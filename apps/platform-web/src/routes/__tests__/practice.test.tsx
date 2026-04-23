@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from "react"
-import { fireEvent, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { SitePreferencesProvider } from "../../app/site-preferences"
 
@@ -37,13 +37,13 @@ function renderWithSitePreferences(children: ReactNode) {
   return render(<SitePreferencesProvider>{children}</SitePreferencesProvider>)
 }
 
-function typeTarget(input: HTMLElement, target: string) {
-  for (const character of target) {
-    fireEvent.keyDown(input, { key: character })
-  }
+function submitTarget(input: HTMLElement, target: string, submitKey: "Enter" | " " = "Enter") {
+  fireEvent.change(input, { target: { value: target } })
+  fireEvent.keyDown(input, { key: submitKey })
 }
 
 afterEach(() => {
+  cleanup()
   vi.clearAllMocks()
   window.history.replaceState({}, "", "/practice")
 })
@@ -76,6 +76,7 @@ describe("practice page", () => {
           contextEntries: [
             {
               sentence: "Two cars collide on the road.",
+              translatedSentence: "两辆车在路上相撞。",
             },
           ],
         },
@@ -99,16 +100,16 @@ describe("practice page", () => {
     renderWithSitePreferences(<PracticePage />)
 
     expect(await screen.findByText("collide")).toBeTruthy()
-    const input = screen.getByLabelText("Current Word")
-    typeTarget(input, "collide")
+    submitTarget(screen.getByLabelText("Current Word"), "collide", " ")
 
     expect(await screen.findByLabelText("Two cars collide on the road.")).toBeTruthy()
-    typeTarget(input, "collide")
+    expect(screen.getByText("两辆车在路上相撞。")).toBeTruthy()
+    submitTarget(screen.getByLabelText("Current Word"), "collide")
 
     expect(await screen.findByText("Mastered this word?")).toBeTruthy()
     expect(screen.getByText("Accuracy")).toBeTruthy()
 
-    fireEvent.keyDown(input, { key: "1" })
+    fireEvent.click(screen.getByRole("button", { name: /Mastered/ }))
 
     expect(await screen.findByText("Practice complete.")).toBeTruthy()
     expect(submitPlatformPracticeResultMock).toHaveBeenCalledWith(
@@ -181,11 +182,10 @@ describe("practice page", () => {
     renderWithSitePreferences(<PracticePage />)
 
     expect(await screen.findByText("alpha")).toBeTruthy()
-    const input = screen.getByLabelText("Current Word")
-    typeTarget(input, "alpha")
+    submitTarget(screen.getByLabelText("Current Word"), "alpha", " ")
 
     expect(await screen.findByText("Mastered this word?")).toBeTruthy()
-    fireEvent.keyDown(input, { key: "2" })
+    fireEvent.click(screen.getByRole("button", { name: /Review Again/ }))
 
     expect(await screen.findByText("beta")).toBeTruthy()
     expect(submitPlatformPracticeResultMock).toHaveBeenCalledWith(
@@ -195,5 +195,95 @@ describe("practice page", () => {
         decision: "review-again",
       }),
     )
+  })
+
+  it("falls back to the word definition when the sentence has no chinese translation", async () => {
+    useAuthMock.mockReturnValue({
+      isLoaded: true,
+      isSignedIn: true,
+      getToken: vi.fn().mockResolvedValue("token-3"),
+    })
+
+    getPlatformPracticeSessionMock.mockResolvedValue({
+      items: [
+        {
+          id: "item-2",
+          sourceText: "repair",
+          normalizedText: "repair",
+          translatedText: "修理",
+          definition: "to fix something broken",
+          sourceLang: "auto",
+          targetLang: "zh",
+          kind: "word",
+          wordCount: 1,
+          createdAt: 1,
+          lastSeenAt: 1,
+          hitCount: 1,
+          updatedAt: 1,
+          deletedAt: null,
+          contextEntries: [
+            {
+              sentence: "They repair the bridge every spring.",
+            },
+          ],
+        },
+      ],
+      practiceStates: [],
+    })
+
+    const { PracticePage } = await import("../practice")
+    renderWithSitePreferences(<PracticePage />)
+
+    expect(await screen.findByText("repair")).toBeTruthy()
+    submitTarget(screen.getByLabelText("Current Word"), "repair")
+
+    expect(await screen.findByLabelText("They repair the bridge every spring.")).toBeTruthy()
+    expect(screen.getByText("to fix something broken")).toBeTruthy()
+  })
+
+  it("advances phrase practice by word when space is pressed", async () => {
+    useAuthMock.mockReturnValue({
+      isLoaded: true,
+      isSignedIn: true,
+      getToken: vi.fn().mockResolvedValue("token-4"),
+    })
+
+    getPlatformPracticeSessionMock.mockResolvedValue({
+      items: [
+        {
+          id: "item-phrase",
+          sourceText: "excuse me",
+          normalizedText: "excuse me",
+          translatedText: "打扰一下",
+          definition: "a polite phrase for getting attention",
+          sourceLang: "en",
+          targetLang: "zh",
+          kind: "phrase",
+          wordCount: 2,
+          createdAt: 1,
+          lastSeenAt: 1,
+          hitCount: 1,
+          updatedAt: 1,
+          deletedAt: null,
+        },
+      ],
+      practiceStates: [],
+    })
+
+    const { PracticePage } = await import("../practice")
+    renderWithSitePreferences(<PracticePage />)
+
+    const input = await screen.findByLabelText("Current Phrase")
+    submitTarget(input, "excuse", " ")
+
+    expect((input as HTMLInputElement).value).toBe("excuse ")
+
+    const slots = document.querySelectorAll(".practice-target-composer__slot")
+    expect(slots[0]?.className).toContain("is-complete")
+    expect(slots[1]?.className).toContain("is-active")
+
+    submitTarget(input, "excuse me", " ")
+
+    expect(await screen.findByText("Mastered this word?")).toBeTruthy()
   })
 })

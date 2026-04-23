@@ -1,4 +1,4 @@
-import type { KeyboardEvent as ReactKeyboardEvent } from "react"
+import type { ChangeEvent as ReactChangeEvent, KeyboardEvent as ReactKeyboardEvent } from "react"
 import type {
   PracticeResultResponse,
   VocabularyContextEntry,
@@ -26,8 +26,11 @@ import { useSitePreferences } from "../app/site-preferences"
 const PRACTICE_ITEM_QUERY_KEY = "item"
 const FEEDBACK_RESET_MS = 160
 const ADVANCE_DELAY_MS = 420
+const ADVANCE_PULSE_RESET_MS = 320
 const WORDS_PER_MINUTE_BASE = 5
 const WHITESPACE_RE = /\s/u
+const MULTIPLE_WHITESPACE_RE = /\s+/gu
+const TRAILING_WHITESPACE_RE = /\s$/u
 const SINGLE_QUOTE_RE = /[’‘]/gu
 const DOUBLE_QUOTE_RE = /[“”]/gu
 const DASH_RE = /[–—]/gu
@@ -36,10 +39,13 @@ const WWW_PREFIX_RE = /^www\./u
 
 type PracticeLoadState = "loading" | "ready" | "needs-sign-in" | "error"
 type PracticeStage = "word" | "sentence" | "confirm" | "complete"
-type FeedbackState = "idle" | "correct" | "wrong"
+type FeedbackState = "idle" | "correct" | "wrong" | "advance"
+type PracticeInputLayoutMode = "target-only" | "full-sentence"
+type PracticeSoundEffect = "typing" | "advance" | "success" | "wrong"
 
 interface PracticeContextMatch {
   sentence: string
+  translatedSentence?: string
   sourceUrl?: string
   sourceLabel: string
   matchedText: string
@@ -56,6 +62,7 @@ interface PracticeMetrics {
   startedAt: number | null
   inputCount: number
   correctCount: number
+  correctCharacterCount: number
   skippedSentenceCount: number
 }
 
@@ -99,6 +106,19 @@ function normalizeTypingCharacter(character: string): string {
     .replace(DOUBLE_QUOTE_RE, "\"")
     .replace(DASH_RE, "-")
     .toLocaleLowerCase()
+}
+
+function normalizeTypingText(value: string): string {
+  return value
+    .trim()
+    .replace(MULTIPLE_WHITESPACE_RE, " ")
+    .split("")
+    .map(normalizeTypingCharacter)
+    .join("")
+}
+
+function getNormalizedTypingLength(value: string): number {
+  return normalizeTypingText(value).length
 }
 
 function isWordBoundary(character: string | undefined): boolean {
@@ -179,6 +199,7 @@ function buildPracticeQueueEntry(item: VocabularyItem, sourceFallbackLabel: stri
       context: {
         ...match,
         sentence,
+        translatedSentence: entry.translatedSentence?.trim() || undefined,
         sourceUrl: entry.sourceUrl,
         sourceLabel: buildSourceLabel(entry.sourceUrl, sourceFallbackLabel),
       },
@@ -293,24 +314,240 @@ function createFreshMetrics(): PracticeMetrics {
     startedAt: null,
     inputCount: 0,
     correctCount: 0,
+    correctCharacterCount: 0,
     skippedSentenceCount: 0,
   }
 }
 
-function PracticeWordDisplay({ target, typedCount }: { target: string, typedCount: number }) {
-  const typedText = target.slice(0, typedCount)
-  const restText = target.slice(typedCount)
+function getComposerWidthCh(target: string): number {
+  return Math.min(Math.max(Array.from(target.trim()).length + 1, 6), 28)
+}
+
+function getSegmentWidthCh(segment: string): number {
+  const normalizedSegment = segment.trim().toLocaleLowerCase()
+
+  if (!normalizedSegment) {
+    return 4
+  }
+
+  const letterWidths: Record<string, number> = {
+    "w": 1.5,
+    "m": 1.5,
+    "s": 0.8,
+    "t": 0.7,
+    "r": 0.7,
+    "f": 0.7,
+    "j": 0.6,
+    "i": 0.5,
+    "l": 0.5,
+    "u": 1.1,
+    "o": 1.1,
+    "p": 1.1,
+    "q": 1.1,
+    "n": 1.1,
+    "h": 1.1,
+    "g": 1.1,
+    "d": 1.1,
+    "b": 1.1,
+    "z": 0.9,
+    "y": 0.9,
+    "x": 0.9,
+    "v": 0.9,
+    "c": 0.9,
+    "'": 0.5,
+  }
+
+  const width = normalizedSegment
+    .split("")
+    .reduce((totalWidth, character) => totalWidth + (letterWidths[character] ?? 1), 0)
+
+  return Math.max(Math.min(width + 1, 28), 4)
+}
+
+interface PracticeTargetSlotLayout {
+  text: string
+  widthCh: number
+}
+
+interface PracticeComposerProgress {
+  activeIndex: number
+  activeValue: string
+  completedCount: number
+  isReadyToAdvance: boolean
+  isSegmentedTarget: boolean
+  slotLayout: PracticeTargetSlotLayout[]
+}
+
+function getTargetSlotLayout(target: string): PracticeTargetSlotLayout[] {
+  const segments = target.trim().split(MULTIPLE_WHITESPACE_RE).filter(Boolean)
+  const sourceSegments = segments.length > 0 ? segments : [target.trim()]
+
+  return sourceSegments.map(segment => ({
+    text: segment,
+    widthCh: getSegmentWidthCh(segment),
+  }))
+}
+
+function getComposerProgress(target: string, value: string): PracticeComposerProgress {
+  const slotLayout = getTargetSlotLayout(target)
+  const isSegmentedTarget = slotLayout.length > 1
+
+  if (!isSegmentedTarget) {
+    return {
+      activeIndex: 0,
+      activeValue: value,
+      completedCount: 0,
+      isReadyToAdvance: false,
+      isSegmentedTarget,
+      slotLayout,
+    }
+  }
+
+  const typedSegments = value.trim()
+    ? value.trim().split(MULTIPLE_WHITESPACE_RE).filter(Boolean)
+    : []
+  const hasTrailingWhitespace = TRAILING_WHITESPACE_RE.test(value)
+  const completedCount = typedSegments.length === 0
+    ? 0
+    : Math.min(
+        Math.max(0, typedSegments.length - (hasTrailingWhitespace ? 0 : 1)),
+        slotLayout.length,
+      )
+  const activeIndex = Math.min(completedCount, Math.max(0, slotLayout.length - 1))
+  const activeValue = hasTrailingWhitespace ? "" : (typedSegments.at(-1) ?? "")
+  const activeTarget = slotLayout[activeIndex]?.text ?? ""
+
+  return {
+    activeIndex,
+    activeValue,
+    completedCount,
+    isReadyToAdvance: normalizeTypingText(activeValue) === normalizeTypingText(activeTarget) && activeValue.trim().length > 0,
+    isSegmentedTarget,
+    slotLayout,
+  }
+}
+
+function PracticeTargetComposer({
+  ariaLabel,
+  hasError,
+  inputRef,
+  layoutMode,
+  onChange,
+  onKeyDown,
+  pulseSlotIndex,
+  target,
+  value,
+}: {
+  ariaLabel: string
+  hasError: boolean
+  inputRef: React.RefObject<HTMLInputElement | null>
+  layoutMode: "block" | "inline"
+  onChange: (event: ReactChangeEvent<HTMLInputElement>) => void
+  onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => void
+  pulseSlotIndex: number | null
+  target: string
+  value: string
+}) {
+  const composerProgress = getComposerProgress(target, value)
+  const {
+    activeIndex,
+    activeValue,
+    completedCount,
+    isReadyToAdvance,
+    isSegmentedTarget,
+    slotLayout,
+  } = composerProgress
+  const containerStyle = isSegmentedTarget
+    ? { maxWidth: "100%" }
+    : { width: `${getComposerWidthCh(target)}ch`, maxWidth: "100%" }
 
   return (
-    <div className="practice-word-display" aria-label={target}>
+    <label
+      className={`practice-target-composer practice-target-composer--${layoutMode}${isSegmentedTarget ? " practice-target-composer--segmented" : ""}${hasError ? " is-error" : ""}`}
+      style={containerStyle}
+      onMouseDown={(event) => {
+        if (event.target !== inputRef.current) {
+          event.preventDefault()
+          inputRef.current?.focus({ preventScroll: true })
+        }
+      }}
+    >
+      {isSegmentedTarget && layoutMode === "block"
+        ? (
+            <span className="practice-target-composer__progress" aria-hidden="true">
+              {slotLayout.map((slot, index) => (
+                <span
+                  key={`${slot.text}-progress-${index}`}
+                  className={`practice-target-composer__progress-dot${index < completedCount ? " is-complete" : ""}${index === activeIndex ? " is-active" : ""}`}
+                />
+              ))}
+            </span>
+          )
+        : null}
+      <span className="practice-target-composer__slots" aria-hidden="true">
+        {slotLayout.map((slot, index) => {
+          const isComplete = isSegmentedTarget && index < completedCount
+          const isActive = !isSegmentedTarget || index === activeIndex
+          const slotStateClass = isSegmentedTarget
+            ? isComplete
+              ? " is-complete"
+              : isActive
+                ? " is-active"
+                : " is-upcoming"
+            : " is-active"
+          const isPulseSlot = pulseSlotIndex === index
+          const showReadyState = isSegmentedTarget && isActive && isReadyToAdvance
+          const slotValue = !isSegmentedTarget
+            ? value
+            : isComplete
+              ? slot.text
+              : isActive
+                ? activeValue
+                : ""
+
+          return (
+            <span
+              key={`${slot.text}-${index}`}
+              className={`practice-target-composer__slot${slotStateClass}${showReadyState ? " is-ready" : ""}${isPulseSlot ? " is-pulse" : ""}`}
+              style={isSegmentedTarget ? { width: `${slot.widthCh}ch` } : undefined}
+            >
+              <span className="practice-target-composer__slot-text">{slotValue}</span>
+            </span>
+          )
+        })}
+      </span>
+      {isSegmentedTarget && layoutMode === "block"
+        ? (
+            <span className="practice-target-composer__hint" aria-hidden="true">
+              <span className="practice-target-composer__keycap">Space</span>
+              <span className="practice-target-composer__hint-progress">{`${Math.min(activeIndex + 1, slotLayout.length)} / ${slotLayout.length}`}</span>
+            </span>
+          )
+        : null}
+      <input
+        ref={inputRef}
+        className="practice-target-composer__input"
+        type="text"
+        value={value}
+        autoCapitalize="off"
+        autoCorrect="off"
+        autoComplete="off"
+        spellCheck={false}
+        inputMode="text"
+        enterKeyHint="done"
+        aria-label={ariaLabel}
+        onChange={onChange}
+        onKeyDown={onKeyDown}
+      />
+    </label>
+  )
+}
+
+function PracticeWordDisplay({ target }: { target: string }) {
+  return (
+    <div className="practice-word-display practice-word-display--hidden" aria-hidden="true">
       <span aria-hidden="true" className="practice-word-display__visual">
-        {typedText
-          ? <span className="practice-word-display__typed">{typedText}</span>
-          : null}
-        <span className="practice-word-display__cursor" />
-        {restText
-          ? <span className="practice-word-display__rest">{restText}</span>
-          : null}
+        {target}
       </span>
     </div>
   )
@@ -408,23 +645,49 @@ function formatSkippedSentenceDescription(locale: SiteLocale, count: number): st
   }
 }
 
-function PracticeSentenceDisplay({ context, typedCount }: { context: PracticeContextMatch, typedCount: number }) {
+function PracticeSentenceDisplay({
+  composerAriaLabel,
+  context,
+  hasError,
+  inputRef,
+  layoutMode,
+  onChange,
+  onKeyDown,
+  pulseSlotIndex,
+  value,
+}: {
+  composerAriaLabel: string
+  context: PracticeContextMatch
+  hasError: boolean
+  inputRef: React.RefObject<HTMLInputElement | null>
+  layoutMode: PracticeInputLayoutMode
+  onChange: (event: ReactChangeEvent<HTMLInputElement>) => void
+  onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => void
+  pulseSlotIndex: number | null
+  value: string
+}) {
+  if (layoutMode === "full-sentence") {
+    return <p className="practice-sentence-display" aria-label={context.sentence}>{context.sentence}</p>
+  }
+
   const beforeText = context.sentence.slice(0, context.matchStart)
   const afterText = context.sentence.slice(context.matchEnd)
-  const typedText = context.matchedText.slice(0, typedCount)
-  const restText = context.matchedText.slice(typedCount)
 
   return (
     <p className="practice-sentence-display" aria-label={context.sentence}>
       <span className="practice-sentence-display__lead">{beforeText}</span>
-      <span className="practice-sentence-display__focus">
-        {typedText
-          ? <span className="practice-sentence-display__typed">{typedText}</span>
-          : null}
-        <span className="practice-sentence-display__cursor" />
-        {restText
-          ? <span className="practice-sentence-display__rest">{restText}</span>
-          : null}
+      <span className="practice-sentence-display__focus practice-sentence-display__focus--slot">
+        <PracticeTargetComposer
+          ariaLabel={composerAriaLabel}
+          hasError={hasError}
+          inputRef={inputRef}
+          layoutMode="inline"
+          onChange={onChange}
+          onKeyDown={onKeyDown}
+          pulseSlotIndex={pulseSlotIndex}
+          target={context.matchedText}
+          value={value}
+        />
       </span>
       <span className="practice-sentence-display__trail">{afterText}</span>
     </p>
@@ -447,7 +710,8 @@ export function PracticePage() {
   const [loadError, setLoadError] = useState("")
   const [currentIndex, setCurrentIndex] = useState(0)
   const [stage, setStage] = useState<PracticeStage>("word")
-  const [typedCount, setTypedCount] = useState(0)
+  const [composerValue, setComposerValue] = useState("")
+  const [composerHasError, setComposerHasError] = useState(false)
   const [metrics, setMetrics] = useState<PracticeMetrics>(() => createFreshMetrics())
   const [now, setNow] = useState(() => Date.now())
   const [feedbackState, setFeedbackState] = useState<FeedbackState>("idle")
@@ -455,10 +719,12 @@ export function PracticePage() {
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [decisionError, setDecisionError] = useState("")
   const [isDecisionPending, setIsDecisionPending] = useState(false)
+  const [pulseSlotIndex, setPulseSlotIndex] = useState<number | null>(null)
 
   const inputRef = useRef<HTMLInputElement | null>(null)
   const feedbackTimerRef = useRef<number | null>(null)
   const advanceTimerRef = useRef<number | null>(null)
+  const pulseTimerRef = useRef<number | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const hasInitializedSessionRef = useRef(false)
 
@@ -550,10 +816,38 @@ export function PracticePage() {
       window.clearTimeout(advanceTimerRef.current)
       advanceTimerRef.current = null
     }
+
+    if (pulseTimerRef.current != null) {
+      window.clearTimeout(pulseTimerRef.current)
+      pulseTimerRef.current = null
+    }
   }
 
   function focusComposer() {
     inputRef.current?.focus({ preventScroll: true })
+  }
+
+  function handleComposerChange(event: ReactChangeEvent<HTMLInputElement>) {
+    setComposerValue(event.currentTarget.value)
+    if (composerHasError) {
+      setComposerHasError(false)
+    }
+  }
+
+  function pulseNextSlot(index: number) {
+    if (index < 0) {
+      return
+    }
+
+    if (pulseTimerRef.current != null) {
+      window.clearTimeout(pulseTimerRef.current)
+    }
+
+    setPulseSlotIndex(index)
+    pulseTimerRef.current = window.setTimeout(() => {
+      setPulseSlotIndex(null)
+      pulseTimerRef.current = null
+    }, ADVANCE_PULSE_RESET_MS)
   }
 
   function resetTransientSessionState(nextQueue: PracticeQueueEntry[]) {
@@ -561,13 +855,15 @@ export function PracticePage() {
     setSessionQueue(nextQueue)
     setCurrentIndex(0)
     setStage(nextQueue.length > 0 ? "word" : "complete")
-    setTypedCount(0)
+    setComposerValue("")
+    setComposerHasError(false)
     setMetrics(createFreshMetrics())
     setFeedbackState("idle")
     setNow(Date.now())
     setSettingsOpen(false)
     setDecisionError("")
     setIsDecisionPending(false)
+    setPulseSlotIndex(null)
     focusComposer()
   }
 
@@ -616,8 +912,11 @@ export function PracticePage() {
   const elapsedMilliseconds = metrics.startedAt ? now - metrics.startedAt : 0
   const hasSavedItems = items.length > 0
   const hasLiveSession = sessionQueue.length > 0 || isPracticeComplete
+  const composerAriaLabel = WHITESPACE_RE.test(activeTarget.trim())
+    ? practiceCopy.currentPhrase
+    : practiceCopy.currentWord
 
-  function playTypingTone(tone: "correct" | "wrong") {
+  function playPracticeSound(effect: PracticeSoundEffect) {
     if (!soundEnabled) {
       return
     }
@@ -634,21 +933,106 @@ export function PracticePage() {
       void audioContext.resume()
     }
 
-    const oscillator = audioContext.createOscillator()
-    const gainNode = audioContext.createGain()
     const currentTime = audioContext.currentTime
-    const duration = tone === "wrong" ? 0.08 : 0.05
+    const destination = audioContext.destination
 
-    oscillator.type = tone === "wrong" ? "triangle" : "square"
-    oscillator.frequency.setValueAtTime(tone === "wrong" ? 160 : 420, currentTime)
-    gainNode.gain.setValueAtTime(0.0001, currentTime)
-    gainNode.gain.exponentialRampToValueAtTime(tone === "wrong" ? 0.02 : 0.012, currentTime + 0.004)
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, currentTime + duration)
+    function playTone({
+      duration,
+      frequency,
+      peakGain,
+      startAt = 0,
+      sweepTo,
+      type,
+    }: {
+      duration: number
+      frequency: number
+      peakGain: number
+      startAt?: number
+      sweepTo?: number
+      type: OscillatorType
+    }) {
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+      const startTime = currentTime + startAt
 
-    oscillator.connect(gainNode)
-    gainNode.connect(audioContext.destination)
-    oscillator.start(currentTime)
-    oscillator.stop(currentTime + duration)
+      oscillator.type = type
+      oscillator.frequency.setValueAtTime(frequency, startTime)
+      if (typeof sweepTo === "number") {
+        oscillator.frequency.exponentialRampToValueAtTime(sweepTo, startTime + duration)
+      }
+
+      gainNode.gain.setValueAtTime(0.0001, startTime)
+      gainNode.gain.exponentialRampToValueAtTime(peakGain, startTime + Math.min(0.01, duration / 2))
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + duration)
+
+      oscillator.connect(gainNode)
+      gainNode.connect(destination)
+      oscillator.start(startTime)
+      oscillator.stop(startTime + duration)
+    }
+
+    switch (effect) {
+      case "typing":
+        playTone({
+          duration: 0.024,
+          frequency: 860,
+          peakGain: 0.006,
+          sweepTo: 680,
+          type: "square",
+        })
+        break
+      case "advance":
+        playTone({
+          duration: 0.05,
+          frequency: 420,
+          peakGain: 0.012,
+          sweepTo: 540,
+          type: "square",
+        })
+        playTone({
+          duration: 0.06,
+          frequency: 620,
+          peakGain: 0.009,
+          startAt: 0.032,
+          sweepTo: 760,
+          type: "triangle",
+        })
+        break
+      case "success":
+        playTone({
+          duration: 0.05,
+          frequency: 520,
+          peakGain: 0.012,
+          sweepTo: 650,
+          type: "square",
+        })
+        playTone({
+          duration: 0.065,
+          frequency: 660,
+          peakGain: 0.01,
+          startAt: 0.045,
+          sweepTo: 840,
+          type: "sine",
+        })
+        playTone({
+          duration: 0.09,
+          frequency: 840,
+          peakGain: 0.008,
+          startAt: 0.1,
+          sweepTo: 1040,
+          type: "triangle",
+        })
+        break
+      case "wrong":
+        playTone({
+          duration: 0.085,
+          frequency: 160,
+          peakGain: 0.02,
+          sweepTo: 122,
+          type: "triangle",
+        })
+        break
+    }
   }
 
   function flashFeedback(nextState: FeedbackState) {
@@ -666,18 +1050,22 @@ export function PracticePage() {
   function showConfirmationStage() {
     clearTransientTimers()
     setStage("confirm")
-    setTypedCount(0)
+    setComposerValue("")
+    setComposerHasError(false)
     setFeedbackState("idle")
     setDecisionError("")
+    setPulseSlotIndex(null)
     focusComposer()
   }
 
   function moveToNextEntry(nextQueue: PracticeQueueEntry[], nextIndex: number) {
     clearTransientTimers()
     setSessionQueue(nextQueue)
-    setTypedCount(0)
+    setComposerValue("")
+    setComposerHasError(false)
     setFeedbackState("idle")
     setDecisionError("")
+    setPulseSlotIndex(null)
 
     if (nextIndex >= nextQueue.length) {
       setNow(Date.now())
@@ -699,8 +1087,10 @@ export function PracticePage() {
     if (stage === "word" && activeEntry.context) {
       clearTransientTimers()
       setStage("sentence")
-      setTypedCount(0)
+      setComposerValue("")
+      setComposerHasError(false)
       setFeedbackState("idle")
+      setPulseSlotIndex(null)
       focusComposer()
       return
     }
@@ -785,7 +1175,8 @@ export function PracticePage() {
         setSessionQueue(sessionQueue)
         setCurrentIndex(0)
         setStage("word")
-        setTypedCount(0)
+        setComposerValue("")
+        setComposerHasError(false)
         setFeedbackState("idle")
         setDecisionError("")
         focusComposer()
@@ -839,9 +1230,34 @@ export function PracticePage() {
         advanceTimerRef.current = null
       }
 
+      if (pulseTimerRef.current != null) {
+        window.clearTimeout(pulseTimerRef.current)
+        pulseTimerRef.current = null
+      }
+
       audioContextRef.current?.close().catch(() => undefined)
     }
   }, [])
+
+  function shouldPlayTypingSound(event: ReactKeyboardEvent<HTMLInputElement>, usesPhraseInput: boolean): boolean {
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+      return false
+    }
+
+    if (event.key === "Backspace" || event.key === "Delete") {
+      return true
+    }
+
+    if (event.key === " " || event.key === "Enter" || event.key === "Tab" || event.key === "Escape") {
+      return false
+    }
+
+    if (usesPhraseInput && event.key === " ") {
+      return false
+    }
+
+    return event.key.length === 1
+  }
 
   function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
     if (loadState !== "ready" || isPracticeComplete) {
@@ -881,40 +1297,97 @@ export function PracticePage() {
       return
     }
 
-    if (event.key === "Backspace") {
+    const usesPhraseInput = WHITESPACE_RE.test(activeTarget.trim())
+    const composerProgress = getComposerProgress(activeTarget, composerValue)
+
+    if (shouldPlayTypingSound(event, usesPhraseInput)) {
+      playPracticeSound("typing")
+    }
+
+    if (usesPhraseInput && event.key === " ") {
       event.preventDefault()
+
+      const activeSlot = composerProgress.slotLayout[composerProgress.activeIndex]
+      const normalizedSegment = normalizeTypingText(composerProgress.activeValue)
+      const normalizedActiveSlot = normalizeTypingText(activeSlot?.text ?? "")
+
+      if (!normalizedSegment || !activeSlot) {
+        return
+      }
+
+      if (normalizedSegment !== normalizedActiveSlot) {
+        setComposerHasError(true)
+        flashFeedback("wrong")
+        playPracticeSound("wrong")
+        return
+      }
+
+      const committedValue = composerProgress.slotLayout
+        .slice(0, composerProgress.activeIndex + 1)
+        .map(slot => slot.text)
+        .join(" ")
+
+      setComposerHasError(false)
+
+      if (composerProgress.activeIndex < composerProgress.slotLayout.length - 1) {
+        setComposerValue(`${committedValue} `)
+        flashFeedback("advance")
+        playPracticeSound("advance")
+        pulseNextSlot(composerProgress.activeIndex + 1)
+        return
+      }
+
+      setMetrics(currentMetrics => ({
+        ...currentMetrics,
+        startedAt: currentMetrics.startedAt ?? Date.now(),
+        inputCount: currentMetrics.inputCount + 1,
+        correctCount: currentMetrics.correctCount + 1,
+        correctCharacterCount: currentMetrics.correctCharacterCount + getNormalizedTypingLength(activeTarget),
+      }))
+      setComposerValue(committedValue)
+      flashFeedback("correct")
+      playPracticeSound("success")
+      scheduleAdvance()
       return
     }
 
-    if (event.key.length !== 1 || typedCount >= activeTarget.length) {
+    const isEnterSubmit = event.key === "Enter"
+    const isSpaceSubmit = event.key === " " && !usesPhraseInput
+
+    if (!isEnterSubmit && !isSpaceSubmit) {
       return
     }
 
     event.preventDefault()
-    const expectedCharacter = activeTarget[typedCount]
-    const matches = normalizeTypingCharacter(event.key) === normalizeTypingCharacter(expectedCharacter)
+
+    const normalizedValue = normalizeTypingText(composerValue)
+    const normalizedTarget = normalizeTypingText(activeTarget)
+    if (!normalizedValue || !normalizedTarget) {
+      return
+    }
+
+    const matches = normalizedValue === normalizedTarget
 
     setMetrics(currentMetrics => ({
       ...currentMetrics,
       startedAt: currentMetrics.startedAt ?? Date.now(),
       inputCount: currentMetrics.inputCount + 1,
       correctCount: currentMetrics.correctCount + (matches ? 1 : 0),
+      correctCharacterCount: currentMetrics.correctCharacterCount + (matches ? getNormalizedTypingLength(activeTarget) : 0),
     }))
 
     if (!matches) {
+      setComposerHasError(true)
       flashFeedback("wrong")
-      playTypingTone("wrong")
+      playPracticeSound("wrong")
       return
     }
 
-    const nextTypedCount = typedCount + 1
-    setTypedCount(nextTypedCount)
+    setComposerValue(activeTarget)
+    setComposerHasError(false)
     flashFeedback("correct")
-    playTypingTone("correct")
-
-    if (nextTypedCount >= activeTarget.length) {
-      scheduleAdvance()
-    }
+    playPracticeSound("success")
+    scheduleAdvance()
   }
 
   if (loadState === "loading") {
@@ -1082,7 +1555,7 @@ export function PracticePage() {
                     </div>
                     <div>
                       <span>{practiceCopy.speed}</span>
-                      <strong>{formatSpeed(metrics.correctCount, elapsedMilliseconds)}</strong>
+                      <strong>{formatSpeed(metrics.correctCharacterCount, elapsedMilliseconds)}</strong>
                     </div>
                     <div>
                       <span>{practiceCopy.time}</span>
@@ -1110,10 +1583,18 @@ export function PracticePage() {
                     {stage === "word"
                       ? (
                           <div className="practice-stage__body practice-stage__body--word">
-                            <div className="practice-stage__eyebrow">
-                              {activeEntry.item.kind === "phrase" ? practiceCopy.currentPhrase : practiceCopy.currentWord}
-                            </div>
-                            <PracticeWordDisplay target={activeTarget} typedCount={typedCount} />
+                            <PracticeWordDisplay target={activeTarget} />
+                            <PracticeTargetComposer
+                              ariaLabel={composerAriaLabel}
+                              hasError={composerHasError}
+                              inputRef={inputRef}
+                              layoutMode="block"
+                              onChange={handleComposerChange}
+                              onKeyDown={handleComposerKeyDown}
+                              pulseSlotIndex={pulseSlotIndex}
+                              target={activeTarget}
+                              value={composerValue}
+                            />
                             <p className="practice-stage__definition">
                               <span>{`${getVocabularyPartOfSpeech(activeEntry.item)}:`}</span>
                               <span>{getVocabularyDefinition(activeEntry.item)}</span>
@@ -1132,7 +1613,20 @@ export function PracticePage() {
                       : stage === "sentence" && activeEntry.context
                         ? (
                             <div className="practice-stage__body practice-stage__body--sentence">
-                              <PracticeSentenceDisplay context={activeEntry.context} typedCount={typedCount} />
+                              <PracticeSentenceDisplay
+                                composerAriaLabel={composerAriaLabel}
+                                context={activeEntry.context}
+                                hasError={composerHasError}
+                                inputRef={inputRef}
+                                layoutMode="target-only"
+                                onChange={handleComposerChange}
+                                onKeyDown={handleComposerKeyDown}
+                                pulseSlotIndex={pulseSlotIndex}
+                                value={composerValue}
+                              />
+                              <p className="practice-stage__translation">
+                                {activeEntry.context.translatedSentence || getVocabularyDefinition(activeEntry.item)}
+                              </p>
                               <div className="practice-stage__source">
                                 <BookIcon className="practice-stage__source-icon" />
                                 <span>{activeEntry.context.sourceLabel}</span>
@@ -1156,20 +1650,24 @@ export function PracticePage() {
               : null}
         </div>
 
-        <input
-          ref={inputRef}
-          className="practice-hidden-input"
-          type="text"
-          value=""
-          autoCapitalize="off"
-          autoCorrect="off"
-          autoComplete="off"
-          spellCheck={false}
-          inputMode="text"
-          aria-label={practiceCopy.currentWord}
-          onChange={() => {}}
-          onKeyDown={handleComposerKeyDown}
-        />
+        {stage === "confirm"
+          ? (
+              <input
+                ref={inputRef}
+                className="practice-hidden-input"
+                type="text"
+                value=""
+                autoCapitalize="off"
+                autoCorrect="off"
+                autoComplete="off"
+                spellCheck={false}
+                inputMode="text"
+                aria-label={practiceCopy.confirmPrompt}
+                onChange={() => {}}
+                onKeyDown={handleComposerKeyDown}
+              />
+            )
+          : null}
       </section>
 
       <footer className="practice-stats-bar">
@@ -1186,7 +1684,7 @@ export function PracticePage() {
         <div className="practice-stats-bar__item">
           <SpeedIcon className="practice-stats-bar__icon" />
           <span>{practiceCopy.speed}</span>
-          <strong>{formatSpeed(metrics.correctCount, elapsedMilliseconds)}</strong>
+          <strong>{formatSpeed(metrics.correctCharacterCount, elapsedMilliseconds)}</strong>
         </div>
         <div className="practice-stats-bar__item">
           <CheckCircleIcon className="practice-stats-bar__icon" />

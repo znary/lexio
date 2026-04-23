@@ -86,9 +86,14 @@ function normalizeVocabularySourceUrl(sourceUrl: string | null | undefined): str
   return normalizedSourceUrl || null
 }
 
+function normalizeVocabularyTranslatedSentence(translatedSentence: string | null | undefined): string | null {
+  const normalizedTranslatedSentence = translatedSentence?.trim()
+  return normalizedTranslatedSentence || null
+}
+
 function normalizeVocabularyContextEntry(
   entry:
-    | Partial<Pick<VocabularyContextEntry, "sentence" | "sourceUrl">>
+    | Partial<Pick<VocabularyContextEntry, "sentence" | "sourceUrl" | "translatedSentence">>
     | null
     | undefined,
 ): VocabularyContextEntry | null {
@@ -98,13 +103,21 @@ function normalizeVocabularyContextEntry(
   }
 
   const sourceUrl = normalizeVocabularySourceUrl(entry?.sourceUrl)
+  const translatedSentence = normalizeVocabularyTranslatedSentence(entry?.translatedSentence)
   return sourceUrl
-    ? { sentence, sourceUrl }
-    : { sentence }
+    ? {
+        sentence,
+        sourceUrl,
+        ...(translatedSentence ? { translatedSentence } : {}),
+      }
+    : {
+        sentence,
+        ...(translatedSentence ? { translatedSentence } : {}),
+      }
 }
 
 function normalizeVocabularyContextEntries(
-  contextEntries: Array<Partial<Pick<VocabularyContextEntry, "sentence" | "sourceUrl">> | null | undefined>,
+  contextEntries: Array<Partial<Pick<VocabularyContextEntry, "sentence" | "sourceUrl" | "translatedSentence">> | null | undefined>,
 ): VocabularyContextEntry[] {
   const uniqueEntries: VocabularyContextEntry[] = []
   const entryBySentence = new Map<string, VocabularyContextEntry>()
@@ -124,6 +137,12 @@ function normalizeVocabularyContextEntries(
       existingEntry.sourceUrl = normalizedEntry.sourceUrl
     }
 
+    if (normalizedEntry.translatedSentence) {
+      if (existingEntry) {
+        existingEntry.translatedSentence = normalizedEntry.translatedSentence
+      }
+    }
+
     if (uniqueEntries.length >= MAX_VOCABULARY_CONTEXT_SENTENCES) {
       break
     }
@@ -136,12 +155,14 @@ function resolveVocabularyContextEntries(
   item: Pick<VocabularyItem, "contextEntries" | "contextSentence" | "contextSentences">,
   nextContextSentence?: string | null,
   nextSourceUrl?: string | null,
+  nextTranslatedSentence?: string | null,
 ): VocabularyContextEntry[] {
   return normalizeVocabularyContextEntries([
     nextContextSentence
       ? {
           sentence: nextContextSentence,
           ...(nextSourceUrl ? { sourceUrl: nextSourceUrl } : {}),
+          ...(nextTranslatedSentence ? { translatedSentence: nextTranslatedSentence } : {}),
         }
       : null,
     ...(item.contextEntries ?? []),
@@ -546,6 +567,7 @@ function restoreOrUpdateExistingItem(
   translatedText: string,
   contextSentence: string | null | undefined,
   sourceUrl: string | null | undefined,
+  translatedContextSentence: string | null | undefined,
   sourceLang: string,
   targetLang: string,
   wordCount: number,
@@ -554,7 +576,7 @@ function restoreOrUpdateExistingItem(
   const metadata = buildVocabularyTermMetadata(sourceText, {
     preferredLemma: item.lemma,
   })
-  const nextContextEntries = resolveVocabularyContextEntries(item, contextSentence, sourceUrl)
+  const nextContextEntries = resolveVocabularyContextEntries(item, contextSentence, sourceUrl, translatedContextSentence)
 
   return {
     ...item,
@@ -590,6 +612,7 @@ function buildVocabularyItem(
   translatedText: string,
   contextSentence: string | null | undefined,
   sourceUrl: string | null | undefined,
+  translatedContextSentence: string | null | undefined,
   sourceLang: string,
   targetLang: string,
   wordCount: number,
@@ -600,7 +623,7 @@ function buildVocabularyItem(
     contextEntries: [],
     contextSentence: undefined,
     contextSentences: [],
-  }, contextSentence, sourceUrl)
+  }, contextSentence, sourceUrl, translatedContextSentence)
 
   return {
     id: globalThis.crypto.randomUUID(),
@@ -744,6 +767,7 @@ export async function saveTranslatedSelectionToVocabulary({
   translatedText,
   contextSentence,
   sourceUrl,
+  translatedContextSentence,
   sourceLang,
   targetLang,
   settings,
@@ -752,6 +776,7 @@ export async function saveTranslatedSelectionToVocabulary({
   translatedText: string
   contextSentence?: string
   sourceUrl?: string
+  translatedContextSentence?: string
   sourceLang: string
   targetLang: string
   settings: VocabularySettings
@@ -776,6 +801,7 @@ export async function saveTranslatedSelectionToVocabulary({
       translatedText,
       contextSentence,
       sourceUrl,
+      translatedContextSentence,
       sourceLang,
       targetLang,
       wordCount,
@@ -798,7 +824,17 @@ export async function saveTranslatedSelectionToVocabulary({
     return updatedItem
   }
 
-  const newItem = buildVocabularyItem(sourceText, translatedText, contextSentence, sourceUrl, sourceLang, targetLang, wordCount, now)
+  const newItem = buildVocabularyItem(
+    sourceText,
+    translatedText,
+    contextSentence,
+    sourceUrl,
+    translatedContextSentence,
+    sourceLang,
+    targetLang,
+    wordCount,
+    now,
+  )
   const snapshot = beginVocabularyMutation(scope)
   const nextItems = upsertVocabularyItem(currentItems, newItem)
 
@@ -814,6 +850,69 @@ export async function saveTranslatedSelectionToVocabulary({
   }
 
   return newItem
+}
+
+export async function updateVocabularyItemContextTranslation({
+  itemId,
+  contextSentence,
+  translatedSentence,
+  sourceUrl,
+}: {
+  itemId: string
+  contextSentence: string
+  translatedSentence: string
+  sourceUrl?: string
+}): Promise<VocabularyItem | null> {
+  const normalizedContextSentence = normalizeVocabularyContextSentence(contextSentence)
+  const normalizedTranslatedSentence = normalizeVocabularyTranslatedSentence(translatedSentence)
+  if (!normalizedContextSentence || !normalizedTranslatedSentence) {
+    return null
+  }
+
+  const scope = await getActiveVocabularyScope()
+  const previousItems = await getVocabularyItems()
+  const existingItem = previousItems.find(item => item.id === itemId)
+  if (!existingItem) {
+    return null
+  }
+
+  const nextContextEntries = resolveVocabularyContextEntries(
+    existingItem,
+    normalizedContextSentence,
+    normalizeVocabularySourceUrl(sourceUrl),
+    normalizedTranslatedSentence,
+  )
+  const currentContextEntries = normalizeVocabularyContextEntries([
+    ...(existingItem.contextEntries ?? []),
+    ...(existingItem.contextSentences ?? []).map(sentence => ({ sentence })),
+    existingItem.contextSentence ? { sentence: existingItem.contextSentence } : null,
+  ])
+
+  if (JSON.stringify(nextContextEntries) === JSON.stringify(currentContextEntries)) {
+    return existingItem
+  }
+
+  const updatedItem = hydrateVocabularyItem({
+    ...existingItem,
+    contextEntries: nextContextEntries,
+    contextSentences: extractVocabularyContextSentences(nextContextEntries),
+    updatedAt: Date.now(),
+  })
+
+  const snapshot = beginVocabularyMutation(scope)
+  const nextItems = upsertVocabularyItem(previousItems, updatedItem)
+  setVocabularyItemsCache(scope, nextItems)
+
+  try {
+    await apiUpdateVocabularyItem(updatedItem)
+    markVocabularySnapshotFresh(scope, nextItems)
+  }
+  catch (error) {
+    revertVocabularyMutation(scope, snapshot)
+    throw error
+  }
+
+  return updatedItem
 }
 
 export async function updateVocabularyItemDetails(

@@ -1,0 +1,2 @@
+ALTER TABLE vocabulary_item_context_sentences
+ADD COLUMN translated_sentence TEXT;

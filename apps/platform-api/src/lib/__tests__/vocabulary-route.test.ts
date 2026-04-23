@@ -22,6 +22,7 @@ function createEnv(results: unknown[] = []): Env {
                   {
                     vocabulary_item_id: "voc_recent",
                     sentence: "The world keeps changing.",
+                    translated_sentence: "The world is always changing.",
                     source_url: "https://example.com/world",
                     created_at: 10,
                     last_seen_at: 10,
@@ -29,6 +30,7 @@ function createEnv(results: unknown[] = []): Env {
                   {
                     vocabulary_item_id: "voc_older",
                     sentence: "I said hello there.",
+                    translated_sentence: null,
                     source_url: null,
                     created_at: 9,
                     last_seen_at: 9,
@@ -81,7 +83,7 @@ describe("vocabulary routes", () => {
         context_sentence: null,
         lemma: null,
         match_terms_json: "[]",
-        translated_text: "世界",
+        translated_text: "world",
         phonetic: null,
         part_of_speech: null,
         definition: null,
@@ -104,7 +106,7 @@ describe("vocabulary routes", () => {
         context_sentence: null,
         lemma: null,
         match_terms_json: "[]",
-        translated_text: "你好",
+        translated_text: "hello",
         phonetic: null,
         part_of_speech: null,
         definition: null,
@@ -133,10 +135,27 @@ describe("vocabulary routes", () => {
     expect(prepareMock).toHaveBeenCalledWith(expect.stringContaining("ORDER BY last_seen_at DESC, updated_at DESC"))
     expect(prepareMock).toHaveBeenCalledWith(expect.stringContaining("FROM vocabulary_item_context_sentences"))
     expect(response.status).toBe(200)
-    const responseText = await response.text()
-    expect(responseText).toContain("\"contextEntries\": [")
-    expect(responseText).toContain("\"contextSentences\": [")
-    expect(responseText).toContain("\"The world keeps changing.\"")
-    expect(responseText).toContain("\"sourceUrl\": \"https://example.com/world\"")
+    const payload = await response.json() as {
+      items: Array<{
+        id: string
+        contextEntries?: Array<{
+          sentence: string
+          translatedSentence?: string
+          sourceUrl?: string
+        }>
+        contextSentences?: string[]
+      }>
+    }
+    expect(payload.items[0]).toEqual(expect.objectContaining({
+      id: "voc_recent",
+      contextEntries: [
+        expect.objectContaining({
+          sentence: "The world keeps changing.",
+          translatedSentence: "The world is always changing.",
+          sourceUrl: "https://example.com/world",
+        }),
+      ],
+      contextSentences: ["The world keeps changing."],
+    }))
   })
 })

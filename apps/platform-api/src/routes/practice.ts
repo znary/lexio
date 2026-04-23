@@ -46,6 +46,7 @@ async function loadVocabularyContextSentenceRows(env: Env, userId: string) {
     SELECT
       vocabulary_item_context_sentences.vocabulary_item_id,
       vocabulary_item_context_sentences.sentence,
+      vocabulary_item_context_sentences.translated_sentence,
       vocabulary_item_context_sentences.source_url,
       vocabulary_item_context_sentences.created_at,
       vocabulary_item_context_sentences.last_seen_at

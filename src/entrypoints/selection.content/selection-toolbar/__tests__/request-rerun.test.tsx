@@ -41,6 +41,7 @@ const getOrCreateWebPageContextMock = vi.fn().mockResolvedValue(null)
 const getOrGenerateWebPageSummaryMock = vi.fn()
 const findVocabularyItemForSelectionMock = vi.fn()
 const saveTranslatedSelectionToVocabularyMock = vi.fn().mockResolvedValue(null)
+const updateVocabularyItemContextTranslationMock = vi.fn().mockResolvedValue(null)
 const setVocabularyItemMasteredMock = vi.fn().mockResolvedValue(null)
 const updateVocabularyItemDetailsMock = vi.fn().mockResolvedValue(null)
 const toastErrorMock = vi.fn()
@@ -287,6 +288,7 @@ vi.mock("@/utils/message", () => ({
 vi.mock("@/utils/vocabulary/service", () => ({
   findVocabularyItemForSelection: (...args: unknown[]) => findVocabularyItemForSelectionMock(...args),
   saveTranslatedSelectionToVocabulary: (...args: unknown[]) => saveTranslatedSelectionToVocabularyMock(...args),
+  updateVocabularyItemContextTranslation: (...args: unknown[]) => updateVocabularyItemContextTranslationMock(...args),
   setVocabularyItemMastered: (...args: unknown[]) => setVocabularyItemMasteredMock(...args),
   updateVocabularyItemDetails: (...args: unknown[]) => updateVocabularyItemDetailsMock(...args),
 }))

@@ -2,6 +2,7 @@ import { resolvePlatformApiUrl } from "./env"
 
 export interface VocabularyContextEntry {
   sentence: string
+  translatedSentence?: string
   sourceUrl?: string
 }
 
