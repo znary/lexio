@@ -8,7 +8,7 @@ vi.mock("#imports", () => ({
 }))
 
 describe("built-in dictionary action", () => {
-  it("keeps only the fields used by the merged translation result", () => {
+  it("keeps visible fields first and adds hidden enrichment fields", () => {
     const action = createBuiltInDictionaryAction("provider-1")
 
     expect(action.outputSchema.map(field => field.id)).toEqual([
@@ -17,6 +17,10 @@ describe("built-in dictionary action", () => {
       "dictionary-part-of-speech",
       "dictionary-definition",
       "dictionary-difficulty",
+      "dictionary-nuance",
+      "dictionary-word-family-core",
+      "dictionary-word-family-contrast",
+      "dictionary-word-family-related",
     ])
     expect(action.outputSchema.map(field => field.name)).toEqual([
       "term",
@@ -24,6 +28,16 @@ describe("built-in dictionary action", () => {
       "partOfSpeech",
       "definition",
       "difficulty",
+      "nuance",
+      "wordFamilyCore",
+      "wordFamilyContrast",
+      "wordFamilyRelated",
+    ])
+    expect(action.outputSchema.filter(field => field.hidden).map(field => field.name)).toEqual([
+      "nuance",
+      "wordFamilyCore",
+      "wordFamilyContrast",
+      "wordFamilyRelated",
     ])
   })
 
@@ -42,6 +56,8 @@ describe("built-in dictionary action", () => {
     expect(action.systemPrompt).toContain("Return the lemma in the source language")
     expect(action.systemPrompt).toContain("Return the phonetic transcription for that source-language lemma")
     expect(action.systemPrompt).toContain("Return the definition in {{targetLanguage}}")
+    expect(action.systemPrompt).toContain("Return a nuance note in {{targetLanguage}}")
+    expect(action.systemPrompt).toContain("term || partOfSpeech || definition")
   })
 
   it("uses the built-in dictionary only for single-term selections", () => {

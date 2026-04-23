@@ -1,5 +1,11 @@
 import type { PlatformAuthSession } from "../platform/storage"
-import type { VocabularyContextEntry, VocabularyItem, VocabularySettings } from "@/types/vocabulary"
+import type {
+  VocabularyContextEntry,
+  VocabularyItem,
+  VocabularySettings,
+  VocabularyWordFamily,
+  VocabularyWordFamilyEntry,
+} from "@/types/vocabulary"
 import { z } from "zod"
 import { vocabularyItemsSchema } from "@/types/vocabulary"
 import { storageAdapter } from "../atoms/storage-adapter"
@@ -151,6 +157,70 @@ function normalizeVocabularyContextEntries(
   return uniqueEntries
 }
 
+function normalizeVocabularyWordFamilyEntry(
+  entry: Partial<VocabularyWordFamilyEntry> | null | undefined,
+): VocabularyWordFamilyEntry | null {
+  const term = typeof entry?.term === "string" && entry.term.trim()
+    ? entry.term.trim()
+    : null
+  const definition = typeof entry?.definition === "string" && entry.definition.trim()
+    ? entry.definition.trim()
+    : null
+  const partOfSpeech = typeof entry?.partOfSpeech === "string" && entry.partOfSpeech.trim()
+    ? entry.partOfSpeech.trim()
+    : null
+
+  if (!term || !definition) {
+    return null
+  }
+
+  return partOfSpeech
+    ? { term, partOfSpeech, definition }
+    : { term, definition }
+}
+
+function normalizeVocabularyWordFamilyGroup(
+  entries: Array<Partial<VocabularyWordFamilyEntry> | null | undefined>,
+): VocabularyWordFamilyEntry[] {
+  const normalizedEntries: VocabularyWordFamilyEntry[] = []
+  const seenTerms = new Set<string>()
+
+  for (const entry of entries) {
+    const normalizedEntry = normalizeVocabularyWordFamilyEntry(entry)
+    if (!normalizedEntry) {
+      continue
+    }
+
+    const normalizedTerm = normalizedEntry.term.toLowerCase()
+    if (seenTerms.has(normalizedTerm)) {
+      continue
+    }
+
+    seenTerms.add(normalizedTerm)
+    normalizedEntries.push(normalizedEntry)
+  }
+
+  return normalizedEntries
+}
+
+function normalizeVocabularyWordFamily(wordFamily: VocabularyWordFamily | null | undefined): VocabularyWordFamily | null {
+  if (!wordFamily) {
+    return null
+  }
+
+  const normalizedWordFamily = {
+    core: normalizeVocabularyWordFamilyGroup(wordFamily.core ?? []),
+    contrast: normalizeVocabularyWordFamilyGroup(wordFamily.contrast ?? []),
+    related: normalizeVocabularyWordFamilyGroup(wordFamily.related ?? []),
+  }
+
+  return normalizedWordFamily.core.length > 0
+    || normalizedWordFamily.contrast.length > 0
+    || normalizedWordFamily.related.length > 0
+    ? normalizedWordFamily
+    : null
+}
+
 function resolveVocabularyContextEntries(
   item: Pick<VocabularyItem, "contextEntries" | "contextSentence" | "contextSentences">,
   nextContextSentence?: string | null,
@@ -180,6 +250,8 @@ function hydrateVocabularyItem(item: VocabularyItem): VocabularyItem {
     contextEntries,
     contextSentence,
     contextSentences,
+    nuance,
+    wordFamily: _wordFamily,
     ...restItem
   } = item
   const normalizedSourceText = normalizeVocabularyText(item.sourceText)
@@ -197,6 +269,10 @@ function hydrateVocabularyItem(item: VocabularyItem): VocabularyItem {
     contextSentence,
     contextSentences,
   })
+  const normalizedWordFamily = normalizeVocabularyWordFamily(item.wordFamily)
+  const normalizedNuance = typeof nuance === "string" && nuance.trim()
+    ? nuance.trim()
+    : null
 
   return {
     ...restItem,
@@ -208,6 +284,8 @@ function hydrateVocabularyItem(item: VocabularyItem): VocabularyItem {
       : {}),
     ...(metadata.lemma ? { lemma: item.lemma ?? metadata.lemma } : {}),
     ...(matchTerms.size > 0 ? { matchTerms: [...matchTerms] } : {}),
+    ...(normalizedNuance ? { nuance: normalizedNuance } : {}),
+    ...(normalizedWordFamily ? { wordFamily: normalizedWordFamily } : {}),
     normalizedText: metadata.normalizedText || item.normalizedText,
     masteredAt: item.masteredAt ?? null,
   }
@@ -917,7 +995,7 @@ export async function updateVocabularyItemContextTranslation({
 
 export async function updateVocabularyItemDetails(
   itemId: string,
-  details: Partial<Pick<VocabularyItem, "definition" | "difficulty" | "lemma" | "partOfSpeech" | "phonetic">>,
+  details: Partial<Pick<VocabularyItem, "definition" | "difficulty" | "lemma" | "nuance" | "partOfSpeech" | "phonetic" | "wordFamily">>,
 ): Promise<VocabularyItem | null> {
   const scope = await getActiveVocabularyScope()
   const previousItems = await getVocabularyItems()
@@ -926,9 +1004,22 @@ export async function updateVocabularyItemDetails(
     return null
   }
 
-  const nextDetails = Object.fromEntries(
-    Object.entries(details).filter(([, value]) => typeof value === "string" && value.trim()),
-  ) as Partial<Pick<VocabularyItem, "definition" | "difficulty" | "lemma" | "partOfSpeech" | "phonetic">>
+  const nextDetails = {
+    ...(typeof details.definition === "string" && details.definition.trim() ? { definition: details.definition.trim() } : {}),
+    ...(typeof details.difficulty === "string" && details.difficulty.trim() ? { difficulty: details.difficulty.trim() } : {}),
+    ...(typeof details.lemma === "string" && details.lemma.trim() ? { lemma: details.lemma.trim() } : {}),
+    ...(typeof details.nuance === "string" && details.nuance.trim() && existingItem.kind === "word"
+      ? { nuance: details.nuance.trim() }
+      : {}),
+    ...(typeof details.partOfSpeech === "string" && details.partOfSpeech.trim() ? { partOfSpeech: details.partOfSpeech.trim() } : {}),
+    ...(typeof details.phonetic === "string" && details.phonetic.trim() ? { phonetic: details.phonetic.trim() } : {}),
+    ...(existingItem.kind === "word"
+      ? (() => {
+          const normalizedWordFamily = normalizeVocabularyWordFamily(details.wordFamily)
+          return normalizedWordFamily ? { wordFamily: normalizedWordFamily } : {}
+        })()
+      : {}),
+  } as Partial<Pick<VocabularyItem, "definition" | "difficulty" | "lemma" | "nuance" | "partOfSpeech" | "phonetic" | "wordFamily">>
 
   if (Object.keys(nextDetails).length === 0) {
     return existingItem

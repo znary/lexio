@@ -4,7 +4,7 @@ import type { SelectionToolbarInlineError } from "../inline-error"
 import type { BackgroundStructuredObjectStreamSnapshot, BackgroundTextStreamSnapshot, ThinkingSnapshot } from "@/types/background-stream"
 import type { LLMProviderConfig, ProviderConfig } from "@/types/config/provider"
 import type { SelectionToolbarCustomActionOutputField } from "@/types/config/selection-toolbar"
-import type { VocabularyItem, VocabularySettings } from "@/types/vocabulary"
+import type { VocabularyItem, VocabularySettings, VocabularyWordFamily, VocabularyWordFamilyEntry } from "@/types/vocabulary"
 import { i18n } from "#imports"
 import { ISO6393_TO_6391, LANG_CODE_TO_EN_NAME } from "@read-frog/definitions"
 import { IconAlertCircle, IconCheck, IconLoader2 } from "@tabler/icons-react"
@@ -441,6 +441,71 @@ function getDictionaryFieldValue(
   return typeof value === "string" ? value.trim() : ""
 }
 
+function parseWordFamilyGroupValue(
+  value: string,
+  limit: number,
+): VocabularyWordFamilyEntry[] {
+  const entries: VocabularyWordFamilyEntry[] = []
+  const seenTerms = new Set<string>()
+
+  for (const rawLine of value.split("\n")) {
+    const line = rawLine.trim()
+    if (!line) {
+      continue
+    }
+
+    const parts = line.split("||").map(part => part.trim())
+    const [term = "", middle = "", ...rest] = parts
+    const definition = rest.length > 0
+      ? rest.join(" || ").trim()
+      : middle
+    const partOfSpeech = rest.length > 0 ? middle : ""
+    if (!term || !definition) {
+      continue
+    }
+
+    const normalizedTerm = term.toLowerCase()
+    if (seenTerms.has(normalizedTerm)) {
+      continue
+    }
+
+    seenTerms.add(normalizedTerm)
+    entries.push(
+      partOfSpeech
+        ? { term, partOfSpeech, definition }
+        : { term, definition },
+    )
+
+    if (entries.length >= limit) {
+      break
+    }
+  }
+
+  return entries
+}
+
+function parseWordFamilyFromDictionaryResult(
+  result: BackgroundStructuredObjectStreamSnapshot["output"] | null,
+  outputSchema: SelectionToolbarCustomActionOutputField[],
+): VocabularyWordFamily | null {
+  const core = parseWordFamilyGroupValue(
+    getDictionaryFieldValue(result, outputSchema, "dictionary-word-family-core"),
+    3,
+  )
+  const contrast = parseWordFamilyGroupValue(
+    getDictionaryFieldValue(result, outputSchema, "dictionary-word-family-contrast"),
+    2,
+  )
+  const related = parseWordFamilyGroupValue(
+    getDictionaryFieldValue(result, outputSchema, "dictionary-word-family-related"),
+    2,
+  )
+
+  return core.length > 0 || contrast.length > 0 || related.length > 0
+    ? { core, contrast, related }
+    : null
+}
+
 function extractVocabularyDetailsFromDictionaryResult(
   result: BackgroundStructuredObjectStreamSnapshot["output"] | null,
   outputSchema: SelectionToolbarCustomActionOutputField[],
@@ -448,10 +513,12 @@ function extractVocabularyDetailsFromDictionaryResult(
   const definition = getDictionaryFieldValue(result, outputSchema, "dictionary-definition")
   const difficulty = getDictionaryFieldValue(result, outputSchema, "dictionary-difficulty")
   const lemma = getDictionaryFieldValue(result, outputSchema, "dictionary-term")
+  const nuance = getDictionaryFieldValue(result, outputSchema, "dictionary-nuance")
   const partOfSpeech = getDictionaryFieldValue(result, outputSchema, "dictionary-part-of-speech")
   const phonetic = getDictionaryFieldValue(result, outputSchema, "dictionary-phonetic")
+  const wordFamily = parseWordFamilyFromDictionaryResult(result, outputSchema)
 
-  if (!definition && !difficulty && !lemma && !partOfSpeech && !phonetic) {
+  if (!definition && !difficulty && !lemma && !nuance && !partOfSpeech && !phonetic && !wordFamily) {
     return null
   }
 
@@ -459,8 +526,10 @@ function extractVocabularyDetailsFromDictionaryResult(
     ...(definition ? { definition } : {}),
     ...(difficulty ? { difficulty } : {}),
     ...(lemma ? { lemma } : {}),
+    ...(nuance ? { nuance } : {}),
     ...(partOfSpeech ? { partOfSpeech } : {}),
     ...(phonetic ? { phonetic } : {}),
+    ...(wordFamily ? { wordFamily } : {}),
   }
 }
 
@@ -1284,7 +1353,7 @@ export function SelectionTranslationProvider({
     }
     lastVocabularyDetailsSyncKeyRef.current = syncKey
 
-    void updateVocabularyItemDetails(savedVocabularyItemId, details).catch(() => {})
+    void Promise.resolve(updateVocabularyItemDetails(savedVocabularyItemId, details)).catch(() => {})
   }, [dictionaryAction, detailedExplanationLoading, detailedExplanationValue, reusedVocabularyItem, savedVocabularyItemId])
 
   const contextValue = useMemo<SelectionTranslationContextValue>(() => ({

@@ -526,6 +526,8 @@ export async function pullSyncData(env: Env, userId: string): Promise<SyncPayloa
       part_of_speech,
       definition,
       difficulty,
+      nuance,
+      word_family_json,
       source_lang,
       target_lang,
       kind,
@@ -605,10 +607,11 @@ export async function pushSyncData(env: Env, userId: string, payload: SyncPayloa
               env.DB.prepare(`
                 INSERT INTO vocabulary_items (
                   id, user_id, source_text, normalized_text, lemma, match_terms_json, translated_text,
-                  phonetic, part_of_speech, definition, difficulty, source_lang, target_lang, kind,
-                  word_count, created_at, last_seen_at, hit_count, updated_at, deleted_at, mastered_at
+                  phonetic, part_of_speech, definition, difficulty, nuance, word_family_json,
+                  source_lang, target_lang, kind, word_count, created_at, last_seen_at, hit_count,
+                  updated_at, deleted_at, mastered_at
                 )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
               `).bind(
                 itemId,
                 userId,
@@ -621,6 +624,8 @@ export async function pushSyncData(env: Env, userId: string, payload: SyncPayloa
                 row.part_of_speech,
                 row.definition,
                 row.difficulty,
+                row.nuance,
+                row.word_family_json,
                 row.source_lang,
                 row.target_lang,
                 row.kind,

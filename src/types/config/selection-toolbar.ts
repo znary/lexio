@@ -8,6 +8,7 @@ export const selectionToolbarCustomActionOutputFieldSchema = z.object({
   type: selectionToolbarCustomActionOutputTypeSchema,
   description: z.string(),
   speaking: z.boolean(),
+  hidden: z.boolean().optional(),
 })
 
 export const selectionToolbarCustomActionNotebaseMappingSchema = z.object({

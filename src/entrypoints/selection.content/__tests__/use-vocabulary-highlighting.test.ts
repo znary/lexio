@@ -403,7 +403,7 @@ describe("shouldHighlightAcrossElements", () => {
     })
   })
 
-  it("highlights newly added content without reloading the vocabulary list", async () => {
+  it("does not rescan newly added content immediately after the first full highlight", async () => {
     const item = createVocabularyItem({
       sourceText: "integration",
       normalizedText: "integration",
@@ -433,16 +433,13 @@ describe("shouldHighlightAcrossElements", () => {
     appendedParagraph.textContent = "Another integration arrived later."
     document.querySelector("main")?.append(appendedParagraph)
 
-    await waitFor(() => {
-      const highlights = [...document.querySelectorAll("main p mark")]
-      expect(highlights).toHaveLength(2)
-      expect(highlights[1]?.textContent).toBe("integration")
-    })
-
+    await new Promise(resolve => window.setTimeout(resolve, 450))
+    const highlights = [...document.querySelectorAll("main p mark")]
+    expect(highlights).toHaveLength(1)
     expect(getVocabularyItemsMock).toHaveBeenCalledTimes(1)
   })
 
-  it("preserves the current selection when mutation-driven highlights run", async () => {
+  it("preserves the current selection when new content is appended after the initial highlight pass", async () => {
     const item = createVocabularyItem({
       sourceText: "integration",
       normalizedText: "integration",
@@ -479,12 +476,9 @@ describe("shouldHighlightAcrossElements", () => {
     appendedParagraph.textContent = "Late integration should still highlight."
     document.querySelector("main")?.append(appendedParagraph)
 
-    await waitFor(() => {
-      const highlights = [...document.querySelectorAll("main p mark")]
-      expect(highlights).toHaveLength(2)
-      expect(highlights[1]?.textContent).toBe("integration")
-    })
-
+    await new Promise(resolve => window.setTimeout(resolve, 450))
+    const highlights = [...document.querySelectorAll("main p mark")]
+    expect(highlights).toHaveLength(1)
     expect(window.getSelection()?.toString()).toBe("Keep")
   })
 

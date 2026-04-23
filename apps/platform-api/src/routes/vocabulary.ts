@@ -73,6 +73,8 @@ export async function handleVocabularyList(_request: Request, env: Env, session:
       part_of_speech,
       definition,
       difficulty,
+      nuance,
+      word_family_json,
       source_lang,
       target_lang,
       kind,
@@ -118,10 +120,11 @@ export async function handleVocabularyCreate(request: Request, env: Env, session
   await env.DB.prepare(`
     INSERT INTO vocabulary_items (
       id, user_id, source_text, normalized_text, lemma, match_terms_json, translated_text,
-      phonetic, part_of_speech, definition, difficulty, source_lang, target_lang, kind,
-      word_count, created_at, last_seen_at, hit_count, updated_at, deleted_at, mastered_at
+      phonetic, part_of_speech, definition, difficulty, nuance, word_family_json,
+      source_lang, target_lang, kind, word_count, created_at, last_seen_at, hit_count,
+      updated_at, deleted_at, mastered_at
     )
-    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
   `).bind(
     row.id,
     user.id,
@@ -134,6 +137,8 @@ export async function handleVocabularyCreate(request: Request, env: Env, session
     row.part_of_speech,
     row.definition,
     row.difficulty,
+    row.nuance,
+    row.word_family_json,
     row.source_lang,
     row.target_lang,
     row.kind,
@@ -171,17 +176,19 @@ export async function handleVocabularyUpdate(request: Request, env: Env, session
         part_of_speech = ?7,
         definition = ?8,
         difficulty = ?9,
-        source_lang = ?10,
-        target_lang = ?11,
-        kind = ?12,
-        word_count = ?13,
-        created_at = ?14,
-        last_seen_at = ?15,
-        hit_count = ?16,
-        updated_at = ?17,
-        deleted_at = ?18,
-        mastered_at = ?19
-    WHERE id = ?20 AND user_id = ?21
+        nuance = ?10,
+        word_family_json = ?11,
+        source_lang = ?12,
+        target_lang = ?13,
+        kind = ?14,
+        word_count = ?15,
+        created_at = ?16,
+        last_seen_at = ?17,
+        hit_count = ?18,
+        updated_at = ?19,
+        deleted_at = ?20,
+        mastered_at = ?21
+    WHERE id = ?22 AND user_id = ?23
   `).bind(
     row.source_text,
     row.normalized_text,
@@ -192,6 +199,8 @@ export async function handleVocabularyUpdate(request: Request, env: Env, session
     row.part_of_speech,
     row.definition,
     row.difficulty,
+    row.nuance,
+    row.word_family_json,
     row.source_lang,
     row.target_lang,
     row.kind,

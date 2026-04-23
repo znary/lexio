@@ -494,26 +494,65 @@ describe("vocabulary service", () => {
     const updatedItem = await updateVocabularyItemDetails("voc_existing", {
       definition: "思考；认为",
       lemma: "think",
+      nuance: "强调主动推理和判断。",
       partOfSpeech: "verb",
       phonetic: "/theta-ng-k/",
+      wordFamily: {
+        core: [
+          { term: "think", partOfSpeech: "verb", definition: "思考" },
+          { term: "thinker", partOfSpeech: "noun", definition: "思考者" },
+        ],
+        contrast: [
+          { term: "thoughtless", partOfSpeech: "adjective", definition: "欠考虑的" },
+        ],
+        related: [
+          { term: "thought", partOfSpeech: "noun", definition: "想法" },
+        ],
+      },
     })
 
     expect(apiUpdateVocabularyItemMock).toHaveBeenCalledWith(expect.objectContaining({
       id: "voc_existing",
       normalizedText: "think",
       lemma: "think",
+      nuance: "强调主动推理和判断。",
       partOfSpeech: "verb",
       definition: "思考；认为",
       phonetic: "/theta-ng-k/",
+      wordFamily: {
+        core: [
+          { term: "think", partOfSpeech: "verb", definition: "思考" },
+          { term: "thinker", partOfSpeech: "noun", definition: "思考者" },
+        ],
+        contrast: [
+          { term: "thoughtless", partOfSpeech: "adjective", definition: "欠考虑的" },
+        ],
+        related: [
+          { term: "thought", partOfSpeech: "noun", definition: "想法" },
+        ],
+      },
       matchTerms: expect.arrayContaining(["think", "thinking", "thinks", "thought"]),
     }))
     expect(updatedItem).toEqual(expect.objectContaining({
       id: "voc_existing",
       normalizedText: "think",
       lemma: "think",
+      nuance: "强调主动推理和判断。",
       partOfSpeech: "verb",
       definition: "思考；认为",
       phonetic: "/theta-ng-k/",
+      wordFamily: {
+        core: [
+          { term: "think", partOfSpeech: "verb", definition: "思考" },
+          { term: "thinker", partOfSpeech: "noun", definition: "思考者" },
+        ],
+        contrast: [
+          { term: "thoughtless", partOfSpeech: "adjective", definition: "欠考虑的" },
+        ],
+        related: [
+          { term: "thought", partOfSpeech: "noun", definition: "想法" },
+        ],
+      },
       matchTerms: expect.arrayContaining(["think", "thinking", "thinks", "thought"]),
     }))
   })

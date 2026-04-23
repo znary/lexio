@@ -89,7 +89,12 @@ interface SiteCopy {
     startPractice: string
     practiceNow: string
     definition: string
+    nuance: string
     inContext: string
+    wordFamily: string
+    wordFamilyCore: string
+    wordFamilyContrast: string
+    wordFamilyRelated: string
     sourceAdded: string
     mastered: string
     pronunciationUnavailable: string
@@ -286,7 +291,12 @@ const siteCopyByLocale: Record<SiteLocale, SiteCopy> = {
       startPractice: "Start Practice",
       practiceNow: "Practice Now",
       definition: "Definition",
+      nuance: "Nuance",
       inContext: "In Context",
+      wordFamily: "Word Family",
+      wordFamilyCore: "Core",
+      wordFamilyContrast: "Contrast",
+      wordFamilyRelated: "Related",
       sourceAdded: "Source / Added",
       mastered: "Mastered",
       pronunciationUnavailable: "Pronunciation unavailable",
@@ -481,7 +491,12 @@ const siteCopyByLocale: Record<SiteLocale, SiteCopy> = {
       startPractice: "开始练习",
       practiceNow: "练这个词",
       definition: "释义",
+      nuance: "细微含义",
       inContext: "语境句子",
+      wordFamily: "词族",
+      wordFamilyCore: "核心",
+      wordFamilyContrast: "对比",
+      wordFamilyRelated: "相关",
       sourceAdded: "来源 / 添加时间",
       mastered: "已掌握",
       pronunciationUnavailable: "暂时没有发音",
@@ -676,7 +691,12 @@ const siteCopyByLocale: Record<SiteLocale, SiteCopy> = {
       startPractice: "練習を始める",
       practiceNow: "この単語を練習",
       definition: "定義",
+      nuance: "ニュアンス",
       inContext: "文脈",
+      wordFamily: "語族",
+      wordFamilyCore: "コア",
+      wordFamilyContrast: "対比",
+      wordFamilyRelated: "関連",
       sourceAdded: "出典 / 追加日",
       mastered: "習得済み",
       pronunciationUnavailable: "発音はまだありません",

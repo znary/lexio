@@ -77,6 +77,8 @@ export async function handlePracticeSession(_request: Request, env: Env, session
         part_of_speech,
         definition,
         difficulty,
+        nuance,
+        word_family_json,
         source_lang,
         target_lang,
         kind,

@@ -36,11 +36,10 @@ const HIGHLIGHT_EXCLUDE_SELECTORS = [
   ".read-frog-translated-content-wrapper",
   "[data-read-frog-host-toast]",
 ]
-const HIGHLIGHT_EXCLUDE_SELECTOR = HIGHLIGHT_EXCLUDE_SELECTORS.join(", ")
 const HIGHLIGHT_MARK_SELECTOR = `mark.${VOCABULARY_HIGHLIGHT_CLASS_NAME}[${VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE}]`
 const HIGHLIGHT_RESCAN_DELAY_MS = 400
-
-type PendingHighlightWork = "full" | "incremental"
+const MAX_HIGHLIGHTABLE_DOM_ELEMENTS = 1800
+const MAX_HIGHLIGHTABLE_TERMS = 600
 
 interface ActiveHoverHighlight {
   element: HTMLElement
@@ -162,55 +161,6 @@ function getHighlightElement(target: EventTarget | null) {
 
   const baseElement = target instanceof HTMLElement ? target : target.parentElement
   return baseElement?.closest(`mark.${VOCABULARY_HIGHLIGHT_CLASS_NAME}[${VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE}]`) as HTMLElement | null
-}
-
-function isElementExcludedFromHighlighting(element: HTMLElement) {
-  return !!element.closest(`${HIGHLIGHT_EXCLUDE_SELECTOR}, ${HIGHLIGHT_MARK_SELECTOR}`)
-}
-
-function addHighlightRoot(roots: HTMLElement[], candidate: HTMLElement | null) {
-  if (!candidate || !candidate.isConnected || !candidate.textContent?.trim()) {
-    return
-  }
-
-  if (isElementExcludedFromHighlighting(candidate)) {
-    return
-  }
-
-  if (roots.some(root => root === candidate || root.contains(candidate))) {
-    return
-  }
-
-  for (let index = roots.length - 1; index >= 0; index -= 1) {
-    if (candidate.contains(roots[index])) {
-      roots.splice(index, 1)
-    }
-  }
-
-  roots.push(candidate)
-}
-
-function collectMutationHighlightRoots(records: MutationRecord[]) {
-  const roots: HTMLElement[] = []
-
-  for (const record of records) {
-    if (record.type !== "childList") {
-      continue
-    }
-
-    record.addedNodes.forEach((node) => {
-      if (node instanceof HTMLElement) {
-        addHighlightRoot(roots, node)
-        return
-      }
-
-      if (node instanceof Text) {
-        addHighlightRoot(roots, node.parentElement)
-      }
-    })
-  }
-
-  return roots
 }
 
 function clearActiveSelection() {
@@ -382,37 +332,21 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
   useEffect(() => {
     let disposed = false
     let isApplyingHighlights = false
-    let observer: MutationObserver | null = null
     let rehighlightTimer: number | null = null
-    let pendingWork: PendingHighlightWork | null = null
-    const pendingMutationRoots = new Set<HTMLElement>()
-    let activeItemsCache: VocabularyItem[] = []
 
-    const scheduleHighlight = (work: PendingHighlightWork, delay = HIGHLIGHT_RESCAN_DELAY_MS) => {
-      pendingWork = work
+    const scheduleFullHighlight = (delay = HIGHLIGHT_RESCAN_DELAY_MS) => {
       if (rehighlightTimer) {
         window.clearTimeout(rehighlightTimer)
       }
 
       rehighlightTimer = window.setTimeout(() => {
         rehighlightTimer = null
-        const nextWork = pendingWork
-        pendingWork = null
-
-        if (nextWork === "full") {
-          pendingMutationRoots.clear()
-          void applyFullHighlights()
-          return
-        }
-
-        const roots = [...pendingMutationRoots]
-        pendingMutationRoots.clear()
-        void applyIncrementalHighlights(roots)
+        void applyFullHighlights()
       }, delay)
     }
 
     const queueHighlight = () => {
-      scheduleHighlight("full")
+      scheduleFullHighlight()
     }
 
     async function applyFullHighlights() {
@@ -433,6 +367,11 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
         }
 
         const activeItems = vocabulary.highlightEnabled ? getActiveVocabularyItems(items) : []
+        const totalTerms = activeItems.reduce((count, item) => count + getVocabularyHighlightTerms(item).length, 0)
+        const shouldSkipHighlighting = activeItems.length > 0 && (
+          document.body.getElementsByTagName("*").length > MAX_HIGHLIGHTABLE_DOM_ELEMENTS
+          || totalTerms > MAX_HIGHLIGHTABLE_TERMS
+        )
         const shouldClearSelection = activeItems.length > 0 || document.querySelector(HIGHLIGHT_MARK_SELECTOR) !== null
 
         if (shouldClearSelection) {
@@ -442,52 +381,15 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
         const markInstance = new Mark(document.body)
         await unmark(markInstance)
 
-        activeItemsCache = activeItems
-
         itemsByIdRef.current = new Map(activeItems.map(item => [item.id, item]))
 
-        if (!vocabulary.highlightEnabled || activeItems.length === 0) {
+        if (!vocabulary.highlightEnabled || activeItems.length === 0 || shouldSkipHighlighting) {
           hideHoverPreview()
           return
         }
 
         ensureHighlightStyle(vocabulary.highlightColor)
         await markTerms(markInstance, activeItems)
-        refreshHoverPreview()
-      }
-      finally {
-        isApplyingHighlights = false
-      }
-    }
-
-    async function applyIncrementalHighlights(roots: HTMLElement[]) {
-      if (disposed || !document.body || isApplyingHighlights || !vocabulary.highlightEnabled || roots.length === 0) {
-        return
-      }
-
-      if (activeItemsCache.length === 0) {
-        return
-      }
-
-      isApplyingHighlights = true
-
-      try {
-        const { default: Mark } = await import("mark.js")
-
-        if (disposed) {
-          return
-        }
-
-        for (const root of roots) {
-          if (!root.isConnected || !root.textContent?.trim() || isElementExcludedFromHighlighting(root)) {
-            continue
-          }
-
-          const markInstance = new Mark(root)
-          await unmark(markInstance)
-          await markTerms(markInstance, activeItemsCache)
-        }
-
         refreshHoverPreview()
       }
       finally {
@@ -535,29 +437,8 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
       scheduleHideHoverPreview()
     }
 
-    observer = new MutationObserver((records) => {
-      if (isApplyingHighlights || !vocabulary.highlightEnabled) {
-        return
-      }
-
-      const nextRoots = collectMutationHighlightRoots(records)
-      if (nextRoots.length === 0) {
-        return
-      }
-
-      nextRoots.forEach(root => pendingMutationRoots.add(root))
-      scheduleHighlight("incremental")
-    })
-
-    if (document.body) {
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-      })
-    }
-
     const handleVocabularyChanged = () => {
-      scheduleHighlight("full", 0)
+      scheduleFullHighlight(0)
     }
 
     document.addEventListener("pointerover", handlePointerOver, true)
@@ -577,7 +458,6 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
       if (rehighlightTimer) {
         window.clearTimeout(rehighlightTimer)
       }
-      observer?.disconnect()
       document.removeEventListener("pointerover", handlePointerOver, true)
       document.removeEventListener("pointermove", handlePointerMove, true)
       document.removeEventListener("pointerleave", handlePointerLeave, true)

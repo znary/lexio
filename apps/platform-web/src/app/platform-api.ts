@@ -6,6 +6,18 @@ export interface VocabularyContextEntry {
   sourceUrl?: string
 }
 
+export interface VocabularyWordFamilyEntry {
+  term: string
+  partOfSpeech?: string
+  definition: string
+}
+
+export interface VocabularyWordFamily {
+  core: VocabularyWordFamilyEntry[]
+  contrast: VocabularyWordFamilyEntry[]
+  related: VocabularyWordFamilyEntry[]
+}
+
 export interface VocabularyItem {
   id: string
   sourceText: string
@@ -15,6 +27,8 @@ export interface VocabularyItem {
   partOfSpeech?: string
   definition?: string
   difficulty?: string
+  nuance?: string
+  wordFamily?: VocabularyWordFamily
   lemma?: string
   matchTerms?: string[]
   sourceLang: string
@@ -89,7 +103,33 @@ function isVocabularyItem(value: unknown): value is VocabularyItem {
     && typeof candidate.hitCount === "number"
     && typeof candidate.updatedAt === "number"
     && (candidate.deletedAt === null || typeof candidate.deletedAt === "number")
+    && (candidate.nuance == null || typeof candidate.nuance === "string")
+    && (candidate.wordFamily == null || isVocabularyWordFamily(candidate.wordFamily))
     && (candidate.contextEntries == null || (Array.isArray(candidate.contextEntries) && candidate.contextEntries.every(isVocabularyContextEntry)))
+  )
+}
+
+function isVocabularyWordFamilyEntry(value: unknown): value is VocabularyWordFamilyEntry {
+  if (!value || typeof value !== "object") {
+    return false
+  }
+
+  const candidate = value as VocabularyWordFamilyEntry
+  return typeof candidate.term === "string"
+    && candidate.term.trim().length > 0
+    && typeof candidate.definition === "string"
+    && candidate.definition.trim().length > 0
+    && (candidate.partOfSpeech == null || typeof candidate.partOfSpeech === "string")
+}
+
+function isVocabularyWordFamily(value: unknown): value is VocabularyWordFamily {
+  if (!value || typeof value !== "object") {
+    return false
+  }
+
+  const candidate = value as VocabularyWordFamily
+  return [candidate.core, candidate.contrast, candidate.related].every(group =>
+    Array.isArray(group) && group.every(isVocabularyWordFamilyEntry),
   )
 }
 

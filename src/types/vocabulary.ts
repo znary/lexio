@@ -7,6 +7,18 @@ export const vocabularyContextEntrySchema = z.object({
   sourceUrl: z.string().min(1).optional(),
 })
 
+export const vocabularyWordFamilyEntrySchema = z.object({
+  term: z.string().min(1),
+  partOfSpeech: z.string().min(1).optional(),
+  definition: z.string().min(1),
+})
+
+export const vocabularyWordFamilySchema = z.object({
+  core: z.array(vocabularyWordFamilyEntrySchema),
+  contrast: z.array(vocabularyWordFamilyEntrySchema),
+  related: z.array(vocabularyWordFamilyEntrySchema),
+})
+
 export const vocabularySettingsSchema = z.object({
   autoSave: z.boolean(),
   highlightEnabled: z.boolean(),
@@ -28,6 +40,8 @@ export const vocabularyItemSchema = z.object({
   partOfSpeech: z.string().min(1).optional(),
   definition: z.string().min(1).optional(),
   difficulty: z.string().min(1).optional(),
+  nuance: z.string().min(1).optional(),
+  wordFamily: vocabularyWordFamilySchema.optional(),
   sourceLang: z.string().min(1),
   targetLang: z.string().min(1),
   kind: vocabularyKindSchema,
@@ -44,5 +58,7 @@ export const vocabularyItemsSchema = z.array(vocabularyItemSchema)
 
 export type VocabularyKind = z.infer<typeof vocabularyKindSchema>
 export type VocabularyContextEntry = z.infer<typeof vocabularyContextEntrySchema>
+export type VocabularyWordFamilyEntry = z.infer<typeof vocabularyWordFamilyEntrySchema>
+export type VocabularyWordFamily = z.infer<typeof vocabularyWordFamilySchema>
 export type VocabularySettings = z.infer<typeof vocabularySettingsSchema>
 export type VocabularyItem = z.infer<typeof vocabularyItemSchema>

@@ -997,6 +997,62 @@ describe("selection toolbar requests", () => {
     })
   })
 
+  it("stores nuance and word family from the dictionary result without rendering hidden fields separately", async () => {
+    translateTextCoreMock.mockResolvedValue("思考")
+    saveTranslatedSelectionToVocabularyMock.mockResolvedValue({
+      id: "voc_1",
+      sourceText: "thinking",
+    })
+    streamBackgroundStructuredObjectMock.mockResolvedValue(
+      createStructuredObjectSnapshot({
+        term: "think",
+        phonetic: "/theta-ng-k/",
+        partOfSpeech: "verb",
+        definition: "思考；认为",
+        difficulty: "B1",
+        nuance: "强调主动推理和判断。",
+        wordFamilyCore: "think || verb || 思考\nthinker || noun || 思考者",
+        wordFamilyContrast: "thoughtless || adjective || 欠考虑的",
+        wordFamilyRelated: "thought || noun || 想法",
+      }),
+    )
+    getOrCreateWebPageContextMock.mockResolvedValue(null)
+
+    const store = createStore()
+    store.set(configAtom, createStandardTranslateConfig())
+    setSelectionState(store, { text: "thinking" })
+    renderWithProviders(<TranslateButton />, store)
+
+    fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId("translation-result").textContent).toBe("思考")
+    })
+
+    await waitFor(() => {
+      expect(updateVocabularyItemDetailsMock).toHaveBeenCalledWith("voc_1", expect.objectContaining({
+        definition: "思考；认为",
+        lemma: "think",
+        nuance: "强调主动推理和判断。",
+        wordFamily: {
+          core: [
+            { term: "think", partOfSpeech: "verb", definition: "思考" },
+            { term: "thinker", partOfSpeech: "noun", definition: "思考者" },
+          ],
+          contrast: [
+            { term: "thoughtless", partOfSpeech: "adjective", definition: "欠考虑的" },
+          ],
+          related: [
+            { term: "thought", partOfSpeech: "noun", definition: "想法" },
+          ],
+        },
+      }))
+    })
+
+    expect(screen.getByTestId("translation-detailed").textContent).toContain("\"wordFamilyCore\"")
+    expect(screen.getByTestId("translation-detailed").textContent).toContain("\"nuance\"")
+  })
+
   it("keeps dictionary detail failures out of the translation UI after the main translation succeeds", async () => {
     translateTextCoreMock.mockResolvedValue("整合")
     streamBackgroundStructuredObjectMock.mockRejectedValue(new Error("dictionary failed"))

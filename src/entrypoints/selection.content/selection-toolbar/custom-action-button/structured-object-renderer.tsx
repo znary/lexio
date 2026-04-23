@@ -46,11 +46,12 @@ function buildStructuredObjectSpec(
   isStreaming: boolean,
   fieldLabelResolver?: (field: SelectionToolbarCustomActionOutputField) => string,
 ): Spec {
+  const visibleOutputSchema = outputSchema.filter(field => !field.hidden)
   const rootKey = "root"
   const childKeys: string[] = []
   const elements: Spec["elements"] = {}
 
-  outputSchema.forEach((field) => {
+  visibleOutputSchema.forEach((field) => {
     const elementKey = `field-${field.id}`
     childKeys.push(elementKey)
 

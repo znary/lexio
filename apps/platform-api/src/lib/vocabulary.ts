@@ -13,6 +13,8 @@ interface VocabularyRow {
   part_of_speech: string | null
   definition: string | null
   difficulty: string | null
+  nuance: string | null
+  word_family_json: string | null
   source_lang: string
   target_lang: string
   kind: string
@@ -39,6 +41,21 @@ interface VocabularyContextEntryRecord {
   translatedSentence?: string
   sourceUrl?: string
 }
+
+interface VocabularyWordFamilyEntryRecord {
+  term: string
+  partOfSpeech?: string
+  definition: string
+}
+
+interface VocabularyWordFamilyRecord {
+  core: VocabularyWordFamilyEntryRecord[]
+  contrast: VocabularyWordFamilyEntryRecord[]
+  related: VocabularyWordFamilyEntryRecord[]
+}
+
+const WORD_FAMILY_GROUP_KEYS = ["core", "contrast", "related"] as const
+type VocabularyWordFamilyGroupKey = (typeof WORD_FAMILY_GROUP_KEYS)[number]
 
 function readString(item: VocabularyItemRecord, key: string, fallback = ""): string {
   return typeof item[key] === "string" ? item[key] as string : fallback
@@ -148,6 +165,126 @@ function parseMatchTerms(matchTermsJson: string): string[] {
   }
 }
 
+function normalizeWordFamilyEntry(
+  entry: Partial<VocabularyWordFamilyEntryRecord> | null | undefined,
+): VocabularyWordFamilyEntryRecord | null {
+  const term = typeof entry?.term === "string" && entry.term.trim()
+    ? entry.term.trim()
+    : null
+  const definition = typeof entry?.definition === "string" && entry.definition.trim()
+    ? entry.definition.trim()
+    : null
+  const partOfSpeech = typeof entry?.partOfSpeech === "string" && entry.partOfSpeech.trim()
+    ? entry.partOfSpeech.trim()
+    : null
+
+  if (!term || !definition) {
+    return null
+  }
+
+  return partOfSpeech
+    ? { term, partOfSpeech, definition }
+    : { term, definition }
+}
+
+function normalizeWordFamilyGroup(
+  entries: Array<Partial<VocabularyWordFamilyEntryRecord> | null | undefined>,
+): VocabularyWordFamilyEntryRecord[] {
+  const uniqueEntries: VocabularyWordFamilyEntryRecord[] = []
+  const seenTerms = new Set<string>()
+
+  for (const entry of entries) {
+    const normalizedEntry = normalizeWordFamilyEntry(entry)
+    if (!normalizedEntry) {
+      continue
+    }
+
+    const normalizedTerm = normalizedEntry.term.toLowerCase()
+    if (seenTerms.has(normalizedTerm)) {
+      continue
+    }
+
+    seenTerms.add(normalizedTerm)
+    uniqueEntries.push(normalizedEntry)
+  }
+
+  return uniqueEntries
+}
+
+function normalizeWordFamily(wordFamily: Partial<Record<VocabularyWordFamilyGroupKey, Array<Partial<VocabularyWordFamilyEntryRecord> | null | undefined>>> | null | undefined): VocabularyWordFamilyRecord | null {
+  if (!wordFamily) {
+    return null
+  }
+
+  const normalizedWordFamily = {
+    core: normalizeWordFamilyGroup(wordFamily.core ?? []),
+    contrast: normalizeWordFamilyGroup(wordFamily.contrast ?? []),
+    related: normalizeWordFamilyGroup(wordFamily.related ?? []),
+  }
+
+  return WORD_FAMILY_GROUP_KEYS.some(key => normalizedWordFamily[key].length > 0)
+    ? normalizedWordFamily
+    : null
+}
+
+function readWordFamilyEntryArray(value: unknown): VocabularyWordFamilyEntryRecord[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return []
+    }
+
+    const record = entry as Record<string, unknown>
+    const normalizedEntry = normalizeWordFamilyEntry({
+      term: typeof record.term === "string" ? record.term : undefined,
+      partOfSpeech: typeof record.partOfSpeech === "string" ? record.partOfSpeech : undefined,
+      definition: typeof record.definition === "string" ? record.definition : undefined,
+    })
+
+    return normalizedEntry ? [normalizedEntry] : []
+  })
+}
+
+function readVocabularyWordFamily(item: VocabularyItemRecord): VocabularyWordFamilyRecord | null {
+  const value = item.wordFamily
+  if (!value || typeof value !== "object") {
+    return null
+  }
+
+  const record = value as Record<string, unknown>
+  return normalizeWordFamily({
+    core: readWordFamilyEntryArray(record.core),
+    contrast: readWordFamilyEntryArray(record.contrast),
+    related: readWordFamilyEntryArray(record.related),
+  })
+}
+
+function parseWordFamily(wordFamilyJson: string | null | undefined): VocabularyWordFamilyRecord | null {
+  if (!wordFamilyJson?.trim()) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(wordFamilyJson) as unknown
+    if (!parsed || typeof parsed !== "object") {
+      return null
+    }
+
+    const record = parsed as Record<string, unknown>
+    return normalizeWordFamily({
+      core: readWordFamilyEntryArray(record.core),
+      contrast: readWordFamilyEntryArray(record.contrast),
+      related: readWordFamilyEntryArray(record.related),
+    })
+  }
+  catch {
+    return null
+  }
+}
+
 function readContextEntryArray(item: VocabularyItemRecord, key: string): VocabularyContextEntryRecord[] {
   const value = item[key]
   if (!Array.isArray(value)) {
@@ -249,6 +386,7 @@ export function serializeVocabularyItem(item: VocabularyItemRecord): VocabularyR
   const normalizedText = readString(item, "normalizedText")
   const sourceText = readString(item, "sourceText", normalizedText)
   const matchTerms = readStringArray(item, "matchTerms")
+  const wordFamily = readVocabularyWordFamily(item)
 
   return {
     id: itemId,
@@ -261,6 +399,8 @@ export function serializeVocabularyItem(item: VocabularyItemRecord): VocabularyR
     part_of_speech: readOptionalString(item, "partOfSpeech"),
     definition: readOptionalString(item, "definition"),
     difficulty: readOptionalString(item, "difficulty"),
+    nuance: readOptionalString(item, "nuance"),
+    word_family_json: wordFamily ? JSON.stringify(wordFamily) : null,
     source_lang: readString(item, "sourceLang"),
     target_lang: readString(item, "targetLang"),
     kind: readString(item, "kind", "word"),
@@ -282,6 +422,7 @@ export function deserializeVocabularyItem(row: VocabularyRow): VocabularyItemRec
         }
       : null,
   ])
+  const wordFamily = parseWordFamily(row.word_family_json)
 
   return {
     id: row.id,
@@ -300,6 +441,8 @@ export function deserializeVocabularyItem(row: VocabularyRow): VocabularyItemRec
     ...(row.part_of_speech ? { partOfSpeech: row.part_of_speech } : {}),
     ...(row.definition ? { definition: row.definition } : {}),
     ...(row.difficulty ? { difficulty: row.difficulty } : {}),
+    ...(row.nuance ? { nuance: row.nuance } : {}),
+    ...(wordFamily ? { wordFamily } : {}),
     sourceLang: row.source_lang,
     targetLang: row.target_lang,
     kind: row.kind,

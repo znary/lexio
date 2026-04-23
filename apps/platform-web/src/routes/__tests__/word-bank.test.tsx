@@ -82,6 +82,115 @@ afterEach(() => {
 })
 
 describe("word bank page speech controls", () => {
+  it("renders the word family panel when the selected item has generated word family data", async () => {
+    useAuthMock.mockReturnValue({
+      isSignedIn: true,
+      getToken: vi.fn().mockResolvedValue("token-1"),
+    })
+    getPlatformVocabularyItemsMock.mockResolvedValue([
+      {
+        id: "item-1",
+        sourceText: "independent",
+        normalizedText: "independent",
+        translatedText: "独立的",
+        definition: "独立的，不依赖他人的",
+        nuance: "强调不受他人控制，也可表示彼此没有关联。",
+        partOfSpeech: "adjective",
+        phonetic: "/ˌɪndɪˈpendənt/",
+        sourceLang: "eng",
+        targetLang: "zho",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 1,
+        lastSeenAt: 1,
+        hitCount: 1,
+        updatedAt: 1,
+        deletedAt: null,
+        wordFamily: {
+          core: [
+            {
+              term: "independence",
+              partOfSpeech: "noun",
+              definition: "独立，自主",
+            },
+            {
+              term: "independently",
+              partOfSpeech: "adverb",
+              definition: "独立地，不受支配地",
+            },
+          ],
+          contrast: [
+            {
+              term: "dependent",
+              partOfSpeech: "adjective",
+              definition: "依赖的",
+            },
+          ],
+          related: [
+            {
+              term: "depend",
+              partOfSpeech: "verb",
+              definition: "依靠，取决于",
+            },
+          ],
+        },
+        contextEntries: [
+          {
+            sentence: "The team worked independently across three tracks.",
+          },
+        ],
+      },
+    ])
+
+    const { WordBankPage } = await import("../word-bank")
+    const { container } = renderWithSitePreferences(<WordBankPage />)
+
+    expect(await screen.findByLabelText("Word Family")).toBeInTheDocument()
+    const practiceButton = screen.getByRole("link", { name: "Practice Now" })
+    expect(container.querySelector(".word-bank-family-column")?.contains(practiceButton)).toBe(true)
+    expect(container.querySelector(".word-bank-detail__header")?.contains(practiceButton)).toBe(false)
+    fireEvent.click(screen.getByRole("button", { name: "independently adverb" }))
+    expect(screen.getByText("独立地，不受支配地")).toBeInTheDocument()
+  })
+
+  it("does not render the word family panel or reserve empty space when the selected item has no word family", async () => {
+    useAuthMock.mockReturnValue({
+      isSignedIn: true,
+      getToken: vi.fn().mockResolvedValue("token-1"),
+    })
+    getPlatformVocabularyItemsMock.mockResolvedValue([
+      {
+        id: "item-1",
+        sourceText: "collide",
+        normalizedText: "collide",
+        translatedText: "碰撞",
+        definition: "to hit something",
+        sourceLang: "eng",
+        targetLang: "zho",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 1,
+        lastSeenAt: 1,
+        hitCount: 1,
+        updatedAt: 1,
+        deletedAt: null,
+        contextEntries: [
+          {
+            sentence: "Two cars collide on the road.",
+          },
+        ],
+      },
+    ])
+
+    const { WordBankPage } = await import("../word-bank")
+    const { container } = renderWithSitePreferences(<WordBankPage />)
+
+    await screen.findByRole("button", { name: "Speak word" })
+
+    expect(screen.queryByLabelText("Word Family")).toBeNull()
+    expect(container.querySelector(".word-bank-detail__layout.has-family")).toBeNull()
+  })
+
   it("plays the saved word and a context sentence through shared Edge TTS", async () => {
     useAuthMock.mockReturnValue({
       isSignedIn: true,
