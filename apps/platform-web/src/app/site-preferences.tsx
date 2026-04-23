@@ -202,6 +202,8 @@ interface SiteCopy {
     singleCompleteTitle: string
     bankCompleteTitle: string
     singleCompleteDescription: string
+    muteAudioLabel: string
+    unmuteAudioLabel: string
     currentWord: string
     currentPhrase: string
     accuracy: string
@@ -386,8 +388,8 @@ const siteCopyByLocale: Record<SiteLocale, SiteCopy> = {
       clearedBadge: "Practice Queue",
       clearedTitle: "Your queue is clear",
       clearedDescription: "Everything in your Word Bank is marked as mastered right now.",
-      typingSoundTitle: "Typing sound",
-      typingSoundDescription: "Play separate sounds for typing, moving to the next word, and finishing a correct answer.",
+      typingSoundTitle: "Practice audio",
+      typingSoundDescription: "Use one switch for key sounds and automatic speech when a word, phrase, or sentence appears.",
       modeTitle: "Mode",
       modeSingleDescription: "Current word only",
       modeBankDescription: "Whole Word Bank queue",
@@ -397,6 +399,8 @@ const siteCopyByLocale: Record<SiteLocale, SiteCopy> = {
       singleCompleteTitle: "Word finished.",
       bankCompleteTitle: "Practice complete.",
       singleCompleteDescription: "You have finished both stages for this word.",
+      muteAudioLabel: "Mute practice audio",
+      unmuteAudioLabel: "Unmute practice audio",
       currentWord: "Current Word",
       currentPhrase: "Current Phrase",
       accuracy: "Accuracy",
@@ -579,8 +583,8 @@ const siteCopyByLocale: Record<SiteLocale, SiteCopy> = {
       clearedBadge: "练习队列",
       clearedTitle: "当前没有要练的词",
       clearedDescription: "你单词本里的词现在都已经标成已掌握了。",
-      typingSoundTitle: "打字声音",
-      typingSoundDescription: "打字、切到下一个词、整项输入成功时，分别给不同的轻反馈音。",
+      typingSoundTitle: "练习声音",
+      typingSoundDescription: "一个开关同时控制按键反馈音，以及看到单词、词组、句子时的自动语音。",
       modeTitle: "模式",
       modeSingleDescription: "只练当前这个词",
       modeBankDescription: "按整个单词本顺序练习",
@@ -590,6 +594,8 @@ const siteCopyByLocale: Record<SiteLocale, SiteCopy> = {
       singleCompleteTitle: "这个词练完了。",
       bankCompleteTitle: "本轮练习完成。",
       singleCompleteDescription: "这个词的单词阶段和句子阶段都已经练完。",
+      muteAudioLabel: "静音练习声音",
+      unmuteAudioLabel: "开启练习声音",
       currentWord: "当前单词",
       currentPhrase: "当前词组",
       accuracy: "准确率",
@@ -772,8 +778,8 @@ const siteCopyByLocale: Record<SiteLocale, SiteCopy> = {
       clearedBadge: "練習キュー",
       clearedTitle: "今は練習する単語がありません",
       clearedDescription: "単語帳の項目は現在すべて習得済みとして扱われています。",
-      typingSoundTitle: "打鍵音",
-      typingSoundDescription: "タイプ中、次の語への移動、正解完了で、それぞれ控えめに違う音を鳴らします。",
+      typingSoundTitle: "練習サウンド",
+      typingSoundDescription: "キー音と、単語・フレーズ・文が表示された時の自動音声を一つの切り替えで管理します。",
       modeTitle: "モード",
       modeSingleDescription: "この単語だけを練習",
       modeBankDescription: "単語帳全体を順に練習",
@@ -783,6 +789,8 @@ const siteCopyByLocale: Record<SiteLocale, SiteCopy> = {
       singleCompleteTitle: "この単語は終わりました。",
       bankCompleteTitle: "今回の練習が終わりました。",
       singleCompleteDescription: "この単語は、単語入力と文脈入力の両方を完了しました。",
+      muteAudioLabel: "練習音声をミュート",
+      unmuteAudioLabel: "練習音声を有効化",
       currentWord: "現在の単語",
       currentPhrase: "現在のフレーズ",
       accuracy: "正確さ",

@@ -124,6 +124,16 @@ export function SpeakerIcon(props: IconProps) {
   )
 }
 
+export function SpeakerMutedIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M5 10h3.3l4.1-3.5v11l-4.1-3.5H5Z" />
+      <path d="m15.2 9.2 4.4 5.6" />
+      <path d="m19.6 9.2-4.4 5.6" />
+    </BaseIcon>
+  )
+}
+
 export function StopSquareIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>

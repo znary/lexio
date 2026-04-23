@@ -1,13 +1,29 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from "react"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { SitePreferencesProvider } from "../../app/site-preferences"
 
 const useAuthMock = vi.fn()
 const getPlatformPracticeSessionMock = vi.fn()
 const submitPlatformPracticeResultMock = vi.fn()
+const synthesizeEdgeTTSMock = vi.fn()
+const audioInstances: MockAudio[] = []
+
+class MockAudio {
+  onended: (() => void) | null = null
+  onerror: (() => void) | null = null
+  pause = vi.fn()
+  play = vi.fn(async () => {})
+  preload = "auto"
+  src = ""
+
+  constructor(src: string) {
+    this.src = src
+    audioInstances.push(this)
+  }
+}
 
 vi.mock("@clerk/clerk-react", () => ({
   useAuth: () => useAuthMock(),
@@ -16,6 +32,10 @@ vi.mock("@clerk/clerk-react", () => ({
 vi.mock("../../app/platform-api", () => ({
   getPlatformPracticeSession: (...args: unknown[]) => getPlatformPracticeSessionMock(...args),
   submitPlatformPracticeResult: (...args: unknown[]) => submitPlatformPracticeResultMock(...args),
+}))
+
+vi.mock("@/utils/server/edge-tts/api", () => ({
+  synthesizeEdgeTTS: (...args: unknown[]) => synthesizeEdgeTTSMock(...args),
 }))
 
 Object.defineProperty(window, "matchMedia", {
@@ -42,9 +62,30 @@ function submitTarget(input: HTMLElement, target: string, submitKey: "Enter" | "
   fireEvent.keyDown(input, { key: submitKey })
 }
 
+beforeEach(() => {
+  audioInstances.length = 0
+  vi.stubGlobal("Audio", MockAudio)
+  Object.defineProperty(URL, "createObjectURL", {
+    value: vi.fn(() => "blob:tts-audio"),
+    configurable: true,
+    writable: true,
+  })
+  Object.defineProperty(URL, "revokeObjectURL", {
+    value: vi.fn(),
+    configurable: true,
+    writable: true,
+  })
+  synthesizeEdgeTTSMock.mockResolvedValue({
+    ok: true,
+    audio: new Uint8Array([1, 2, 3]).buffer,
+    contentType: "audio/mpeg",
+  })
+})
+
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  vi.unstubAllGlobals()
   window.history.replaceState({}, "", "/practice")
 })
 
@@ -285,5 +326,64 @@ describe("practice page", () => {
     submitTarget(input, "excuse me", " ")
 
     expect(await screen.findByText("Mastered this word?")).toBeTruthy()
+  })
+
+  it("auto plays speech for the visible word and sentence when sound is enabled", async () => {
+    useAuthMock.mockReturnValue({
+      isLoaded: true,
+      isSignedIn: true,
+      getToken: vi.fn().mockResolvedValue("token-5"),
+    })
+
+    getPlatformPracticeSessionMock.mockResolvedValue({
+      items: [
+        {
+          id: "item-speech",
+          sourceText: "collide",
+          normalizedText: "collide",
+          translatedText: "碰撞",
+          definition: "to hit something",
+          sourceLang: "eng",
+          targetLang: "zh",
+          kind: "word",
+          wordCount: 1,
+          createdAt: 1,
+          lastSeenAt: 1,
+          hitCount: 1,
+          updatedAt: 1,
+          deletedAt: null,
+          contextEntries: [
+            {
+              sentence: "Two cars collide on the road.",
+              translatedSentence: "两辆车在路上相撞。",
+            },
+          ],
+        },
+      ],
+      practiceStates: [],
+    })
+
+    const { PracticePage } = await import("../practice")
+    renderWithSitePreferences(<PracticePage />)
+
+    await waitFor(() => {
+      expect(audioInstances).toHaveLength(1)
+    })
+    expect(synthesizeEdgeTTSMock).toHaveBeenCalledWith(expect.objectContaining({
+      text: "collide",
+      voice: "en-US-DavisNeural",
+    }))
+
+    submitTarget(await screen.findByLabelText("Current Word"), "collide", " ")
+
+    expect(await screen.findByLabelText("Two cars collide on the road.")).toBeTruthy()
+    await waitFor(() => {
+      expect(audioInstances).toHaveLength(2)
+    })
+    expect(synthesizeEdgeTTSMock).toHaveBeenCalledWith(expect.objectContaining({
+      text: "Two cars collide on the road.",
+      voice: "en-US-DavisNeural",
+    }))
+    expect(synthesizeEdgeTTSMock).toHaveBeenCalledTimes(2)
   })
 })

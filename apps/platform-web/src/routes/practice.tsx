@@ -15,13 +15,17 @@ import {
   ClockIcon,
   KeyboardIcon,
   RestartIcon,
+  SpeakerIcon,
+  SpeakerMutedIcon,
   SpeedIcon,
+  SpinnerIcon,
   TargetIcon,
   TuningIcon,
 } from "../app/icons"
 import { getPlatformPracticeSession, submitPlatformPracticeResult } from "../app/platform-api"
 import { APP_ROUTES } from "../app/routes"
 import { useSitePreferences } from "../app/site-preferences"
+import { usePlatformTextToSpeech } from "../app/use-platform-text-to-speech"
 
 const PRACTICE_ITEM_QUERY_KEY = "item"
 const FEEDBACK_RESET_MS = 160
@@ -207,6 +211,26 @@ function buildPracticeQueueEntry(item: VocabularyItem, sourceFallbackLabel: stri
   }
 
   return { item, context: null }
+}
+
+function getPracticeSpeechRequest(entry: PracticeQueueEntry, stage: PracticeStage): { playbackKey: string, text: string, language?: string } | null {
+  if (stage === "word") {
+    return {
+      playbackKey: `${entry.item.id}:word`,
+      text: entry.item.sourceText,
+      language: entry.item.sourceLang,
+    }
+  }
+
+  if (stage === "sentence" && entry.context) {
+    return {
+      playbackKey: `${entry.item.id}:sentence`,
+      text: entry.context.sentence,
+      language: entry.item.sourceLang,
+    }
+  }
+
+  return null
 }
 
 function sortBankPracticeItems(
@@ -698,7 +722,15 @@ export function PracticePage() {
   const { getToken, isLoaded, isSignedIn } = useAuth()
   const { copy, getLanguageLabel, locale } = useSitePreferences()
   const commonCopy = copy.common
+  const wordBankCopy = copy.wordBank
   const practiceCopy = copy.practice
+  const {
+    activePlaybackKey: activeSpeechPlaybackKey,
+    play: playSpeech,
+    preload: preloadSpeech,
+    state: speechPlaybackState,
+    stop: stopSpeech,
+  } = usePlatformTextToSpeech(wordBankCopy)
   const practiceItemId = useMemo(() => getPracticeItemIdFromLocation(), [])
   const practiceMode = practiceItemId ? "single" : "bank"
   const hasSignedInSession = Boolean(isSignedIn)
@@ -727,6 +759,7 @@ export function PracticePage() {
   const pulseTimerRef = useRef<number | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const hasInitializedSessionRef = useRef(false)
+  const autoPlayedSpeechKeyRef = useRef("")
 
   useEffect(() => {
     let cancelled = false
@@ -834,6 +867,16 @@ export function PracticePage() {
     }
   }
 
+  function toggleSoundEnabled() {
+    setSoundEnabled((enabled) => {
+      if (enabled) {
+        stopSpeech()
+      }
+
+      return !enabled
+    })
+  }
+
   function pulseNextSlot(index: number) {
     if (index < 0) {
       return
@@ -864,6 +907,7 @@ export function PracticePage() {
     setDecisionError("")
     setIsDecisionPending(false)
     setPulseSlotIndex(null)
+    autoPlayedSpeechKeyRef.current = ""
     focusComposer()
   }
 
@@ -906,6 +950,7 @@ export function PracticePage() {
   const activeLanguage = activeEntry
     ? getLanguageLabel(activeEntry.item.sourceLang, getDefaultEnglishLabel(locale))
     : getDefaultEnglishLabel(locale)
+  const nextEntry = sessionQueue[currentIndex + 1] ?? null
   const nextWords = useMemo(() => {
     return sessionQueue.slice(currentIndex + 1, currentIndex + 4).map(entry => entry.item.sourceText)
   }, [currentIndex, sessionQueue])
@@ -915,6 +960,46 @@ export function PracticePage() {
   const composerAriaLabel = WHITESPACE_RE.test(activeTarget.trim())
     ? practiceCopy.currentPhrase
     : practiceCopy.currentWord
+  const currentSpeechRequest = useMemo(() => {
+    if (!activeEntry) {
+      return null
+    }
+
+    return getPracticeSpeechRequest(activeEntry, stage)
+  }, [activeEntry, stage])
+  const preloadSpeechRequests = useMemo(() => {
+    if (!activeEntry) {
+      return []
+    }
+
+    const requests = new Map<string, { text: string, language?: string }>()
+    const currentRequest = getPracticeSpeechRequest(activeEntry, stage)
+    if (currentRequest) {
+      requests.set(`${currentRequest.language ?? ""}::${currentRequest.text}`, {
+        text: currentRequest.text,
+        language: currentRequest.language,
+      })
+    }
+
+    if (stage === "word" && activeEntry.context) {
+      requests.set(`${activeEntry.item.sourceLang}::${activeEntry.context.sentence}`, {
+        text: activeEntry.context.sentence,
+        language: activeEntry.item.sourceLang,
+      })
+    }
+
+    if (nextEntry) {
+      requests.set(`${nextEntry.item.sourceLang}::${nextEntry.item.sourceText}`, {
+        text: nextEntry.item.sourceText,
+        language: nextEntry.item.sourceLang,
+      })
+    }
+
+    return [...requests.values()]
+  }, [activeEntry, nextEntry, stage])
+  const isCurrentSpeechBusy = currentSpeechRequest != null
+    && activeSpeechPlaybackKey === currentSpeechRequest.playbackKey
+    && speechPlaybackState !== "idle"
 
   function playPracticeSound(effect: PracticeSoundEffect) {
     if (!soundEnabled) {
@@ -1219,6 +1304,38 @@ export function PracticePage() {
   }, [activeEntry, isPracticeComplete, loadState, stage])
 
   useEffect(() => {
+    if (!soundEnabled || loadState !== "ready" || isPracticeComplete || stage === "confirm") {
+      stopSpeech()
+      autoPlayedSpeechKeyRef.current = ""
+      return
+    }
+
+    if (preloadSpeechRequests.length === 0) {
+      return
+    }
+
+    void preloadSpeech(preloadSpeechRequests)
+  }, [isPracticeComplete, loadState, preloadSpeech, preloadSpeechRequests, soundEnabled, stage, stopSpeech])
+
+  useEffect(() => {
+    if (!soundEnabled || loadState !== "ready" || isPracticeComplete || !currentSpeechRequest) {
+      autoPlayedSpeechKeyRef.current = ""
+      return
+    }
+
+    const autoplaySignature = `${currentIndex}:${stage}:${currentSpeechRequest.playbackKey}:${currentSpeechRequest.text}`
+    if (autoPlayedSpeechKeyRef.current === autoplaySignature) {
+      return
+    }
+
+    autoPlayedSpeechKeyRef.current = autoplaySignature
+    void playSpeech({
+      ...currentSpeechRequest,
+      suppressErrors: true,
+    })
+  }, [currentIndex, currentSpeechRequest, isPracticeComplete, loadState, playSpeech, soundEnabled, stage])
+
+  useEffect(() => {
     return () => {
       if (feedbackTimerRef.current != null) {
         window.clearTimeout(feedbackTimerRef.current)
@@ -1493,6 +1610,19 @@ export function PracticePage() {
             </button>
             <button
               type="button"
+              className={`practice-session__utility practice-session__utility--icon${soundEnabled ? " is-active" : ""}${isCurrentSpeechBusy ? " is-speaking" : ""}`}
+              aria-label={soundEnabled ? practiceCopy.muteAudioLabel : practiceCopy.unmuteAudioLabel}
+              aria-pressed={soundEnabled}
+              onClick={toggleSoundEnabled}
+            >
+              {!soundEnabled
+                ? <SpeakerMutedIcon className="practice-session__utility-icon" />
+                : isCurrentSpeechBusy && speechPlaybackState === "fetching"
+                  ? <SpinnerIcon className="practice-session__utility-icon practice-session__utility-icon--spinning" />
+                  : <SpeakerIcon className="practice-session__utility-icon" />}
+            </button>
+            <button
+              type="button"
               className={`practice-session__utility${settingsOpen ? " is-active" : ""}`}
               onClick={() => setSettingsOpen(open => !open)}
             >
@@ -1519,7 +1649,7 @@ export function PracticePage() {
                   <button
                     type="button"
                     className={`practice-toggle${soundEnabled ? " is-on" : ""}`}
-                    onClick={() => setSoundEnabled(enabled => !enabled)}
+                    onClick={toggleSoundEnabled}
                   >
                     {soundEnabled ? commonCopy.actions.soundOn : commonCopy.actions.soundOff}
                   </button>
