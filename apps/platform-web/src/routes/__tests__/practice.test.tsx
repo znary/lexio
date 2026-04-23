@@ -142,6 +142,7 @@ describe("practice page", () => {
     renderWithSitePreferences(<PracticePage />)
 
     expect(await screen.findByText("collide")).toBeTruthy()
+    expect(screen.queryByLabelText("Upcoming words")).toBeNull()
     submitTarget(screen.getByLabelText("Current Word"), "collide", " ")
 
     expect(await screen.findByLabelText("Two cars collide on the road.")).toBeTruthy()
@@ -399,6 +400,45 @@ describe("practice page", () => {
       expect(visibleSlots[0]?.style.width).toBe("184px")
       expect(visibleSlots[1]?.style.width).toBe("96px")
     })
+  })
+
+  it("keeps the word composer wide enough to stay readable", async () => {
+    useAuthMock.mockReturnValue({
+      isLoaded: true,
+      isSignedIn: true,
+      getToken: vi.fn().mockResolvedValue("token-word-width"),
+    })
+
+    getPlatformPracticeSessionMock.mockResolvedValue({
+      items: [
+        {
+          id: "item-word-width",
+          sourceText: "it",
+          normalizedText: "it",
+          translatedText: "它",
+          definition: "used to refer to a thing",
+          sourceLang: "en",
+          targetLang: "zh",
+          kind: "word",
+          wordCount: 1,
+          createdAt: 1,
+          lastSeenAt: 1,
+          hitCount: 1,
+          updatedAt: 1,
+          deletedAt: null,
+        },
+      ],
+      practiceStates: [],
+    })
+
+    const { PracticePage } = await import("../practice")
+    renderWithSitePreferences(<PracticePage />)
+
+    const input = await screen.findByLabelText("Current Word")
+    const composer = input.closest<HTMLElement>(".practice-target-composer")
+
+    expect(composer).toBeTruthy()
+    expect(composer?.style.width).toBe("8ch")
   })
 
   it("auto plays speech for the visible word and sentence when sound is enabled", async () => {

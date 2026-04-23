@@ -1691,6 +1691,18 @@ mark {
   text-align: center;
 }
 
+.practice-target-composer--block:not(.practice-target-composer--segmented) .practice-target-composer__slots {
+  justify-self: stretch;
+}
+
+.practice-target-composer--block:not(.practice-target-composer--segmented) .practice-target-composer__slot {
+  min-width: clamp(220px, 22vw, 340px);
+  padding-bottom: 0.12em;
+  border-bottom-width: 0.12em;
+  border-bottom-color: rgba(168, 85, 247, 0.48);
+  background: transparent;
+}
+
 .practice-target-composer--inline {
   gap: 0;
   justify-items: flex-start;
@@ -1810,19 +1822,6 @@ mark {
   color: var(--text-muted);
   font-family: "Manrope", sans-serif;
   font-weight: 700;
-}
-
-.practice-stage__queue {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 28px;
-  color: rgba(190, 201, 199, 0.84);
-  font-size: clamp(28px, 2.6vw, 54px);
-  letter-spacing: -0.05em;
-  line-height: 1.1;
-  user-select: none;
 }
 
 .practice-sentence-display {
@@ -2722,8 +2721,7 @@ mark {
 
 :root[data-theme="dark"] .typing-line__rest,
 :root[data-theme="dark"] .word-state,
-:root[data-theme="dark"] .practice-word-display__visual,
-:root[data-theme="dark"] .practice-stage__queue {
+:root[data-theme="dark"] .practice-word-display__visual {
   color: rgba(118, 136, 144, 0.68);
 }
 
@@ -3023,11 +3021,6 @@ mark {
   .practice-state-card p,
   .practice-finish-card__note {
     font-size: 18px;
-  }
-
-  .practice-stage__queue {
-    gap: 18px;
-    font-size: clamp(24px, 5vw, 40px);
   }
 
   .practice-confirmation {

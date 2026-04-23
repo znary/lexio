@@ -403,7 +403,6 @@ interface PracticeComposerProgress {
 }
 
 interface PracticeComposerMeasuredLayout {
-  composerWidthPx: number | null
   slotWidthsPx: number[]
 }
 
@@ -496,7 +495,6 @@ function PracticeTargetComposer({
   } = composerProgress
   const measureSlotRefs = useRef<Array<HTMLSpanElement | null>>([])
   const [measuredLayout, setMeasuredLayout] = useState<PracticeComposerMeasuredLayout>({
-    composerWidthPx: null,
     slotWidthsPx: [],
   })
 
@@ -512,15 +510,12 @@ function PracticeTargetComposer({
         return
       }
 
-      const nextComposerWidthPx = isSegmentedTarget ? null : Math.max(nextSlotWidthsPx[0] ?? 0, 96)
-
       setMeasuredLayout((currentLayout) => {
-        if (currentLayout.composerWidthPx === nextComposerWidthPx && areMeasuredWidthsEqual(currentLayout.slotWidthsPx, nextSlotWidthsPx)) {
+        if (areMeasuredWidthsEqual(currentLayout.slotWidthsPx, nextSlotWidthsPx)) {
           return currentLayout
         }
 
         return {
-          composerWidthPx: nextComposerWidthPx,
           slotWidthsPx: nextSlotWidthsPx,
         }
       })
@@ -556,9 +551,13 @@ function PracticeTargetComposer({
     }
   }, [isSegmentedTarget, target])
 
+  const blockComposerWidthCh = Math.max(getComposerWidthCh(target), 8)
   const containerStyle = isSegmentedTarget
     ? { maxWidth: "100%" }
-    : { width: measuredLayout.composerWidthPx != null ? `${measuredLayout.composerWidthPx}px` : `${getComposerWidthCh(target)}ch`, maxWidth: "100%" }
+    : {
+        width: `${layoutMode === "block" ? blockComposerWidthCh : getComposerWidthCh(target)}ch`,
+        maxWidth: "100%",
+      }
 
   return (
     <label
@@ -1040,9 +1039,6 @@ export function PracticePage() {
     ? getLanguageLabel(activeEntry.item.sourceLang, getDefaultEnglishLabel(locale))
     : getDefaultEnglishLabel(locale)
   const nextEntry = sessionQueue[currentIndex + 1] ?? null
-  const nextWords = useMemo(() => {
-    return sessionQueue.slice(currentIndex + 1, currentIndex + 4).map(entry => entry.item.sourceText)
-  }, [currentIndex, sessionQueue])
   const elapsedMilliseconds = metrics.startedAt ? now - metrics.startedAt : 0
   const hasSavedItems = items.length > 0
   const hasLiveSession = sessionQueue.length > 0 || isPracticeComplete
@@ -1818,15 +1814,6 @@ export function PracticePage() {
                               <span>{`${getVocabularyPartOfSpeech(activeEntry.item)}:`}</span>
                               <span>{getVocabularyDefinition(activeEntry.item)}</span>
                             </p>
-                            {nextWords.length > 0
-                              ? (
-                                  <div className="practice-stage__queue" aria-label="Upcoming words">
-                                    {nextWords.map(word => (
-                                      <span key={word}>{word}</span>
-                                    ))}
-                                  </div>
-                                )
-                              : null}
                           </div>
                         )
                       : stage === "sentence" && activeEntry.context
