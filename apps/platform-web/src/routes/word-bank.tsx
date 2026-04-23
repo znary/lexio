@@ -2,28 +2,31 @@ import type {
   VocabularyContextEntry,
   VocabularyItem,
   VocabularyWordFamily,
-  VocabularyWordFamilyEntry,
 } from "../app/platform-api"
 import { useAuth } from "@clerk/clerk-react"
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react"
 import {
-  ChevronDownIcon,
   PlayTriangleIcon,
-  PracticeSparkIcon,
   SearchIcon,
   SpeakerIcon,
   SpinnerIcon,
   StopSquareIcon,
 } from "../app/icons"
 import { getPlatformVocabularyItems } from "../app/platform-api"
-import { APP_ROUTES, getPracticeHref, getPracticeItemHref } from "../app/routes"
+import { APP_ROUTES, getPracticeStartHref } from "../app/routes"
 import { useSitePreferences } from "../app/site-preferences"
 import { usePlatformTextToSpeech } from "../app/use-platform-text-to-speech"
 
 const WWW_PREFIX_RE = /^www\./
 const WORD_FAMILY_GROUP_ORDER = ["core", "contrast", "related"] as const
+const WORD_BANK_CACHE_KEY_PREFIX = "lexio.platform.word-bank.v1"
 
 type WordFamilyGroupKey = (typeof WORD_FAMILY_GROUP_ORDER)[number]
+
+interface WordBankCacheSnapshot {
+  cachedAt: number
+  items: VocabularyItem[]
+}
 
 function getItemSummary(item: VocabularyItem): string {
   return item.translatedText.trim() || item.definition?.trim() || item.sourceText
@@ -31,11 +34,6 @@ function getItemSummary(item: VocabularyItem): string {
 
 function getItemDefinition(item: VocabularyItem): string {
   return item.definition?.trim() || item.translatedText.trim()
-}
-
-function getItemNuance(item: VocabularyItem): string | null {
-  const nuance = item.nuance?.trim()
-  return nuance || null
 }
 
 function getItemPhonetic(item: VocabularyItem): string {
@@ -124,71 +122,62 @@ function getWordFamilyGroupLabel(
   }
 }
 
-function getWordFamilySelectionKey(groupKey: WordFamilyGroupKey, index: number): string {
-  return `${groupKey}:${index}`
+function getWordBankCacheKey(userId: string): string {
+  return `${WORD_BANK_CACHE_KEY_PREFIX}:${userId}`
 }
 
-function getFirstWordFamilySelection(wordFamily: VocabularyWordFamily): {
-  entry: VocabularyWordFamilyEntry
-  groupKey: WordFamilyGroupKey
-  index: number
-} | null {
-  for (const groupKey of WORD_FAMILY_GROUP_ORDER) {
-    const entry = wordFamily[groupKey][0]
-    if (entry) {
-      return {
-        entry,
-        groupKey,
-        index: 0,
-      }
+function readWordBankCache(userId: string | null | undefined): VocabularyItem[] | null {
+  if (!userId || typeof window === "undefined") {
+    return null
+  }
+
+  try {
+    const rawValue = window.sessionStorage.getItem(getWordBankCacheKey(userId))
+    if (!rawValue) {
+      return null
     }
-  }
 
-  return null
+    const snapshot = JSON.parse(rawValue) as Partial<WordBankCacheSnapshot>
+    return Array.isArray(snapshot.items) ? snapshot.items : null
+  }
+  catch {
+    return null
+  }
 }
 
-function getWordFamilySelection(
-  wordFamily: VocabularyWordFamily,
-  selectionKey: string,
-): {
-  entry: VocabularyWordFamilyEntry
-  groupKey: WordFamilyGroupKey
-  index: number
-} | null {
-  const [rawGroupKey, rawIndex] = selectionKey.split(":")
-  if (!WORD_FAMILY_GROUP_ORDER.includes(rawGroupKey as WordFamilyGroupKey)) {
-    return getFirstWordFamilySelection(wordFamily)
+function writeWordBankCache(userId: string | null | undefined, items: VocabularyItem[]): void {
+  if (!userId || typeof window === "undefined") {
+    return
   }
 
-  const groupKey = rawGroupKey as WordFamilyGroupKey
-  const index = Number(rawIndex)
-  if (!Number.isInteger(index) || index < 0) {
-    return getFirstWordFamilySelection(wordFamily)
+  const snapshot: WordBankCacheSnapshot = {
+    cachedAt: Date.now(),
+    items,
   }
 
-  const entry = wordFamily[groupKey][index]
-  return entry
-    ? {
-        entry,
-        groupKey,
-        index,
-      }
-    : getFirstWordFamilySelection(wordFamily)
+  try {
+    window.sessionStorage.setItem(getWordBankCacheKey(userId), JSON.stringify(snapshot))
+  }
+  catch {
+    // Ignore cache write failures so the page can continue using live data.
+  }
 }
 
 function SpeakControlButton({
   ariaLabel,
+  className,
   state,
   onClick,
 }: {
   ariaLabel: string
+  className?: string
   state: "idle" | "fetching" | "playing"
   onClick: () => void
 }) {
   return (
     <button
       type="button"
-      className={`icon-button${state === "playing" ? " is-active" : ""}`}
+      className={`icon-button${className ? ` ${className}` : ""}${state === "playing" ? " is-active" : ""}`}
       aria-label={ariaLabel}
       onClick={onClick}
     >
@@ -202,7 +191,7 @@ function SpeakControlButton({
 }
 
 export function WordBankPage() {
-  const { getToken, isSignedIn } = useAuth()
+  const { getToken, isSignedIn, userId } = useAuth()
   const { copy, formatDate } = useSitePreferences()
   const commonCopy = copy.common
   const wordBankCopy = copy.wordBank
@@ -216,7 +205,6 @@ export function WordBankPage() {
   const hasSignedInSession = Boolean(isSignedIn)
   const [items, setItems] = useState<VocabularyItem[]>([])
   const [selectedId, setSelectedId] = useState("")
-  const [selectedFamilyKey, setSelectedFamilyKey] = useState("")
   const [searchText, setSearchText] = useState("")
   const deferredSearchText = useDeferredValue(searchText)
   const [isLoading, setIsLoading] = useState(hasSignedInSession)
@@ -232,8 +220,16 @@ export function WordBankPage() {
         return
       }
 
-      try {
+      const cachedItems = readWordBankCache(userId)
+      if (cachedItems) {
+        setItems(cachedItems.filter(item => item.deletedAt == null))
+        setIsLoading(false)
+      }
+      else {
         setIsLoading(true)
+      }
+
+      try {
         const token = await getToken()
         if (!token) {
           throw new Error("Could not read your Lexio session.")
@@ -244,10 +240,12 @@ export function WordBankPage() {
           return
         }
 
-        setItems(nextItems.filter(item => item.deletedAt == null))
+        const nextVisibleItems = nextItems.filter(item => item.deletedAt == null)
+        setItems(nextVisibleItems)
+        writeWordBankCache(userId, nextVisibleItems)
       }
       catch {
-        if (!cancelled) {
+        if (!cancelled && !cachedItems) {
           setItems([])
         }
       }
@@ -263,7 +261,7 @@ export function WordBankPage() {
     return () => {
       cancelled = true
     }
-  }, [getToken, hasSignedInSession])
+  }, [getToken, hasSignedInSession, userId])
 
   const visibleItems = useMemo(() => {
     const normalizedQuery = deferredSearchText.trim().toLowerCase()
@@ -292,13 +290,8 @@ export function WordBankPage() {
     return selectedItem ? getItemWordFamily(selectedItem) : null
   }, [selectedItem])
 
-  const activeWordFamilySelection = useMemo(() => {
-    return selectedWordFamily ? getWordFamilySelection(selectedWordFamily, selectedFamilyKey) : null
-  }, [selectedFamilyKey, selectedWordFamily])
-
   const detailContexts = selectedItem ? getItemContexts(selectedItem).slice(0, 2) : []
-  const detailNuance = selectedItem ? getItemNuance(selectedItem) : null
-  const hasWordFamily = Boolean(selectedWordFamily && activeWordFamilySelection)
+  const hasWordFamily = Boolean(selectedWordFamily)
   const normalizedQuery = deferredSearchText.trim()
   const listStatusMessage = !hasSignedInSession
     ? wordBankCopy.statusSignedOut
@@ -326,12 +319,10 @@ export function WordBankPage() {
           title: wordBankCopy.empty.libraryTitle,
           description: wordBankCopy.empty.libraryDescription,
         }
-  const practiceHref = getPracticeHref()
-  const selectedPracticeHref = selectedItem ? getPracticeItemHref(selectedItem.id) : practiceHref
+  const selectedPracticeHref = selectedItem ? getPracticeStartHref(selectedItem.id) : APP_ROUTES.practice
 
   useEffect(() => {
     stop()
-    setSelectedFamilyKey("")
   }, [selectedItemId, stop])
 
   const handleSpeak = useCallback((playbackKey: string, text: string, language?: string) => {
@@ -352,55 +343,40 @@ export function WordBankPage() {
 
   return (
     <div className="word-bank-page">
-      <header className="word-bank-toolbar">
-        <div>
-          <h1>{wordBankCopy.title}</h1>
-          <p>{wordBankCopy.subtitle}</p>
-        </div>
-
-        <div className="word-bank-toolbar__actions">
-          <label className="search-field">
-            <SearchIcon className="search-field__icon" />
-            <input
-              type="text"
-              value={searchText}
-              onChange={event => setSearchText(event.target.value)}
-              placeholder={wordBankCopy.searchPlaceholder}
-            />
-          </label>
-
-          <button type="button" className="toolbar-button">
-            <span>{wordBankCopy.sortLabel}</span>
-            <ChevronDownIcon className="toolbar-chevron" />
-          </button>
-
-          <a className="primary-button" href={practiceHref}>
-            <PracticeSparkIcon className="toolbar-practice-icon" />
-            <span>{wordBankCopy.startPractice}</span>
-          </a>
-        </div>
-      </header>
-
       <div className="word-bank-layout">
-        <aside className="word-bank-list">
-          {isLoading
-            ? <div className="word-bank-list__status">{listStatusMessage}</div>
-            : visibleItems.length > 0
-              ? visibleItems.map(item => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={`word-bank-item${selectedItem?.id === item.id ? " is-active" : ""}`}
-                    onClick={() => setSelectedId(item.id)}
-                  >
-                    <div>
-                      <strong>{item.sourceText}</strong>
-                      <p>{getItemSummary(item)}</p>
-                    </div>
-                    <span className={`word-state${item.masteredAt ? " is-mastered" : ""}`} />
-                  </button>
-                ))
-              : <div className="word-bank-list__status">{listStatusMessage}</div>}
+        <aside className="word-bank-list-panel">
+          <div className="word-bank-list__toolbar">
+            <label className="search-field word-bank-list__search">
+              <SearchIcon className="search-field__icon" />
+              <input
+                type="text"
+                value={searchText}
+                onChange={event => setSearchText(event.target.value)}
+                placeholder={wordBankCopy.searchPlaceholder}
+              />
+            </label>
+          </div>
+
+          <div className="word-bank-list">
+            {isLoading
+              ? <div className="word-bank-list__status">{listStatusMessage}</div>
+              : visibleItems.length > 0
+                ? visibleItems.map(item => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`word-bank-item${selectedItem?.id === item.id ? " is-active" : ""}`}
+                      onClick={() => setSelectedId(item.id)}
+                    >
+                      <div>
+                        <strong>{item.sourceText}</strong>
+                        <p>{getItemSummary(item)}</p>
+                      </div>
+                      <span className={`word-state${item.masteredAt ? " is-mastered" : ""}`} />
+                    </button>
+                  ))
+                : <div className="word-bank-list__status">{listStatusMessage}</div>}
+          </div>
         </aside>
 
         <article className={`word-bank-detail${selectedItem ? "" : " word-bank-detail--empty"}${selectedItem && hasWordFamily ? " word-bank-detail--with-family" : " word-bank-detail--single"}`}>
@@ -422,25 +398,98 @@ export function WordBankPage() {
                 </div>
               )
             : (
-                <div className={`word-bank-detail__layout${hasWordFamily ? " has-family" : ""}`}>
-                  <div className="word-bank-detail__main">
-                    <header className="word-bank-detail__header">
-                      <div className="word-bank-title-stack">
-                        <h2>{selectedItem.sourceText}</h2>
-                        <div className="word-bank-meta">
-                          <span className="word-chip">{getItemPartOfSpeech(selectedItem)}</span>
-                          <span>{getItemPhonetic(selectedItem)}</span>
-                          <SpeakControlButton
-                            ariaLabel={getAriaLabel(wordBankCopy.speakWord, `${selectedItem.id}:word`)}
-                            state={getButtonState(`${selectedItem.id}:word`)}
-                            onClick={() => handleSpeak(`${selectedItem.id}:word`, selectedItem.sourceText, selectedItem.sourceLang)}
-                          />
+                <div className="word-bank-detail__scroll">
+                  <div className={`word-bank-detail__layout${hasWordFamily ? " has-family" : ""}`}>
+                    <div className="word-bank-detail__main">
+                      <header className="word-bank-detail__header">
+                        <div className="word-bank-title-stack">
+                          <h2>{selectedItem.sourceText}</h2>
+                          <div className="word-bank-meta">
+                            <span className="word-chip">{getItemPartOfSpeech(selectedItem)}</span>
+                            <span>{getItemPhonetic(selectedItem)}</span>
+                            <SpeakControlButton
+                              ariaLabel={getAriaLabel(wordBankCopy.speakWord, `${selectedItem.id}:word`)}
+                              state={getButtonState(`${selectedItem.id}:word`)}
+                              onClick={() => handleSpeak(`${selectedItem.id}:word`, selectedItem.sourceText, selectedItem.sourceLang)}
+                            />
+                          </div>
                         </div>
-                      </div>
 
-                      {!hasWordFamily
-                        ? (
-                            <div className="detail-actions">
+                        {!hasWordFamily
+                          ? (
+                              <div className="detail-actions">
+                                <a className="detail-practice-button" href={selectedPracticeHref}>
+                                  <PlayTriangleIcon className="detail-play-icon" />
+                                  <span>{wordBankCopy.practiceNow}</span>
+                                </a>
+                                {selectedItem.masteredAt
+                                  ? (
+                                      <div className="mastered-badge">
+                                        <span aria-hidden="true">●</span>
+                                        <span>{wordBankCopy.mastered}</span>
+                                      </div>
+                                    )
+                                  : null}
+                              </div>
+                            )
+                          : null}
+                      </header>
+
+                      <section className="detail-section">
+                        <h3>{wordBankCopy.definition}</h3>
+                        <p className="detail-definition">{getItemDefinition(selectedItem)}</p>
+                      </section>
+
+                      <section className="detail-section">
+                        <h3>{wordBankCopy.inContext}</h3>
+                        {detailContexts.length > 0
+                          ? (
+                              <div className="context-stack">
+                                {detailContexts.map((entry, index) => (
+                                  <blockquote
+                                    key={`${entry.sentence}-${entry.sourceUrl ?? "no-source"}`}
+                                    className={`context-block${index === 1 ? " context-block--muted" : ""}`}
+                                  >
+                                    <div className="context-block__row">
+                                      <p className="context-block__quote">
+                                        &quot;
+                                        {entry.sentence}
+                                        &quot;
+                                      </p>
+                                      <SpeakControlButton
+                                        className="context-speak-button"
+                                        ariaLabel={getAriaLabel(wordBankCopy.speakSentence, `${selectedItem.id}:context:${index}`)}
+                                        state={getButtonState(`${selectedItem.id}:context:${index}`)}
+                                        onClick={() => handleSpeak(`${selectedItem.id}:context:${index}`, entry.sentence, selectedItem.sourceLang)}
+                                      />
+                                    </div>
+                                  </blockquote>
+                                ))}
+                              </div>
+                            )
+                          : (
+                              <div className="context-stack">
+                                <blockquote className="context-block context-block--muted">
+                                  {wordBankCopy.missingContext}
+                                </blockquote>
+                              </div>
+                            )}
+                      </section>
+
+                      <footer className="detail-footer">
+                        <p>
+                          <span aria-hidden="true">📖</span>
+                          <span>{getSourceLabel(selectedItem, commonCopy.labels.sourceUnavailable, commonCopy.labels.lexioCapture)}</span>
+                          <span className="detail-separator">•</span>
+                          <span>{formatDate(selectedItem.createdAt)}</span>
+                        </p>
+                      </footer>
+                    </div>
+
+                    {selectedWordFamily
+                      ? (
+                          <aside className="word-bank-family-column">
+                            <div className="detail-actions detail-actions--family">
                               <a className="detail-practice-button" href={selectedPracticeHref}>
                                 <PlayTriangleIcon className="detail-play-icon" />
                                 <span>{wordBankCopy.practiceNow}</span>
@@ -454,149 +503,48 @@ export function WordBankPage() {
                                   )
                                 : null}
                             </div>
-                          )
-                        : null}
-                    </header>
 
-                    <section className="detail-section">
-                      <h3>{wordBankCopy.definition}</h3>
-                      <p className="detail-definition">{getItemDefinition(selectedItem)}</p>
-                    </section>
+                            <div className="word-bank-family" aria-label={wordBankCopy.wordFamily}>
+                              <div className="word-bank-family__header">{wordBankCopy.wordFamily}</div>
 
-                    {detailNuance
-                      ? (
-                          <section className="detail-section detail-section--nuance">
-                            <h3>{wordBankCopy.nuance}</h3>
-                            <div className="detail-nuance">
-                              <span className="detail-nuance__spark" aria-hidden="true">✦</span>
-                              <p>{detailNuance}</p>
-                            </div>
-                          </section>
-                        )
-                      : null}
+                              {WORD_FAMILY_GROUP_ORDER.map((groupKey) => {
+                                const entries = selectedWordFamily[groupKey]
+                                if (entries.length === 0) {
+                                  return null
+                                }
 
-                    <section className="detail-section">
-                      <h3>{wordBankCopy.inContext}</h3>
-                      {detailContexts.length > 0
-                        ? (
-                            <div className="context-stack">
-                              {detailContexts.map((entry, index) => (
-                                <blockquote
-                                  key={`${entry.sentence}-${entry.sourceUrl ?? "no-source"}`}
-                                  className={`context-block${index === 1 ? " context-block--muted" : ""}`}
-                                >
-                                  <div className="context-block__row">
-                                    <p className="context-block__quote">
-                                      &quot;
-                                      {entry.sentence}
-                                      &quot;
-                                    </p>
-                                    <SpeakControlButton
-                                      ariaLabel={getAriaLabel(wordBankCopy.speakSentence, `${selectedItem.id}:context:${index}`)}
-                                      state={getButtonState(`${selectedItem.id}:context:${index}`)}
-                                      onClick={() => handleSpeak(`${selectedItem.id}:context:${index}`, entry.sentence, selectedItem.sourceLang)}
-                                    />
-                                  </div>
-                                </blockquote>
-                              ))}
-                            </div>
-                          )
-                        : (
-                            <div className="context-stack">
-                              <blockquote className="context-block context-block--muted">
-                                {wordBankCopy.missingContext}
-                              </blockquote>
-                            </div>
-                          )}
-                    </section>
+                                return (
+                                  <section key={groupKey} className="word-bank-family__group">
+                                    <div className="word-bank-family__group-label">
+                                      <span className="word-bank-family__group-dot" />
+                                      <span>{getWordFamilyGroupLabel(wordBankCopy, groupKey)}</span>
+                                    </div>
 
-                    <footer className="detail-footer">
-                      <div>
-                        <h3>{wordBankCopy.sourceAdded}</h3>
-                        <p>
-                          <span aria-hidden="true">📖</span>
-                          <span>{getSourceLabel(selectedItem, commonCopy.labels.sourceUnavailable, commonCopy.labels.lexioCapture)}</span>
-                          <span className="detail-separator">•</span>
-                          <span>{formatDate(selectedItem.createdAt)}</span>
-                        </p>
-                      </div>
-                    </footer>
-                  </div>
-
-                  {selectedWordFamily && activeWordFamilySelection
-                    ? (
-                        <aside className="word-bank-family-column">
-                          <div className="detail-actions detail-actions--family">
-                            <a className="detail-practice-button" href={selectedPracticeHref}>
-                              <PlayTriangleIcon className="detail-play-icon" />
-                              <span>{wordBankCopy.practiceNow}</span>
-                            </a>
-                            {selectedItem.masteredAt
-                              ? (
-                                  <div className="mastered-badge">
-                                    <span aria-hidden="true">●</span>
-                                    <span>{wordBankCopy.mastered}</span>
-                                  </div>
-                                )
-                              : null}
-                          </div>
-
-                          <div className="word-bank-family" aria-label={wordBankCopy.wordFamily}>
-                            <div className="word-bank-family__header">{wordBankCopy.wordFamily}</div>
-
-                            {WORD_FAMILY_GROUP_ORDER.map((groupKey) => {
-                              const entries = selectedWordFamily[groupKey]
-                              if (entries.length === 0) {
-                                return null
-                              }
-
-                              return (
-                                <section key={groupKey} className="word-bank-family__group">
-                                  <div className="word-bank-family__group-label">
-                                    <span className="word-bank-family__group-dot" />
-                                    <span>{getWordFamilyGroupLabel(wordBankCopy, groupKey)}</span>
-                                  </div>
-
-                                  <div className="word-bank-family__group-list">
-                                    {entries.map((entry, index) => {
-                                      const isActive = activeWordFamilySelection.groupKey === groupKey
-                                        && activeWordFamilySelection.index === index
-
-                                      return (
-                                        <div
-                                          key={`${groupKey}-${entry.term}-${index}`}
-                                          className={`word-bank-family__entry${isActive ? " is-active" : ""}`}
-                                        >
-                                          <button
-                                            type="button"
-                                            className="word-bank-family__entry-button"
-                                            aria-label={[entry.term, entry.partOfSpeech].filter(Boolean).join(" ")}
-                                            onClick={() => setSelectedFamilyKey(getWordFamilySelectionKey(groupKey, index))}
-                                          >
-                                            <span className="word-bank-family__entry-term">{entry.term}</span>
+                                    <div className="word-bank-family__group-list">
+                                      {entries.map((entry, index) => (
+                                        <div key={`${groupKey}-${entry.term}-${index}`} className="word-bank-family__entry">
+                                          <div className="word-bank-family__entry-surface">
+                                            <div className="word-bank-family__entry-copy">
+                                              <span className="word-bank-family__entry-term">{entry.term}</span>
+                                              {entry.definition
+                                                ? <span className="word-bank-family__entry-definition">{entry.definition}</span>
+                                                : null}
+                                            </div>
                                             {entry.partOfSpeech
                                               ? <span className="word-bank-family__entry-meta">{entry.partOfSpeech}</span>
                                               : null}
-                                          </button>
-
-                                          {isActive
-                                            ? (
-                                                <div className="word-bank-family__entry-card">
-                                                  <p>{entry.definition}</p>
-                                                </div>
-                                              )
-                                            : null}
+                                          </div>
                                         </div>
-                                      )
-                                    })}
-                                  </div>
-                                </section>
-                              )
-                            })}
-                          </div>
-                        </aside>
-                      )
-                    : null}
+                                      ))}
+                                    </div>
+                                  </section>
+                                )
+                              })}
+                            </div>
+                          </aside>
+                        )
+                      : null}
+                  </div>
                 </div>
               )}
         </article>

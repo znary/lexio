@@ -16,7 +16,7 @@ import { useSitePreferences } from "./site-preferences"
 interface ResolvedPage {
   content: ReactNode
   layout: "site" | "standalone"
-  headerVariant: "hero" | "library"
+  headerVariant: "hero" | "library" | "practice"
 }
 
 function resolvePage(pathname: string): ResolvedPage {
@@ -24,7 +24,7 @@ function resolvePage(pathname: string): ResolvedPage {
     case APP_ROUTES.wordBank:
       return { layout: "site", headerVariant: "library", content: <WordBankPage /> }
     case APP_ROUTES.practice:
-      return { layout: "site", headerVariant: "library", content: <PracticePage /> }
+      return { layout: "site", headerVariant: "practice", content: <PracticePage /> }
     case APP_ROUTES.pricing:
       return { layout: "site", headerVariant: "library", content: <PricingPage /> }
     case APP_ROUTES.signIn:
@@ -39,7 +39,7 @@ function resolvePage(pathname: string): ResolvedPage {
   }
 }
 
-function SiteHeader({ pathname, variant }: { pathname: string, variant: "hero" | "library" }) {
+function SiteHeader({ pathname, variant }: { pathname: string, variant: "hero" | "library" | "practice" }) {
   const {
     copy,
     locale,
@@ -49,9 +49,21 @@ function SiteHeader({ pathname, variant }: { pathname: string, variant: "hero" |
     themeMode,
     themeModeOptions,
   } = useSitePreferences()
+
+  if (variant === "practice") {
+    return (
+      <header className="site-header">
+        <div className="site-header__inner site-header__inner--practice">
+          <a className="practice-header-link" href={APP_ROUTES.wordBank}>
+            {copy.common.navigation.wordBank}
+          </a>
+        </div>
+      </header>
+    )
+  }
+
   const siteNavLinks = [
     { href: APP_ROUTES.wordBank, label: copy.common.navigation.wordBank },
-    { href: APP_ROUTES.practice, label: copy.common.navigation.practice },
   ] as const
   const signedOutActions = variant === "library"
     ? (
@@ -80,7 +92,7 @@ function SiteHeader({ pathname, variant }: { pathname: string, variant: "hero" |
           <span className="brand-wordmark">Lexio</span>
         </a>
 
-        <nav className="site-nav" aria-label={copy.common.navigation.practice}>
+        <nav className="site-nav" aria-label={copy.common.navigation.wordBank}>
           {siteNavLinks.map(link => (
             <a
               key={link.href}
@@ -187,6 +199,7 @@ export default function App() {
   const pathname = normalizePathname(window.location.pathname)
   const page = resolvePage(pathname)
   const isPracticePage = pathname === APP_ROUTES.practice
+  const hideSiteFooter = pathname === APP_ROUTES.wordBank || isPracticePage
 
   if (page.layout === "standalone") {
     return (
@@ -204,7 +217,7 @@ export default function App() {
       <main className={isPracticePage ? "site-main site-main--practice" : "site-main"}>
         {page.content}
       </main>
-      {isPracticePage ? null : <SiteFooter />}
+      {hideSiteFooter ? null : <SiteFooter />}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from "react"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { SitePreferencesProvider } from "../../app/site-preferences"
 
@@ -63,6 +63,7 @@ function renderWithSitePreferences(children: ReactNode) {
 
 beforeEach(() => {
   audioInstances.length = 0
+  window.sessionStorage.clear()
   vi.stubGlobal("Audio", MockAudio)
   Object.defineProperty(URL, "createObjectURL", {
     value: vi.fn(() => "blob:tts-audio"),
@@ -77,8 +78,10 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  cleanup()
   vi.clearAllMocks()
   vi.unstubAllGlobals()
+  window.sessionStorage.clear()
 })
 
 describe("word bank page speech controls", () => {
@@ -145,12 +148,12 @@ describe("word bank page speech controls", () => {
     const { WordBankPage } = await import("../word-bank")
     const { container } = renderWithSitePreferences(<WordBankPage />)
 
-    expect(await screen.findByLabelText("Word Family")).toBeInTheDocument()
+    expect(await screen.findByLabelText("Word Family")).toBeTruthy()
     const practiceButton = screen.getByRole("link", { name: "Practice Now" })
     expect(container.querySelector(".word-bank-family-column")?.contains(practiceButton)).toBe(true)
     expect(container.querySelector(".word-bank-detail__header")?.contains(practiceButton)).toBe(false)
-    fireEvent.click(screen.getByRole("button", { name: "independently adverb" }))
-    expect(screen.getByText("独立地，不受支配地")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "independently adverb" })).toBeNull()
+    expect(screen.getByText("独立地，不受支配地")).toBeTruthy()
   })
 
   it("does not render the word family panel or reserve empty space when the selected item has no word family", async () => {
@@ -189,6 +192,110 @@ describe("word bank page speech controls", () => {
 
     expect(screen.queryByLabelText("Word Family")).toBeNull()
     expect(container.querySelector(".word-bank-detail__layout.has-family")).toBeNull()
+  })
+
+  it("removes the top practice entry point, hides nuance copy, and starts practice from the current word onward", async () => {
+    useAuthMock.mockReturnValue({
+      isSignedIn: true,
+      userId: "user-1",
+      getToken: vi.fn().mockResolvedValue("token-1"),
+    })
+    getPlatformVocabularyItemsMock.mockResolvedValue([
+      {
+        id: "item-1",
+        sourceText: "independent",
+        normalizedText: "independent",
+        translatedText: "独立的",
+        definition: "独立的，不依赖他人的",
+        nuance: "强调不受他人控制，也可表示彼此没有关联。",
+        sourceLang: "eng",
+        targetLang: "zho",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 1,
+        lastSeenAt: 1,
+        hitCount: 1,
+        updatedAt: 1,
+        deletedAt: null,
+        contextEntries: [
+          {
+            sentence: "The team worked independently across three tracks.",
+          },
+        ],
+      },
+    ])
+
+    const { WordBankPage } = await import("../word-bank")
+    renderWithSitePreferences(<WordBankPage />)
+
+    const practiceButton = (await screen.findAllByRole("link", { name: "Practice Now" }))[0]
+
+    expect(practiceButton?.getAttribute("href")).toBe("/practice?start=item-1")
+    expect(screen.queryByRole("link", { name: "Start Practice" })).toBeNull()
+    expect(screen.queryByText("Recently Added")).toBeNull()
+    expect(screen.queryByText("Nuance")).toBeNull()
+    expect(screen.queryByText("Source / Added")).toBeNull()
+  })
+
+  it("shows cached words immediately before the background refresh finishes", async () => {
+    useAuthMock.mockReturnValue({
+      isSignedIn: true,
+      userId: "user-cache",
+      getToken: vi.fn().mockResolvedValue("token-cache"),
+    })
+
+    window.sessionStorage.setItem("lexio.platform.word-bank.v1:user-cache", JSON.stringify({
+      cachedAt: 1,
+      items: [
+        {
+          id: "cached-item",
+          sourceText: "cached",
+          normalizedText: "cached",
+          translatedText: "缓存",
+          definition: "saved locally",
+          sourceLang: "eng",
+          targetLang: "zho",
+          kind: "word",
+          wordCount: 1,
+          createdAt: 1,
+          lastSeenAt: 1,
+          hitCount: 1,
+          updatedAt: 1,
+          deletedAt: null,
+        },
+      ],
+    }))
+
+    let resolveItems: ((items: unknown[]) => void) | undefined
+    getPlatformVocabularyItemsMock.mockReturnValue(new Promise((resolve) => {
+      resolveItems = resolve
+    }))
+
+    const { WordBankPage } = await import("../word-bank")
+    renderWithSitePreferences(<WordBankPage />)
+
+    expect(await screen.findByRole("heading", { name: "cached" })).toBeTruthy()
+
+    resolveItems?.([
+      {
+        id: "fresh-item",
+        sourceText: "fresh",
+        normalizedText: "fresh",
+        translatedText: "新的",
+        definition: "just fetched",
+        sourceLang: "eng",
+        targetLang: "zho",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 2,
+        lastSeenAt: 2,
+        hitCount: 1,
+        updatedAt: 2,
+        deletedAt: null,
+      },
+    ])
+
+    expect(await screen.findByRole("heading", { name: "fresh" })).toBeTruthy()
   })
 
   it("plays the saved word and a context sentence through shared Edge TTS", async () => {

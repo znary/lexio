@@ -20,7 +20,6 @@ import {
   SpeedIcon,
   SpinnerIcon,
   TargetIcon,
-  TuningIcon,
 } from "../app/icons"
 import { getPlatformPracticeSession, submitPlatformPracticeResult } from "../app/platform-api"
 import { APP_ROUTES } from "../app/routes"
@@ -28,6 +27,7 @@ import { useSitePreferences } from "../app/site-preferences"
 import { usePlatformTextToSpeech } from "../app/use-platform-text-to-speech"
 
 const PRACTICE_ITEM_QUERY_KEY = "item"
+const PRACTICE_START_QUERY_KEY = "start"
 const FEEDBACK_RESET_MS = 160
 const ADVANCE_DELAY_MS = 420
 const ADVANCE_PULSE_RESET_MS = 320
@@ -46,6 +46,7 @@ type PracticeStage = "word" | "sentence" | "confirm" | "complete"
 type FeedbackState = "idle" | "correct" | "wrong" | "advance"
 type PracticeInputLayoutMode = "target-only" | "full-sentence"
 type PracticeSoundEffect = "typing" | "advance" | "success" | "wrong"
+type PracticeMode = "single" | "from-word" | "bank"
 
 interface PracticeContextMatch {
   sentence: string
@@ -77,6 +78,11 @@ interface WindowWithWebkitAudio extends Window {
 function getPracticeItemIdFromLocation(): string {
   const search = new URLSearchParams(window.location.search)
   return search.get(PRACTICE_ITEM_QUERY_KEY)?.trim() || ""
+}
+
+function getPracticeStartItemIdFromLocation(): string {
+  const search = new URLSearchParams(window.location.search)
+  return search.get(PRACTICE_START_QUERY_KEY)?.trim() || ""
 }
 
 function getVocabularyContexts(item: VocabularyItem): VocabularyContextEntry[] {
@@ -268,14 +274,26 @@ function sortBankPracticeItems(
 function buildPracticeQueue(
   items: VocabularyItem[],
   requestedItem: VocabularyItem | null,
-  practiceItemId: string,
+  singlePracticeItemId: string,
+  startPracticeItemId: string,
   practiceStateByItemId: ReadonlyMap<string, VocabularyPracticeState>,
   sourceFallbackLabel: string,
 ): PracticeQueueEntry[] {
-  if (practiceItemId) {
+  if (singlePracticeItemId) {
     return requestedItem
       ? [buildPracticeQueueEntry(requestedItem, sourceFallbackLabel)]
       : []
+  }
+
+  if (startPracticeItemId) {
+    const startIndex = items.findIndex(item => item.id === startPracticeItemId)
+    if (startIndex === -1) {
+      return []
+    }
+
+    return items
+      .slice(startIndex)
+      .map(item => buildPracticeQueueEntry(item, sourceFallbackLabel))
   }
 
   return sortBankPracticeItems(items, practiceStateByItemId).map(item => buildPracticeQueueEntry(item, sourceFallbackLabel))
@@ -721,18 +739,6 @@ function PracticeConfirmationDisplay({
   )
 }
 
-function getDefaultEnglishLabel(locale: SiteLocale): string {
-  switch (locale) {
-    case "zh-CN":
-      return "英语"
-    case "ja-JP":
-      return "英語"
-    case "en-US":
-    default:
-      return "English"
-  }
-}
-
 function formatBankCompletionDescription(locale: SiteLocale, count: number): string {
   switch (locale) {
     case "zh-CN":
@@ -742,6 +748,18 @@ function formatBankCompletionDescription(locale: SiteLocale, count: number): str
     case "en-US":
     default:
       return `You finished ${count} saved ${count === 1 ? "word" : "words"} in this session.`
+  }
+}
+
+function formatFromWordCompletionDescription(locale: SiteLocale, count: number): string {
+  switch (locale) {
+    case "zh-CN":
+      return `这一轮从当前词开始，一共完成了 ${count} 个已保存词条。`
+    case "ja-JP":
+      return `この単語から始めて、今回のセッションでは保存済みの${count}語を終えました。`
+    case "en-US":
+    default:
+      return `Starting from this word, you finished ${count} saved ${count === 1 ? "word" : "words"} in this session.`
   }
 }
 
@@ -808,7 +826,7 @@ function PracticeSentenceDisplay({
 
 export function PracticePage() {
   const { getToken, isLoaded, isSignedIn } = useAuth()
-  const { copy, getLanguageLabel, locale } = useSitePreferences()
+  const { copy, locale } = useSitePreferences()
   const commonCopy = copy.common
   const wordBankCopy = copy.wordBank
   const practiceCopy = copy.practice
@@ -819,8 +837,14 @@ export function PracticePage() {
     state: speechPlaybackState,
     stop: stopSpeech,
   } = usePlatformTextToSpeech(wordBankCopy)
-  const practiceItemId = useMemo(() => getPracticeItemIdFromLocation(), [])
-  const practiceMode = practiceItemId ? "single" : "bank"
+  const practiceSingleItemId = useMemo(() => getPracticeItemIdFromLocation(), [])
+  const practiceStartItemId = useMemo(() => getPracticeStartItemIdFromLocation(), [])
+  const requestedItemId = practiceStartItemId || practiceSingleItemId
+  const practiceMode: PracticeMode = practiceSingleItemId
+    ? "single"
+    : practiceStartItemId
+      ? "from-word"
+      : "bank"
   const hasSignedInSession = Boolean(isSignedIn)
 
   const [items, setItems] = useState<VocabularyItem[]>([])
@@ -835,7 +859,6 @@ export function PracticePage() {
   const [metrics, setMetrics] = useState<PracticeMetrics>(() => createFreshMetrics())
   const [now, setNow] = useState(() => Date.now())
   const [feedbackState, setFeedbackState] = useState<FeedbackState>("idle")
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [decisionError, setDecisionError] = useState("")
   const [isDecisionPending, setIsDecisionPending] = useState(false)
@@ -906,12 +929,12 @@ export function PracticePage() {
   }, [getToken, hasSignedInSession, isLoaded, practiceCopy.errorTitle])
 
   const requestedItem = useMemo(() => {
-    if (!practiceItemId) {
+    if (!requestedItemId) {
       return null
     }
 
-    return items.find(item => item.id === practiceItemId) ?? null
-  }, [items, practiceItemId])
+    return items.find(item => item.id === requestedItemId) ?? null
+  }, [items, requestedItemId])
 
   const practiceStateByItemId = useMemo(() => {
     return new Map(practiceStates.map(state => [state.itemId, state]))
@@ -921,11 +944,12 @@ export function PracticePage() {
     return buildPracticeQueue(
       items,
       requestedItem,
-      practiceItemId,
+      practiceSingleItemId,
+      practiceStartItemId,
       practiceStateByItemId,
       commonCopy.labels.lexioContext,
     )
-  }, [commonCopy.labels.lexioContext, items, practiceItemId, practiceStateByItemId, requestedItem])
+  }, [commonCopy.labels.lexioContext, items, practiceSingleItemId, practiceStartItemId, practiceStateByItemId, requestedItem])
 
   function clearTransientTimers() {
     if (feedbackTimerRef.current != null) {
@@ -991,7 +1015,6 @@ export function PracticePage() {
     setMetrics(createFreshMetrics())
     setFeedbackState("idle")
     setNow(Date.now())
-    setSettingsOpen(false)
     setDecisionError("")
     setIsDecisionPending(false)
     setPulseSlotIndex(null)
@@ -1035,9 +1058,6 @@ export function PracticePage() {
       ? activeEntry.context.matchedText
       : (stage === "word" ? activeEntry.item.sourceText : "")
     : ""
-  const activeLanguage = activeEntry
-    ? getLanguageLabel(activeEntry.item.sourceLang, getDefaultEnglishLabel(locale))
-    : getDefaultEnglishLabel(locale)
   const nextEntry = sessionQueue[currentIndex + 1] ?? null
   const elapsedMilliseconds = metrics.startedAt ? now - metrics.startedAt : 0
   const hasSavedItems = items.length > 0
@@ -1472,12 +1492,7 @@ export function PracticePage() {
 
     if (event.key === "Escape") {
       event.preventDefault()
-      if (settingsOpen) {
-        setSettingsOpen(false)
-      }
-      else {
-        resetPracticeSession()
-      }
+      resetPracticeSession()
       return
     }
 
@@ -1638,7 +1653,7 @@ export function PracticePage() {
     )
   }
 
-  if (practiceItemId && !requestedItem) {
+  if (requestedItemId && !requestedItem) {
     return (
       <div className="practice-page practice-page--state">
         <section className="practice-state-card">
@@ -1654,7 +1669,7 @@ export function PracticePage() {
     )
   }
 
-  if (!hasLiveSession && !practiceItemId && queueSeed.length === 0 && hasSavedItems) {
+  if (!hasLiveSession && practiceMode === "bank" && queueSeed.length === 0 && hasSavedItems) {
     return (
       <div className="practice-page practice-page--state">
         <section className="practice-state-card">
@@ -1706,62 +1721,27 @@ export function PracticePage() {
                   ? <SpinnerIcon className="practice-session__utility-icon practice-session__utility-icon--spinning" />
                   : <SpeakerIcon className="practice-session__utility-icon" />}
             </button>
-            <button
-              type="button"
-              className={`practice-session__utility${settingsOpen ? " is-active" : ""}`}
-              onClick={() => setSettingsOpen(open => !open)}
-            >
-              <TuningIcon className="practice-session__utility-icon" />
-              <span>{commonCopy.actions.settings}</span>
-            </button>
-          </div>
-
-          <div className="practice-session__meta">
-            <span>{activeLanguage}</span>
-            <span className="practice-session__meta-divider" />
-            <span>{`${Math.min(currentIndex + 1, sessionQueue.length)} / ${sessionQueue.length}`}</span>
           </div>
         </div>
-
-        {settingsOpen
-          ? (
-              <div className="practice-settings-panel">
-                <div className="practice-settings-panel__row">
-                  <div>
-                    <strong>{practiceCopy.typingSoundTitle}</strong>
-                    <p>{practiceCopy.typingSoundDescription}</p>
-                  </div>
-                  <button
-                    type="button"
-                    className={`practice-toggle${soundEnabled ? " is-on" : ""}`}
-                    onClick={toggleSoundEnabled}
-                  >
-                    {soundEnabled ? commonCopy.actions.soundOn : commonCopy.actions.soundOff}
-                  </button>
-                </div>
-                <div className="practice-settings-panel__row">
-                  <div>
-                    <strong>{practiceCopy.modeTitle}</strong>
-                    <p>{practiceMode === "single" ? practiceCopy.modeSingleDescription : practiceCopy.modeBankDescription}</p>
-                  </div>
-                  <span className="practice-settings-panel__value">
-                    {practiceMode === "single" ? practiceCopy.singleModeLabel : practiceCopy.bankModeLabel}
-                  </span>
-                </div>
-              </div>
-            )
-          : null}
 
         <div className="practice-session__canvas">
           {isPracticeComplete
             ? (
                 <div className="practice-finish-card">
                   <div className="practice-finish-card__badge">{practiceCopy.sessionCompleteBadge}</div>
-                  <h1>{practiceMode === "single" ? practiceCopy.singleCompleteTitle : practiceCopy.bankCompleteTitle}</h1>
+                  <h1>
+                    {practiceMode === "single"
+                      ? practiceCopy.singleCompleteTitle
+                      : practiceMode === "from-word"
+                        ? practiceCopy.fromWordCompleteTitle
+                        : practiceCopy.bankCompleteTitle}
+                  </h1>
                   <p>
                     {practiceMode === "single"
                       ? practiceCopy.singleCompleteDescription
-                      : formatBankCompletionDescription(locale, sessionQueue.length)}
+                      : practiceMode === "from-word"
+                        ? formatFromWordCompletionDescription(locale, sessionQueue.length)
+                        : formatBankCompletionDescription(locale, sessionQueue.length)}
                   </p>
                   <div className="practice-finish-card__summary">
                     <div>

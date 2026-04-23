@@ -240,6 +240,136 @@ describe("practice page", () => {
     )
   })
 
+  it("keeps only restart and audio controls in the practice top bar", async () => {
+    useAuthMock.mockReturnValue({
+      isLoaded: true,
+      isSignedIn: true,
+      getToken: vi.fn().mockResolvedValue("token-topbar"),
+    })
+
+    getPlatformPracticeSessionMock.mockResolvedValue({
+      items: [
+        {
+          id: "item-topbar",
+          sourceText: "collide",
+          normalizedText: "collide",
+          translatedText: "碰撞",
+          definition: "to hit something",
+          sourceLang: "en",
+          targetLang: "zh",
+          kind: "word",
+          wordCount: 1,
+          createdAt: 1,
+          lastSeenAt: 1,
+          hitCount: 1,
+          updatedAt: 1,
+          deletedAt: null,
+        },
+      ],
+      practiceStates: [],
+    })
+
+    const { PracticePage } = await import("../practice")
+    renderWithSitePreferences(<PracticePage />)
+
+    expect(await screen.findByText("collide")).toBeTruthy()
+    expect(screen.getByRole("button", { name: "Mute practice audio" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "Restart" })).toBeTruthy()
+    expect(screen.queryByText("Settings")).toBeNull()
+    expect(screen.queryByText("English")).toBeNull()
+    expect(screen.queryByText("1 / 1")).toBeNull()
+  })
+
+  it("starts from the selected word and continues forward through later words", async () => {
+    window.history.replaceState({}, "", "/practice?start=item-b")
+
+    useAuthMock.mockReturnValue({
+      isLoaded: true,
+      isSignedIn: true,
+      getToken: vi.fn().mockResolvedValue("token-start"),
+    })
+
+    getPlatformPracticeSessionMock.mockResolvedValue({
+      items: [
+        {
+          id: "item-a",
+          sourceText: "alpha",
+          normalizedText: "alpha",
+          translatedText: "阿尔法",
+          definition: "the first item",
+          sourceLang: "en",
+          targetLang: "zh",
+          kind: "word",
+          wordCount: 1,
+          createdAt: 1,
+          lastSeenAt: 10,
+          hitCount: 1,
+          updatedAt: 10,
+          deletedAt: null,
+        },
+        {
+          id: "item-b",
+          sourceText: "beta",
+          normalizedText: "beta",
+          translatedText: "贝塔",
+          definition: "the second item",
+          sourceLang: "en",
+          targetLang: "zh",
+          kind: "word",
+          wordCount: 1,
+          createdAt: 2,
+          lastSeenAt: 9,
+          hitCount: 1,
+          updatedAt: 9,
+          deletedAt: null,
+        },
+        {
+          id: "item-c",
+          sourceText: "gamma",
+          normalizedText: "gamma",
+          translatedText: "伽马",
+          definition: "the third item",
+          sourceLang: "en",
+          targetLang: "zh",
+          kind: "word",
+          wordCount: 1,
+          createdAt: 3,
+          lastSeenAt: 8,
+          hitCount: 1,
+          updatedAt: 8,
+          deletedAt: null,
+        },
+      ],
+      practiceStates: [],
+    })
+
+    submitPlatformPracticeResultMock.mockResolvedValue({
+      ok: true,
+      masteredAt: 3333,
+      practiceState: {
+        itemId: "item-b",
+        lastPracticedAt: 3333,
+        lastDecision: "mastered",
+        reviewAgainCount: 0,
+        updatedAt: 3333,
+      },
+    })
+
+    const { PracticePage } = await import("../practice")
+    renderWithSitePreferences(<PracticePage />)
+
+    expect(await screen.findByText("beta")).toBeTruthy()
+    expect(screen.queryByText("alpha")).toBeNull()
+
+    submitTarget(screen.getByLabelText("Current Word"), "beta")
+
+    expect(await screen.findByText("Mastered this word?")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: /Mastered/ }))
+
+    expect(await screen.findByText("gamma")).toBeTruthy()
+    expect(screen.queryByText("alpha")).toBeNull()
+  })
+
   it("falls back to the word definition when the sentence has no chinese translation", async () => {
     useAuthMock.mockReturnValue({
       isLoaded: true,

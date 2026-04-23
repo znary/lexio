@@ -200,11 +200,14 @@ interface SiteCopy {
     typingSoundDescription: string
     modeTitle: string
     modeSingleDescription: string
+    modeFromWordDescription: string
     modeBankDescription: string
     singleModeLabel: string
+    fromWordModeLabel: string
     bankModeLabel: string
     sessionCompleteBadge: string
     singleCompleteTitle: string
+    fromWordCompleteTitle: string
     bankCompleteTitle: string
     singleCompleteDescription: string
     muteAudioLabel: string
@@ -402,11 +405,14 @@ const siteCopyByLocale: Record<SiteLocale, SiteCopy> = {
       typingSoundDescription: "Use one switch for key sounds and automatic speech when a word, phrase, or sentence appears.",
       modeTitle: "Mode",
       modeSingleDescription: "Current word only",
+      modeFromWordDescription: "Start from this word and keep going",
       modeBankDescription: "Whole Word Bank queue",
       singleModeLabel: "Single",
+      fromWordModeLabel: "From Here",
       bankModeLabel: "Bank",
       sessionCompleteBadge: "Session Complete",
       singleCompleteTitle: "Word finished.",
+      fromWordCompleteTitle: "Reached the end.",
       bankCompleteTitle: "Practice complete.",
       singleCompleteDescription: "You have finished both stages for this word.",
       muteAudioLabel: "Mute practice audio",
@@ -492,7 +498,7 @@ const siteCopyByLocale: Record<SiteLocale, SiteCopy> = {
       practiceNow: "练这个词",
       definition: "释义",
       nuance: "细微含义",
-      inContext: "语境句子",
+      inContext: "语境",
       wordFamily: "词族",
       wordFamilyCore: "核心",
       wordFamilyContrast: "对比",
@@ -602,11 +608,14 @@ const siteCopyByLocale: Record<SiteLocale, SiteCopy> = {
       typingSoundDescription: "一个开关同时控制按键反馈音，以及看到单词、词组、句子时的自动语音。",
       modeTitle: "模式",
       modeSingleDescription: "只练当前这个词",
+      modeFromWordDescription: "从当前词开始继续往后练",
       modeBankDescription: "按整个单词本顺序练习",
       singleModeLabel: "单词",
+      fromWordModeLabel: "从这里",
       bankModeLabel: "整本",
       sessionCompleteBadge: "本轮完成",
       singleCompleteTitle: "这个词练完了。",
+      fromWordCompleteTitle: "已经练到末尾了。",
       bankCompleteTitle: "本轮练习完成。",
       singleCompleteDescription: "这个词的单词阶段和句子阶段都已经练完。",
       muteAudioLabel: "静音练习声音",
@@ -802,11 +811,14 @@ const siteCopyByLocale: Record<SiteLocale, SiteCopy> = {
       typingSoundDescription: "キー音と、単語・フレーズ・文が表示された時の自動音声を一つの切り替えで管理します。",
       modeTitle: "モード",
       modeSingleDescription: "この単語だけを練習",
+      modeFromWordDescription: "この単語から始めて後ろへ進む",
       modeBankDescription: "単語帳全体を順に練習",
       singleModeLabel: "単語",
+      fromWordModeLabel: "ここから",
       bankModeLabel: "全体",
       sessionCompleteBadge: "完了",
       singleCompleteTitle: "この単語は終わりました。",
+      fromWordCompleteTitle: "最後まで進みました。",
       bankCompleteTitle: "今回の練習が終わりました。",
       singleCompleteDescription: "この単語は、単語入力と文脈入力の両方を完了しました。",
       muteAudioLabel: "練習音声をミュート",
