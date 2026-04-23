@@ -1406,6 +1406,20 @@ mark {
   gap: 10px;
 }
 
+.practice-target-composer__measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 0.24em;
+  width: max-content;
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+  white-space: pre;
+}
+
 .practice-target-composer__progress-dot {
   width: 24px;
   height: 6px;
@@ -1452,6 +1466,17 @@ mark {
 }
 
 .practice-target-composer__slot-text {
+  display: inline-block;
+  min-width: 0.2em;
+  white-space: pre;
+}
+
+.practice-target-composer__slot--measure {
+  width: auto;
+}
+
+.practice-target-composer__slot--measure::after {
+  content: attr(data-measure-text);
   display: inline-block;
   min-width: 0.2em;
   white-space: pre;

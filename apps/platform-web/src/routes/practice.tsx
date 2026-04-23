@@ -8,7 +8,7 @@ import type {
 } from "../app/platform-api"
 import type { SiteLocale } from "../app/site-preferences"
 import { useAuth } from "@clerk/clerk-react"
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
+import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react"
 import {
   BookIcon,
   CheckCircleIcon,
@@ -402,6 +402,11 @@ interface PracticeComposerProgress {
   slotLayout: PracticeTargetSlotLayout[]
 }
 
+interface PracticeComposerMeasuredLayout {
+  composerWidthPx: number | null
+  slotWidthsPx: number[]
+}
+
 function getTargetSlotLayout(target: string): PracticeTargetSlotLayout[] {
   const segments = target.trim().split(MULTIPLE_WHITESPACE_RE).filter(Boolean)
   const sourceSegments = segments.length > 0 ? segments : [target.trim()]
@@ -451,6 +456,14 @@ function getComposerProgress(target: string, value: string): PracticeComposerPro
   }
 }
 
+function areMeasuredWidthsEqual(current: number[], next: number[]): boolean {
+  if (current.length !== next.length) {
+    return false
+  }
+
+  return current.every((width, index) => width === next[index])
+}
+
 function PracticeTargetComposer({
   ariaLabel,
   hasError,
@@ -481,9 +494,71 @@ function PracticeTargetComposer({
     isSegmentedTarget,
     slotLayout,
   } = composerProgress
+  const measureSlotRefs = useRef<Array<HTMLSpanElement | null>>([])
+  const [measuredLayout, setMeasuredLayout] = useState<PracticeComposerMeasuredLayout>({
+    composerWidthPx: null,
+    slotWidthsPx: [],
+  })
+
+  useLayoutEffect(() => {
+    function syncMeasuredLayout() {
+      const nextSlotWidthsPx = slotLayout.map((_, index) => {
+        const measureSlot = measureSlotRefs.current[index]
+        const measuredWidth = measureSlot?.getBoundingClientRect().width ?? 0
+        return measuredWidth > 0 ? Math.ceil(measuredWidth) : 0
+      })
+
+      if (!nextSlotWidthsPx.some(width => width > 0)) {
+        return
+      }
+
+      const nextComposerWidthPx = isSegmentedTarget ? null : Math.max(nextSlotWidthsPx[0] ?? 0, 96)
+
+      setMeasuredLayout((currentLayout) => {
+        if (currentLayout.composerWidthPx === nextComposerWidthPx && areMeasuredWidthsEqual(currentLayout.slotWidthsPx, nextSlotWidthsPx)) {
+          return currentLayout
+        }
+
+        return {
+          composerWidthPx: nextComposerWidthPx,
+          slotWidthsPx: nextSlotWidthsPx,
+        }
+      })
+    }
+
+    syncMeasuredLayout()
+
+    const handleResize = () => {
+      syncMeasuredLayout()
+    }
+
+    window.addEventListener("resize", handleResize)
+
+    let isDisposed = false
+    const fontSet = document.fonts
+    const handleFontLoadingDone = () => {
+      syncMeasuredLayout()
+    }
+
+    if (fontSet) {
+      void fontSet.ready.then(() => {
+        if (!isDisposed) {
+          syncMeasuredLayout()
+        }
+      })
+      fontSet.addEventListener?.("loadingdone", handleFontLoadingDone)
+    }
+
+    return () => {
+      isDisposed = true
+      window.removeEventListener("resize", handleResize)
+      fontSet?.removeEventListener?.("loadingdone", handleFontLoadingDone)
+    }
+  }, [isSegmentedTarget, target])
+
   const containerStyle = isSegmentedTarget
     ? { maxWidth: "100%" }
-    : { width: `${getComposerWidthCh(target)}ch`, maxWidth: "100%" }
+    : { width: measuredLayout.composerWidthPx != null ? `${measuredLayout.composerWidthPx}px` : `${getComposerWidthCh(target)}ch`, maxWidth: "100%" }
 
   return (
     <label
@@ -496,6 +571,18 @@ function PracticeTargetComposer({
         }
       }}
     >
+      <span className="practice-target-composer__measure" aria-hidden="true">
+        {slotLayout.map((slot, index) => (
+          <span
+            key={`${slot.text}-measure-${index}`}
+            ref={(node) => {
+              measureSlotRefs.current[index] = node
+            }}
+            data-measure-text={slot.text}
+            className="practice-target-composer__slot practice-target-composer__slot--measure"
+          />
+        ))}
+      </span>
       {isSegmentedTarget && layoutMode === "block"
         ? (
             <span className="practice-target-composer__progress" aria-hidden="true">
@@ -533,7 +620,9 @@ function PracticeTargetComposer({
             <span
               key={`${slot.text}-${index}`}
               className={`practice-target-composer__slot${slotStateClass}${showReadyState ? " is-ready" : ""}${isPulseSlot ? " is-pulse" : ""}`}
-              style={isSegmentedTarget ? { width: `${slot.widthCh}ch` } : undefined}
+              style={isSegmentedTarget
+                ? { width: measuredLayout.slotWidthsPx[index] != null && measuredLayout.slotWidthsPx[index] > 0 ? `${measuredLayout.slotWidthsPx[index]}px` : `${slot.widthCh}ch` }
+                : undefined}
             >
               <span className="practice-target-composer__slot-text">{slotValue}</span>
             </span>

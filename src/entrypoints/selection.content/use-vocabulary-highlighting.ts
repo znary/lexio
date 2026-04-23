@@ -387,7 +387,6 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
     let pendingWork: PendingHighlightWork | null = null
     const pendingMutationRoots = new Set<HTMLElement>()
     let activeItemsCache: VocabularyItem[] = []
-    let hasAppliedInitialHighlights = false
 
     const scheduleHighlight = (work: PendingHighlightWork, delay = HIGHLIGHT_RESCAN_DELAY_MS) => {
       pendingWork = work
@@ -433,10 +432,16 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
           return
         }
 
+        const activeItems = vocabulary.highlightEnabled ? getActiveVocabularyItems(items) : []
+        const shouldClearSelection = activeItems.length > 0 || document.querySelector(HIGHLIGHT_MARK_SELECTOR) !== null
+
+        if (shouldClearSelection) {
+          clearActiveSelection()
+        }
+
         const markInstance = new Mark(document.body)
         await unmark(markInstance)
 
-        const activeItems = vocabulary.highlightEnabled ? getActiveVocabularyItems(items) : []
         activeItemsCache = activeItems
 
         itemsByIdRef.current = new Map(activeItems.map(item => [item.id, item]))
@@ -446,13 +451,8 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
           return
         }
 
-        if (!hasAppliedInitialHighlights) {
-          clearActiveSelection()
-        }
-
         ensureHighlightStyle(vocabulary.highlightColor)
         await markTerms(markInstance, activeItems)
-        hasAppliedInitialHighlights = true
         refreshHoverPreview()
       }
       finally {

@@ -10,6 +10,40 @@
 6. Read live DOM/runtime state after the repro, not just screenshots.
 7. If needed, add temporary instrumentation to the extension-local layer and rebuild.
 
+## When the user already has Chrome open
+
+Use this path first when:
+- the site requires the user's existing login state
+- the target page is already open and reproducing the issue
+- the extension is already installed in that running Chrome
+- the user explicitly says not to start a new Chrome instance
+
+Do this:
+1. Attach to the existing `Google Chrome` window with `mcp__computer_use__`.
+2. Keep the user's current repro tab. Do not replace it with a fresh browser profile.
+3. If you rebuilt the extension, open `chrome://extensions/` in the same running Chrome and click `重新加载` on the target extension card.
+4. Return to the original repro page in the same window and reload that page if needed.
+5. Reproduce with real clicks, scrolls, and tab changes in the live window.
+6. If DevTools is already open in that same window, treat that DevTools view as the source of truth for:
+   - Elements
+   - Console
+   - Performance live metrics such as INP
+7. Verify the fix with live evidence from that same logged-in session.
+
+Important limitation:
+- `mcp__chrome_devtools__` does not automatically attach to an arbitrary Chrome the user already has open.
+- If that Chrome was not started with `--remote-debugging-port`, the DevTools MCP will not control it.
+- In that case, use `mcp__computer_use__` plus Chrome's own built-in DevTools UI inside the running window.
+
+Good evidence from this workflow:
+- the same GitHub page that was previously laggy can now scroll and accept clicks
+- a real link click in that window navigates successfully
+- live INP drops back to a normal value after interaction
+- the extension's injected UI is visibly present or absent exactly as expected
+- `chrome://extensions/` shows the unpacked extension reload succeeded
+
+If you temporarily changed site rules to isolate the bug, such as adding `github.com` to a blacklist, remove that temporary rule before final verification.
+
 ## How to reason about UI bugs
 
 ### Tooltip / popover bugs

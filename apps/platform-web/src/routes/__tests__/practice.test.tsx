@@ -85,6 +85,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
   window.history.replaceState({}, "", "/practice")
 })
@@ -319,13 +320,85 @@ describe("practice page", () => {
 
     expect((input as HTMLInputElement).value).toBe("excuse ")
 
-    const slots = document.querySelectorAll(".practice-target-composer__slot")
+    const slots = document.querySelectorAll(".practice-target-composer__slots .practice-target-composer__slot")
     expect(slots[0]?.className).toContain("is-complete")
     expect(slots[1]?.className).toContain("is-active")
 
     submitTarget(input, "excuse me", " ")
 
     expect(await screen.findByText("Mastered this word?")).toBeTruthy()
+  })
+
+  it("pre-measures phrase slot widths from the target text before typing", async () => {
+    useAuthMock.mockReturnValue({
+      isLoaded: true,
+      isSignedIn: true,
+      getToken: vi.fn().mockResolvedValue("token-width"),
+    })
+
+    getPlatformPracticeSessionMock.mockResolvedValue({
+      items: [
+        {
+          id: "item-width",
+          sourceText: "excuse me",
+          normalizedText: "excuse me",
+          translatedText: "打扰一下",
+          definition: "a polite phrase for getting attention",
+          sourceLang: "en",
+          targetLang: "zh",
+          kind: "phrase",
+          wordCount: 2,
+          createdAt: 1,
+          lastSeenAt: 1,
+          hitCount: 1,
+          updatedAt: 1,
+          deletedAt: null,
+        },
+      ],
+      practiceStates: [],
+    })
+
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("practice-target-composer__slot--measure")) {
+        const text = this.dataset.measureText?.trim() ?? ""
+        const width = text === "excuse" ? 184 : text === "me" ? 96 : 112
+
+        return {
+          width,
+          height: 48,
+          top: 0,
+          left: 0,
+          right: width,
+          bottom: 48,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        } as DOMRect
+      }
+
+      return {
+        width: 0,
+        height: 0,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect
+    })
+
+    const { PracticePage } = await import("../practice")
+    renderWithSitePreferences(<PracticePage />)
+
+    await screen.findByLabelText("Current Phrase")
+
+    await waitFor(() => {
+      const visibleSlots = document.querySelectorAll<HTMLElement>(".practice-target-composer__slots .practice-target-composer__slot")
+      expect(visibleSlots[0]?.style.width).toBe("184px")
+      expect(visibleSlots[1]?.style.width).toBe("96px")
+    })
   })
 
   it("auto plays speech for the visible word and sentence when sound is enabled", async () => {

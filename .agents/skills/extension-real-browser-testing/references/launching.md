@@ -80,6 +80,16 @@ Then inspect targets with:
 curl -s http://127.0.0.1:9226/json/list
 ```
 
+## Existing running Chrome
+
+If the user already has a logged-in Chrome window open and does not want it restarted:
+- do not launch a second Chrome just to get an isolated profile
+- do not claim that `mcp__chrome_devtools__` can directly take over that running Chrome unless it already has a remote debugging port
+- prefer `mcp__computer_use__` for clicks, tab switching, extension reloads, and on-screen verification
+- use the DevTools window already inside that Chrome for Elements, Console, and Performance checks
+
+Only choose a fresh browser launch when the bug does not depend on the user's current session, login state, installed extensions, or already-open page.
+
 ## Why not Browserbase/browser tool?
 
 The browser tool cannot load a local unpacked extension, so it is not suitable for this workflow.

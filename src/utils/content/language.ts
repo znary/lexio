@@ -18,7 +18,7 @@ const DEFAULT_MIN_LENGTH = 10
 const DEFAULT_MAX_LENGTH_FOR_LLM = 500
 const LLM_DETECTION_FALLBACK_TOAST_ID = "llm-detection-fallback"
 
-export type DetectionSource = "llm" | "franc" | "fallback"
+export type DetectionSource = "document" | "llm" | "franc" | "fallback"
 
 export interface DetectLanguageOptions {
   /** Minimum text length to attempt detection (default: 10) */

@@ -3,7 +3,7 @@ import type { LangCodeISO6393 } from "@read-frog/definitions"
 import type { Config } from "@/types/config/config"
 import { storage } from "#imports"
 import { DEFAULT_CONFIG, DETECTED_CODE_STORAGE_KEY } from "@/utils/constants/config"
-import { getDocumentInfo } from "@/utils/content/analyze"
+import { detectDocumentLanguageForBootstrap } from "@/utils/content/analyze"
 import { ensurePresetStyles } from "@/utils/host/translate/ui/style-injector"
 import { getOrCreateWebPageContext } from "@/utils/host/translate/webpage-context"
 import { logger } from "@/utils/logger"
@@ -17,6 +17,13 @@ import { PageTranslationManager } from "./translation-control/page-translation"
 
 export async function bootstrapHostContent(ctx: ContentScriptContext, initialConfig: Config | null) {
   ensurePresetStyles(document)
+
+  const refreshDetectedPageLanguage = async (url: string, configOverride?: Config | null) => {
+    const { detectedCodeOrUnd } = await detectDocumentLanguageForBootstrap(configOverride)
+    const detectedCode: LangCodeISO6393 = detectedCodeOrUnd === "und" ? "eng" : detectedCodeOrUnd
+    await storage.setItem<LangCodeISO6393>(`local:${DETECTED_CODE_STORAGE_KEY}`, detectedCode)
+    void sendMessage("checkAndAskAutoPageTranslation", { url, detectedCodeOrUnd })
+  }
 
   const cleanupUrlListener = setupUrlChangeListener()
 
@@ -56,11 +63,7 @@ export async function bootstrapHostContent(ctx: ContentScriptContext, initialCon
       }
       // Only the top frame should detect and set language to avoid race conditions from iframes
       if (window === window.top) {
-        const { detectedCodeOrUnd } = await getDocumentInfo()
-        const detectedCode: LangCodeISO6393 = detectedCodeOrUnd === "und" ? "eng" : detectedCodeOrUnd
-        await storage.setItem<LangCodeISO6393>(`local:${DETECTED_CODE_STORAGE_KEY}`, detectedCode)
-        // Notify background script that URL has changed, let it decide whether to automatically enable translation
-        void sendMessage("checkAndAskAutoPageTranslation", { url: to, detectedCodeOrUnd })
+        await refreshDetectedPageLanguage(to)
       }
     }
   }
@@ -102,11 +105,6 @@ export async function bootstrapHostContent(ctx: ContentScriptContext, initialCon
 
   // Only the top frame should detect and set language to avoid race conditions from iframes
   if (window === window.top) {
-    const { detectedCodeOrUnd } = await getDocumentInfo()
-    const initialDetectedCode: LangCodeISO6393 = detectedCodeOrUnd === "und" ? "eng" : detectedCodeOrUnd
-    await storage.setItem<LangCodeISO6393>(`local:${DETECTED_CODE_STORAGE_KEY}`, initialDetectedCode)
-
-    // Check if auto-translation should be enabled for initial page load
-    void sendMessage("checkAndAskAutoPageTranslation", { url: window.location.href, detectedCodeOrUnd })
+    await refreshDetectedPageLanguage(window.location.href, initialConfig)
   }
 }

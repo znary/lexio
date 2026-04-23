@@ -488,6 +488,63 @@ describe("shouldHighlightAcrossElements", () => {
     expect(window.getSelection()?.toString()).toBe("Keep")
   })
 
+  it("clears the active page selection before reapplying full highlights after vocabulary changes", async () => {
+    const integrationItem = createVocabularyItem({
+      id: "item-1",
+      sourceText: "integration",
+      normalizedText: "integration",
+      kind: "word",
+      wordCount: 1,
+    })
+    const keepItem = createVocabularyItem({
+      id: "item-2",
+      sourceText: "Keep",
+      normalizedText: "keep",
+      matchTerms: ["keep"],
+      translatedText: "保留",
+      kind: "word",
+      wordCount: 1,
+    })
+    let currentItems: VocabularyItem[] = [integrationItem]
+
+    getVocabularyItemsMock.mockImplementation(async () => currentItems)
+    document.body.innerHTML = `
+      <main>
+        <p>Integration is working.</p>
+        <p>Keep this selection intact.</p>
+      </main>
+    `
+
+    const container = document.createElement("div")
+    document.body.append(container)
+    render(createElement(VocabularyHighlightingHarness), { container })
+
+    await waitFor(() => {
+      const highlight = document.querySelector("p mark")
+      expect(highlight?.textContent).toBe("Integration")
+    })
+
+    const selectionTextNode = document.querySelectorAll("main p")[1]?.firstChild
+    if (!(selectionTextNode instanceof Text)) {
+      throw new TypeError("Selection text node is missing")
+    }
+
+    selectText(selectionTextNode, 0, 4)
+    expect(window.getSelection()?.toString()).toBe("Keep")
+
+    currentItems = [integrationItem, keepItem]
+    document.dispatchEvent(new CustomEvent("lexio:vocabulary-changed"))
+
+    await waitFor(() => {
+      expect(getVocabularyItemsMock).toHaveBeenCalledTimes(2)
+      const highlights = [...document.querySelectorAll("main p mark")]
+      expect(highlights).toHaveLength(2)
+      expect(highlights[1]?.textContent).toBe("Keep")
+    })
+
+    expect(window.getSelection()?.toString()).toBe("")
+  })
+
   it("keeps the hover card open while the cursor crosses the bridge between the highlight and the card", async () => {
     const item = createVocabularyItem({
       sourceText: "integration",
