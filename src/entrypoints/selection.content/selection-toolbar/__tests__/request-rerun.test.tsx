@@ -570,7 +570,7 @@ describe("selection toolbar requests", () => {
     const store = createStore()
     const initialConfig = createStandardTranslateConfig(true)
     store.set(configAtom, initialConfig)
-    setSelectionState(store, { text: "Selected text" })
+    setSelectionState(store, { text: "Selected text." })
     const view = renderWithProviders(<TranslateButton />, store)
 
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
@@ -632,7 +632,7 @@ describe("selection toolbar requests", () => {
 
     const store = createStore()
     store.set(configAtom, createStandardTranslateConfig())
-    setSelectionState(store, { text: "Selected text" })
+    setSelectionState(store, { text: "Selected text." })
     renderWithProviders(<TranslateButton />, store)
 
     const trigger = screen.getByRole("button", { name: "action.translation" })
@@ -655,15 +655,15 @@ describe("selection toolbar requests", () => {
 
     const store = createStore()
     store.set(configAtom, createStandardTranslateConfig())
-    setSelectionState(store, { text: "Selected text" })
+    setSelectionState(store, { text: "Selected text." })
     renderWithProviders(<TranslateButton />, store)
 
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
 
     await waitFor(() => {
       expect(screen.getByTestId("selection-popover-content")).toHaveAttribute("data-final-focus", "false")
-      expect(screen.getByTestId("selection-popover-content")).toHaveAttribute("data-initial-width", "760")
-      expect(screen.getByTestId("selection-popover-content")).toHaveAttribute("data-min-width", "360")
+      expect(screen.getByTestId("selection-popover-content")).toHaveAttribute("data-initial-width", "840")
+      expect(screen.getByTestId("selection-popover-content")).toHaveAttribute("data-min-width", "760")
     })
   })
 
@@ -678,7 +678,7 @@ describe("selection toolbar requests", () => {
 
     const store = createStore()
     store.set(configAtom, createStandardTranslateConfig())
-    setSelectionState(store, { text: "Selected text" })
+    setSelectionState(store, { text: "Selected text." })
     renderWithProviders(<TranslateButton />, store)
 
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
@@ -723,7 +723,7 @@ describe("selection toolbar requests", () => {
     const store = createStore()
     store.set(configAtom, createStandardTranslateConfig())
     setSelectionState(store, {
-      text: "Original page selection",
+      text: "Original page selection.",
       range: createRangeFor(paragraph),
     })
     renderWithProviders(<SelectionToolbar />, store)
@@ -772,10 +772,10 @@ describe("selection toolbar requests", () => {
     })
 
     expect(translateTextCoreMock.mock.calls[0]?.[0]).toMatchObject({
-      text: "Original page selection",
+      text: "Original page selection.",
     })
     expect(translateTextCoreMock.mock.calls[1]?.[0]).toMatchObject({
-      text: "Original page selection",
+      text: "Original page selection.",
     })
     expect(screen.getByTestId("footer-paragraphs").textContent).toBe("Original page paragraph with surrounding context.")
   })
@@ -796,7 +796,7 @@ describe("selection toolbar requests", () => {
     const config = createStandardTranslateConfig()
     setSelectionToolbarTranslateProvider(config, MANAGED_CLOUD_PROVIDER_ID)
     store.set(configAtom, config)
-    setSelectionState(store, { text: "Selected text" })
+    setSelectionState(store, { text: "Selected text." })
     renderWithProviders(<TranslateButton />, store)
 
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
@@ -830,7 +830,7 @@ describe("selection toolbar requests", () => {
     })
 
     expect(saveTranslatedSelectionToVocabularyMock).toHaveBeenCalledWith(expect.objectContaining({
-      sourceText: "Selected text",
+      sourceText: "Selected text.",
       translatedText: "后台完成",
     }))
     expect(toastErrorMock).not.toHaveBeenCalled()
@@ -838,7 +838,9 @@ describe("selection toolbar requests", () => {
   })
 
   it("saves the sentence that contains the selection into vocabulary", async () => {
-    translateTextCoreMock.mockResolvedValue("关键词")
+    streamBackgroundStructuredObjectMock.mockResolvedValue(
+      createStructuredObjectSnapshot({ term: "keyword", definition: "关键词" }),
+    )
     getOrCreateWebPageContextMock.mockResolvedValue(null)
 
     document.body.innerHTML = `
@@ -892,7 +894,7 @@ describe("selection toolbar requests", () => {
     const updatedConfig = cloneConfig(DEFAULT_CONFIG)
     setSelectionToolbarTranslateProvider(updatedConfig, MANAGED_CLOUD_PROVIDER_ID)
     store.set(configAtom, updatedConfig)
-    setSelectionState(store, { text: "Selected text" })
+    setSelectionState(store, { text: "Selected text." })
     renderWithProviders(<TranslateButton />, store)
 
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
@@ -928,7 +930,7 @@ describe("selection toolbar requests", () => {
 
     const store = createStore()
     store.set(configAtom, createStandardTranslateConfig())
-    setSelectionState(store, { text: "Selected text" })
+    setSelectionState(store, { text: "Selected text." })
     renderWithProviders(<TranslateButton />, store)
 
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
@@ -961,7 +963,7 @@ describe("selection toolbar requests", () => {
 
     const store = createStore()
     store.set(configAtom, createStandardTranslateConfig())
-    setSelectionState(store, { text: "Selected text" })
+    setSelectionState(store, { text: "Selected text." })
     renderWithProviders(<TranslateButton />, store)
 
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
@@ -975,9 +977,7 @@ describe("selection toolbar requests", () => {
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
-  it("starts the dictionary detail request while the main translation is still running", async () => {
-    const translationRun = createDeferredPromise<string>()
-    translateTextCoreMock.mockReturnValue(translationRun.promise)
+  it("starts the dictionary detail request without running a separate selected-text translation", async () => {
     streamBackgroundStructuredObjectMock.mockResolvedValue(
       createStructuredObjectSnapshot({ term: "demonstrate", definition: "演示" }),
     )
@@ -991,27 +991,19 @@ describe("selection toolbar requests", () => {
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
 
     await waitFor(() => {
-      expect(screen.getByTestId("translation-status").textContent).toBe("true")
-    })
-
-    expect(screen.queryByRole("alert")).toBeNull()
-    await waitFor(() => {
       expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(1)
     })
-    expect(screen.getByTestId("translation-detailed-error").textContent).toBe("")
 
-    await act(async () => {
-      translationRun.resolve("演示")
-      await Promise.resolve()
-    })
-
+    expect(translateTextCoreMock).not.toHaveBeenCalled()
+    expect(streamManagedTranslationMock).not.toHaveBeenCalled()
+    expect(screen.queryByRole("alert")).toBeNull()
     await waitFor(() => {
-      expect(screen.getByTestId("translation-result").textContent).toBe("演示")
+      expect(screen.getByTestId("translation-detailed").textContent).toContain("\"definition\":\"演示\"")
     })
+    expect(screen.getByTestId("translation-detailed-error").textContent).toBe("")
   })
 
   it("stores nuance and word family from the dictionary result without rendering hidden fields separately", async () => {
-    translateTextCoreMock.mockResolvedValue("思考")
     saveTranslatedSelectionToVocabularyMock.mockResolvedValue({
       id: "voc_1",
       sourceText: "thinking",
@@ -1039,7 +1031,10 @@ describe("selection toolbar requests", () => {
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
 
     await waitFor(() => {
-      expect(screen.getByTestId("translation-result").textContent).toBe("思考")
+      expect(saveTranslatedSelectionToVocabularyMock).toHaveBeenCalledWith(expect.objectContaining({
+        sourceText: "thinking",
+        translatedText: "思考；认为",
+      }))
     })
 
     await waitFor(() => {
@@ -1064,10 +1059,65 @@ describe("selection toolbar requests", () => {
 
     expect(screen.getByTestId("translation-detailed").textContent).toContain("\"wordFamilyCore\"")
     expect(screen.getByTestId("translation-detailed").textContent).toContain("\"nuance\"")
+    expect(translateTextCoreMock).not.toHaveBeenCalled()
   })
 
-  it("keeps dictionary detail failures out of the translation UI after the main translation succeeds", async () => {
-    translateTextCoreMock.mockResolvedValue("整合")
+  it("saves a short phrase from dictionary details without running a separate selected-text translation", async () => {
+    translateTextCoreMock.mockResolvedValue("单独翻译不应该请求")
+    saveTranslatedSelectionToVocabularyMock.mockResolvedValue({
+      id: "voc_phrase",
+      sourceText: "in favor of",
+    })
+    streamBackgroundStructuredObjectMock.mockResolvedValue(
+      createStructuredObjectSnapshot({
+        term: "in favor of",
+        partOfSpeech: "prepositional phrase",
+        definition: "支持；赞成",
+        difficulty: "B1",
+        contextSentenceTranslation: "我们支持这个决定。",
+        wordFamilyCore: "be in favor of || prepositional phrase || 支持，赞成",
+      }),
+    )
+    getOrCreateWebPageContextMock.mockResolvedValue(null)
+
+    const store = createStore()
+    store.set(configAtom, createStandardTranslateConfig())
+    setSelectionState(store, { text: "in favor of" })
+    renderWithProviders(<TranslateButton />, store)
+
+    fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
+
+    await waitFor(() => {
+      expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(1)
+    })
+
+    await waitFor(() => {
+      expect(saveTranslatedSelectionToVocabularyMock).toHaveBeenCalledWith(expect.objectContaining({
+        sourceText: "in favor of",
+        translatedText: "支持；赞成",
+        translatedContextSentence: "我们支持这个决定。",
+      }))
+    })
+
+    await waitFor(() => {
+      expect(updateVocabularyItemDetailsMock).toHaveBeenCalledWith("voc_phrase", expect.objectContaining({
+        definition: "支持；赞成",
+        partOfSpeech: "prepositional phrase",
+        wordFamily: {
+          core: [
+            { term: "be in favor of", partOfSpeech: "prepositional phrase", definition: "支持，赞成" },
+          ],
+          contrast: [],
+          related: [],
+        },
+      }))
+    })
+
+    expect(translateTextCoreMock).not.toHaveBeenCalled()
+    expect(streamManagedTranslationMock).not.toHaveBeenCalled()
+  })
+
+  it("keeps dictionary detail failures out of the translation UI", async () => {
     streamBackgroundStructuredObjectMock.mockRejectedValue(new Error("dictionary failed"))
     getOrCreateWebPageContextMock.mockResolvedValue(null)
 
@@ -1079,16 +1129,13 @@ describe("selection toolbar requests", () => {
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
 
     await waitFor(() => {
-      expect(screen.getByTestId("translation-result").textContent).toBe("整合")
-    })
-
-    await waitFor(() => {
       expect(screen.getByTestId("translation-status").textContent).toBe("false")
     })
 
     expect(screen.getByTestId("translation-detailed-error").textContent).toBe("")
     expect(screen.queryByRole("alert")).toBeNull()
     expect(toastErrorMock).not.toHaveBeenCalled()
+    expect(translateTextCoreMock).not.toHaveBeenCalled()
   })
 
   it("reuses a saved vocabulary item until the user regenerates it", async () => {
@@ -1153,12 +1200,9 @@ describe("selection toolbar requests", () => {
     fireEvent.click(screen.getByRole("button", { name: "Regenerate" }))
 
     await waitFor(() => {
-      expect(translateTextCoreMock).toHaveBeenCalledTimes(1)
-    })
-
-    await waitFor(() => {
       expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(1)
     })
+    expect(translateTextCoreMock).not.toHaveBeenCalled()
   })
 
   it("enriches a reused vocabulary item when the cached item does not have word family details", async () => {
@@ -1291,7 +1335,7 @@ describe("selection toolbar requests", () => {
     updatedConfig.selectionToolbar.features.translate.providerId = "missing-provider-id"
 
     store.set(configAtom, updatedConfig)
-    setSelectionState(store, { text: "Selected text" })
+    setSelectionState(store, { text: "Selected text." })
     renderWithProviders(<TranslateButton />, store)
 
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
@@ -1304,12 +1348,12 @@ describe("selection toolbar requests", () => {
   })
 
   it("shows translations identical to the original text", async () => {
-    translateTextCoreMock.mockResolvedValue("Selected text")
+    translateTextCoreMock.mockResolvedValue("Selected text.")
     getOrCreateWebPageContextMock.mockResolvedValue(null)
 
     const store = createStore()
     store.set(configAtom, createStandardTranslateConfig())
-    setSelectionState(store, { text: "Selected text" })
+    setSelectionState(store, { text: "Selected text." })
     renderWithProviders(<TranslateButton />, store)
 
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
@@ -1322,7 +1366,7 @@ describe("selection toolbar requests", () => {
       expect(screen.getByTestId("translation-status").textContent).toBe("false")
     })
 
-    expect(screen.getByTestId("translation-result").textContent).toBe("Selected text")
+    expect(screen.getByTestId("translation-result").textContent).toBe("Selected text.")
   })
 
   it("opens selection translation from the context menu and tracks the context-menu surface", async () => {
@@ -1330,12 +1374,12 @@ describe("selection toolbar requests", () => {
     getOrCreateWebPageContextMock.mockResolvedValue(null)
 
     const paragraph = document.createElement("p")
-    paragraph.textContent = "Selected text inside a paragraph."
+    paragraph.textContent = "Selected text. Inside a paragraph."
     document.body.appendChild(paragraph)
 
     const store = createStore()
     store.set(configAtom, createStandardTranslateConfig())
-    setSelectionState(store, { text: "Selected text", range: createRangeFor(paragraph) })
+    setSelectionState(store, { text: "Selected text.", range: createRangeFor(paragraph) })
     renderWithProviders(<TranslateButton />, store)
 
     act(() => {
@@ -1350,7 +1394,7 @@ describe("selection toolbar requests", () => {
     const handler = getRegisteredMessageHandler("openSelectionTranslationFromContextMenu")
 
     await act(async () => {
-      handler({ data: { selectionText: "Selected text" } })
+      handler({ data: { selectionText: "Selected text." } })
       await Promise.resolve()
     })
 
@@ -1454,7 +1498,7 @@ describe("selection toolbar requests", () => {
 
     const store = createStore()
     store.set(configAtom, createStandardTranslateConfig())
-    setSelectionState(store, { text: "Selected text" })
+    setSelectionState(store, { text: "Selected text." })
     renderWithProviders(<TranslateButton />, store)
 
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
@@ -1478,7 +1522,7 @@ describe("selection toolbar requests", () => {
 
     const store = createStore()
     store.set(configAtom, createStandardTranslateConfig())
-    setSelectionState(store, { text: "Selected text" })
+    setSelectionState(store, { text: "Selected text." })
     renderWithProviders(<TranslateButton />, store)
 
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
@@ -1493,7 +1537,7 @@ describe("selection toolbar requests", () => {
 
     const store = createStore()
     store.set(configAtom, createStandardTranslateConfig())
-    setSelectionState(store, { text: "Selected text" })
+    setSelectionState(store, { text: "Selected text." })
     renderWithProviders(<TranslateButton />, store)
 
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
@@ -1506,9 +1550,6 @@ describe("selection toolbar requests", () => {
   })
 
   it("reruns the built-in detailed explanation when the target language changes", async () => {
-    translateTextCoreMock
-      .mockResolvedValueOnce("图书馆")
-      .mockResolvedValueOnce("Biblioteca")
     streamBackgroundStructuredObjectMock
       .mockResolvedValueOnce(createStructuredObjectSnapshot({ term: "library", definition: "图书馆" }))
       .mockResolvedValueOnce(createStructuredObjectSnapshot({ term: "library", definition: "biblioteca" }))
@@ -1522,9 +1563,9 @@ describe("selection toolbar requests", () => {
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
 
     await waitFor(() => {
-      expect(translateTextCoreMock).toHaveBeenCalledTimes(1)
       expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(1)
     })
+    expect(translateTextCoreMock).not.toHaveBeenCalled()
 
     const updatedConfig = cloneConfig(store.get(configAtom))
     updatedConfig.language = {
@@ -1537,9 +1578,9 @@ describe("selection toolbar requests", () => {
     })
 
     await waitFor(() => {
-      expect(translateTextCoreMock).toHaveBeenCalledTimes(2)
       expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(2)
     })
+    expect(translateTextCoreMock).not.toHaveBeenCalled()
 
     expect(streamBackgroundStructuredObjectMock.mock.calls[1]?.[0]).toEqual(
       expect.objectContaining({
@@ -1550,9 +1591,6 @@ describe("selection toolbar requests", () => {
   })
 
   it("reruns the built-in detailed explanation when the target language setter updates config", async () => {
-    translateTextCoreMock
-      .mockResolvedValueOnce("Persistence")
-      .mockResolvedValueOnce("持久化")
     streamBackgroundStructuredObjectMock
       .mockResolvedValueOnce(createStructuredObjectSnapshot({ term: "persistence", definition: "粘り強さ" }))
       .mockResolvedValueOnce(createStructuredObjectSnapshot({ term: "persistence", definition: "持久化" }))
@@ -1571,18 +1609,18 @@ describe("selection toolbar requests", () => {
     fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
 
     await waitFor(() => {
-      expect(translateTextCoreMock).toHaveBeenCalledTimes(1)
       expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(1)
     })
+    expect(translateTextCoreMock).not.toHaveBeenCalled()
 
     await act(async () => {
       await store.set(configFieldsAtomMap.language, { targetCode: "cmn" })
     })
 
     await waitFor(() => {
-      expect(translateTextCoreMock).toHaveBeenCalledTimes(2)
       expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(2)
     })
+    expect(translateTextCoreMock).not.toHaveBeenCalled()
 
     expect(streamBackgroundStructuredObjectMock.mock.calls[1]?.[0]).toEqual(
       expect.objectContaining({

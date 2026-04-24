@@ -125,6 +125,58 @@ function getActiveVocabularyItems(items: VocabularyItem[]): VocabularyItem[] {
     })
 }
 
+function getHighlightSignature(item: VocabularyItem): string {
+  return JSON.stringify({
+    kind: item.kind,
+    matchTerms: getVocabularyHighlightTerms(item),
+    sourceText: item.sourceText,
+    wordCount: item.wordCount,
+  })
+}
+
+function doHighlightTermsConflict(leftTerms: string[], rightTerms: string[]): boolean {
+  return leftTerms.some(leftTerm =>
+    rightTerms.some(rightTerm =>
+      leftTerm === rightTerm
+      || leftTerm.includes(rightTerm)
+      || rightTerm.includes(leftTerm),
+    ),
+  )
+}
+
+function getIncrementalAddedVocabularyItems(
+  currentItems: VocabularyItem[],
+  nextItems: VocabularyItem[],
+): VocabularyItem[] | null {
+  const currentById = new Map(currentItems.map(item => [item.id, item]))
+  const nextById = new Map(nextItems.map(item => [item.id, item]))
+
+  for (const currentItem of currentItems) {
+    const nextItem = nextById.get(currentItem.id)
+    if (!nextItem) {
+      return null
+    }
+
+    if (getHighlightSignature(currentItem) !== getHighlightSignature(nextItem)) {
+      return null
+    }
+  }
+
+  const addedItems = nextItems.filter(item => !currentById.has(item.id))
+  if (addedItems.length === 0) {
+    return []
+  }
+
+  const currentTerms = currentItems.flatMap(getVocabularyHighlightTerms)
+  for (const addedItem of addedItems) {
+    if (doHighlightTermsConflict(currentTerms, getVocabularyHighlightTerms(addedItem))) {
+      return null
+    }
+  }
+
+  return addedItems
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(REGEXP_SPECIAL_CHAR_RE, "\\$&")
 }
@@ -440,62 +492,131 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
     let disposed = false
     let isApplyingHighlights = false
     let rehighlightTimer: number | null = null
+    let pendingHighlightMode: "full" | "incremental" | null = null
+    let queuedHighlightMode: "full" | "incremental" | null = null
 
-    const scheduleFullHighlight = (delay = HIGHLIGHT_RESCAN_DELAY_MS) => {
+    const mergeHighlightMode = (current: "full" | "incremental" | null, next: "full" | "incremental") => {
+      return current === "full" || next === "full" ? "full" : "incremental"
+    }
+
+    const scheduleHighlight = (mode: "full" | "incremental", delay = HIGHLIGHT_RESCAN_DELAY_MS) => {
+      pendingHighlightMode = mergeHighlightMode(pendingHighlightMode, mode)
       if (rehighlightTimer) {
         window.clearTimeout(rehighlightTimer)
       }
 
       rehighlightTimer = window.setTimeout(() => {
         rehighlightTimer = null
-        void applyFullHighlights()
+        const nextMode = pendingHighlightMode ?? "full"
+        pendingHighlightMode = null
+        void applyHighlights(nextMode)
       }, delay)
+    }
+
+    const scheduleFullHighlight = (delay = HIGHLIGHT_RESCAN_DELAY_MS) => {
+      scheduleHighlight("full", delay)
     }
 
     const queueHighlight = () => {
       scheduleFullHighlight()
     }
 
+    async function loadActiveVocabularyItems() {
+      const [{ default: Mark }, items] = await Promise.all([
+        import("mark.js"),
+        vocabulary.highlightEnabled ? getVocabularyItems() : Promise.resolve([] as VocabularyItem[]),
+      ])
+
+      return {
+        Mark,
+        activeItems: vocabulary.highlightEnabled ? getActiveVocabularyItems(items) : [],
+      }
+    }
+
+    async function applyIncrementalHighlights() {
+      const { Mark, activeItems } = await loadActiveVocabularyItems()
+      if (disposed) {
+        return true
+      }
+
+      const currentItems = [...itemsByIdRef.current.values()]
+      const markInstance = new Mark(document.body)
+
+      if (!vocabulary.highlightEnabled || activeItems.length === 0) {
+        return false
+      }
+
+      if (currentItems.length === 0 && document.querySelector(HIGHLIGHT_MARK_SELECTOR) !== null) {
+        return false
+      }
+
+      const addedItems = getIncrementalAddedVocabularyItems(currentItems, activeItems)
+      if (addedItems == null) {
+        return false
+      }
+
+      itemsByIdRef.current = new Map(activeItems.map(item => [item.id, item]))
+      ensureHighlightStyle(vocabulary.highlightColor)
+
+      if (addedItems.length > 0) {
+        clearActiveSelection()
+        await markTerms(markInstance, addedItems)
+      }
+
+      refreshHoverPreview()
+      return true
+    }
+
     async function applyFullHighlights() {
+      const { Mark, activeItems } = await loadActiveVocabularyItems()
+
+      if (disposed) {
+        return
+      }
+
+      const markInstance = new Mark(document.body)
+      itemsByIdRef.current = new Map(activeItems.map(item => [item.id, item]))
+
+      if (!vocabulary.highlightEnabled || activeItems.length === 0) {
+        await unmark(markInstance)
+        hideHoverPreview()
+        return
+      }
+
+      ensureHighlightStyle(vocabulary.highlightColor)
+
+      const shouldClearSelection = activeItems.length > 0 || document.querySelector(HIGHLIGHT_MARK_SELECTOR) !== null
+      if (shouldClearSelection) {
+        clearActiveSelection()
+      }
+
+      await unmark(markInstance)
+      await markTerms(markInstance, activeItems)
+      refreshHoverPreview()
+    }
+
+    async function applyHighlights(mode: "full" | "incremental") {
       if (disposed || !document.body || isApplyingHighlights) {
+        queuedHighlightMode = mergeHighlightMode(queuedHighlightMode, mode)
         return
       }
 
       isApplyingHighlights = true
 
       try {
-        const [{ default: Mark }, items] = await Promise.all([
-          import("mark.js"),
-          vocabulary.highlightEnabled ? getVocabularyItems() : Promise.resolve([] as VocabularyItem[]),
-        ])
-
-        if (disposed) {
+        if (mode === "incremental" && await applyIncrementalHighlights()) {
           return
         }
 
-        const activeItems = vocabulary.highlightEnabled ? getActiveVocabularyItems(items) : []
-        const markInstance = new Mark(document.body)
-        itemsByIdRef.current = new Map(activeItems.map(item => [item.id, item]))
-
-        if (!vocabulary.highlightEnabled || activeItems.length === 0) {
-          await unmark(markInstance)
-          hideHoverPreview()
-          return
-        }
-
-        ensureHighlightStyle(vocabulary.highlightColor)
-
-        const shouldClearSelection = activeItems.length > 0 || document.querySelector(HIGHLIGHT_MARK_SELECTOR) !== null
-        if (shouldClearSelection) {
-          clearActiveSelection()
-        }
-
-        await unmark(markInstance)
-        await markTerms(markInstance, activeItems)
-        refreshHoverPreview()
+        await applyFullHighlights()
       }
       finally {
         isApplyingHighlights = false
+        if (queuedHighlightMode) {
+          const nextMode = queuedHighlightMode
+          queuedHighlightMode = null
+          scheduleHighlight(nextMode, 0)
+        }
       }
     }
 
@@ -540,7 +661,7 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
     }
 
     const handleVocabularyChanged = () => {
-      scheduleFullHighlight(0)
+      scheduleHighlight("incremental", 0)
     }
 
     document.addEventListener("pointerover", handlePointerOver, true)
@@ -552,7 +673,7 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
     window.addEventListener("blur", hideHoverPreview)
     window.addEventListener("resize", refreshHoverPreview)
     window.addEventListener("scroll", refreshHoverPreview, true)
-    void applyFullHighlights()
+    void applyHighlights("full")
 
     return () => {
       disposed = true

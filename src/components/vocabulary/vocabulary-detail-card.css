@@ -10,9 +10,21 @@
 
 .selection-translation-card {
   container-type: inline-size;
-  padding: 12px;
-  background: linear-gradient(180deg, rgba(247, 249, 250, 0.78), rgba(241, 246, 246, 0.72));
+  min-height: 100%;
+  padding: 0;
+  background: transparent;
   color: rgba(28, 37, 44, 0.96);
+  display: flex;
+}
+
+.selection-translation-popover__header,
+.selection-translation-popover__footer {
+  border-color: rgba(223, 229, 232, 0.92);
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.selection-translation-popover__body {
+  background: linear-gradient(180deg, rgba(247, 249, 250, 0.78), rgba(241, 246, 246, 0.72));
 }
 
 .selection-translation-card__status {
@@ -44,13 +56,13 @@
   position: relative;
   z-index: 1;
   width: 100%;
+  min-height: 100%;
+  flex: 1 1 auto;
   padding: 22px 22px 20px;
-  border: 1px solid var(--vocabulary-card-border);
-  border-radius: 28px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 251, 251, 0.96) 100%);
-  box-shadow:
-    0 22px 58px rgba(132, 145, 156, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.74);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--vocabulary-card-text);
   display: flex;
   overflow: hidden;
@@ -67,7 +79,7 @@
 }
 
 .vocabulary-detail-card--popover .word-bank-detail__layout.has-family {
-  grid-template-columns: minmax(0, 1fr) minmax(160px, 0.78fr);
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.95fr);
   align-items: stretch;
   gap: 18px;
 }
@@ -246,10 +258,48 @@
   gap: 12px;
 }
 
+.vocabulary-detail-card--popover .context-block__text {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  gap: 10px;
+}
+
 .vocabulary-detail-card--popover .context-block__quote {
   margin: 0;
   min-width: 0;
   flex: 1 1 auto;
+}
+
+.vocabulary-detail-card--popover .context-block__translation {
+  max-width: 100%;
+  margin: 0;
+  color: rgba(51, 82, 86, 0.82);
+  font-size: 14px;
+  line-height: 1.55;
+  font-style: normal;
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-color: rgba(0, 107, 100, 0.42);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+.vocabulary-detail-card--popover .vocabulary-detail-card__definition-skeleton,
+.vocabulary-detail-card--popover .word-bank-family__entry-copy--skeleton {
+  display: grid;
+  gap: 10px;
+}
+
+.vocabulary-detail-card--popover .context-block__translation-skeleton {
+  margin-top: 2px;
+  width: 100%;
+  display: grid;
+  gap: 8px;
+}
+
+.vocabulary-detail-card--popover [data-slot="skeleton"] {
+  background-color: rgba(223, 232, 235, 0.86);
 }
 
 .vocabulary-detail-card--popover .context-block--muted {
@@ -329,6 +379,15 @@
   gap: 5px 10px;
 }
 
+.vocabulary-detail-card--popover .word-bank-family__entry-copy--skeleton {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.vocabulary-detail-card--popover .word-bank-family--skeleton .word-bank-family__entry-surface {
+  min-height: 64px;
+}
+
 .vocabulary-detail-card--popover .word-bank-family__entry-term {
   color: var(--vocabulary-card-text);
   font-size: 16px;
@@ -367,21 +426,10 @@
   height: 100%;
 }
 
-@container (max-width: 680px) {
-  .vocabulary-detail-card--popover .word-bank-detail__layout.has-family {
-    grid-template-columns: 1fr;
-    gap: 22px;
-  }
-
-  .vocabulary-detail-card--popover .word-bank-detail__layout.has-family .word-bank-family {
-    height: auto;
-  }
-}
-
 @container (max-width: 420px) {
   .vocabulary-detail-card--popover.word-bank-detail {
     padding: 18px;
-    border-radius: 24px;
+    border-radius: 0;
   }
 
   .vocabulary-detail-card--popover .word-bank-detail__header {
@@ -407,8 +455,21 @@
 
 .dark .selection-translation-card,
 [data-theme="dark"] .selection-translation-card {
-  background: linear-gradient(180deg, rgba(19, 28, 33, 0.8), rgba(17, 25, 30, 0.72));
+  background: transparent;
   color: rgba(236, 242, 244, 0.96);
+}
+
+.dark .selection-translation-popover__header,
+[data-theme="dark"] .selection-translation-popover__header,
+.dark .selection-translation-popover__footer,
+[data-theme="dark"] .selection-translation-popover__footer {
+  border-color: rgba(78, 95, 107, 0.42);
+  background: rgba(17, 25, 30, 0.98);
+}
+
+.dark .selection-translation-popover__body,
+[data-theme="dark"] .selection-translation-popover__body {
+  background: linear-gradient(180deg, rgba(19, 28, 33, 0.8), rgba(17, 25, 30, 0.72));
 }
 
 .dark .selection-translation-card__status,
@@ -428,10 +489,8 @@
   --vocabulary-card-border: rgba(78, 95, 107, 0.42);
   --vocabulary-card-panel: rgba(31, 43, 50, 0.92);
 
-  background: linear-gradient(180deg, rgba(17, 25, 30, 0.98), rgba(20, 29, 35, 0.96));
-  box-shadow:
-    0 22px 58px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background: transparent;
+  box-shadow: none;
 }
 
 .dark .vocabulary-detail-card--popover .word-chip,
@@ -465,6 +524,17 @@
 [data-theme="dark"] .vocabulary-detail-card--popover .context-block {
   border-color: rgba(76, 94, 106, 0.44);
   background: rgba(24, 35, 42, 0.92);
+}
+
+.dark .vocabulary-detail-card--popover .context-block__translation,
+[data-theme="dark"] .vocabulary-detail-card--popover .context-block__translation {
+  color: rgba(190, 218, 220, 0.82);
+  text-decoration-color: rgba(130, 226, 218, 0.46);
+}
+
+.dark .vocabulary-detail-card--popover [data-slot="skeleton"],
+[data-theme="dark"] .vocabulary-detail-card--popover [data-slot="skeleton"] {
+  background-color: rgba(71, 88, 99, 0.72);
 }
 
 .dark .vocabulary-detail-card--popover .context-block--muted,

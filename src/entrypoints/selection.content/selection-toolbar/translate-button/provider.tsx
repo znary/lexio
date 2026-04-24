@@ -24,7 +24,6 @@ import {
   shouldUseBuiltInDictionary,
 } from "@/utils/constants/built-in-dictionary-action"
 import { DEFAULT_DICTIONARY_ACTION_ID } from "@/utils/constants/custom-action"
-import { CONTENT_WRAPPER_CLASS, PARAGRAPH_ATTRIBUTE } from "@/utils/constants/dom-labels"
 import { prepareTranslationText } from "@/utils/host/translate/text-preparation"
 import { translateTextCore } from "@/utils/host/translate/translate-text"
 import { getOrCreateWebPageContext } from "@/utils/host/translate/webpage-context"
@@ -70,9 +69,6 @@ interface TranslationResumeSnapshot {
   translatedText: string | undefined
   translationRunKey: string | null
 }
-
-const CONTEXT_TEXT_WHITESPACE_RE = /\s+/g
-const CONTEXT_SENTENCE_BOUNDARY_RE = /(?<=[.!?。！？])\s+|\n+/u
 
 function createTranslationRunKey({
   popoverSessionKey,
@@ -227,167 +223,8 @@ async function translateWithStandardProvider({
   return translatedText
 }
 
-function normalizeContextSentenceText(value: string | null | undefined) {
-  return prepareTranslationText(value)?.replace(CONTEXT_TEXT_WHITESPACE_RE, " ") ?? ""
-}
-
-function splitContextParagraphIntoSentences(paragraph: string): string[] {
-  if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
-    try {
-      const segmenter = new Intl.Segmenter(undefined, { granularity: "sentence" })
-      const segments = Array.from(
-        segmenter.segment(paragraph),
-        segment => normalizeContextSentenceText(segment.segment),
-      ).filter(Boolean)
-
-      if (segments.length > 0) {
-        return segments
-      }
-    }
-    catch {
-      // Fall through to the regex fallback when sentence segmentation is unavailable.
-    }
-  }
-
-  return paragraph
-    .split(CONTEXT_SENTENCE_BOUNDARY_RE)
-    .map(segment => normalizeContextSentenceText(segment))
-    .filter(Boolean)
-}
-
-function getOriginalParagraphText(paragraphElement: HTMLElement) {
-  const clone = paragraphElement.cloneNode(true) as HTMLElement
-  clone.querySelectorAll(`.${CONTENT_WRAPPER_CLASS}`).forEach((wrapper) => {
-    wrapper.remove()
-  })
-  return normalizeContextSentenceText(clone.textContent)
-}
-
-function getTranslatedParagraphText(paragraphElement: HTMLElement): string | null {
-  const wrapperTexts = Array.from(paragraphElement.querySelectorAll<HTMLElement>(`.${CONTENT_WRAPPER_CLASS}`))
-    .map(wrapper => normalizeContextSentenceText(wrapper.textContent))
-    .filter(Boolean)
-
-  if (wrapperTexts.length > 0) {
-    return wrapperTexts.join(" ")
-  }
-
-  const nextSibling = paragraphElement.nextElementSibling
-  if (nextSibling instanceof HTMLElement && nextSibling.classList.contains(CONTENT_WRAPPER_CLASS)) {
-    return normalizeContextSentenceText(nextSibling.textContent)
-  }
-
-  return null
-}
-
-function resolveTranslatedSentenceFromParagraph(
-  sourceParagraph: string,
-  translatedParagraph: string,
-  contextSentence: string,
-): string | null {
-  const normalizedSourceParagraph = normalizeContextSentenceText(sourceParagraph)
-  const normalizedTranslatedParagraph = normalizeContextSentenceText(translatedParagraph)
-  const normalizedContextSentence = normalizeContextSentenceText(contextSentence)
-  if (!normalizedSourceParagraph || !normalizedTranslatedParagraph || !normalizedContextSentence) {
-    return null
-  }
-
-  const sourceSentences = splitContextParagraphIntoSentences(normalizedSourceParagraph)
-  const sentenceIndex = sourceSentences.findIndex(sentence => sentence === normalizedContextSentence)
-  if (sentenceIndex === -1) {
-    return normalizedSourceParagraph === normalizedContextSentence
-      ? normalizedTranslatedParagraph
-      : null
-  }
-
-  if (sourceSentences.length === 1) {
-    return normalizedTranslatedParagraph
-  }
-
-  const translatedSentences = splitContextParagraphIntoSentences(normalizedTranslatedParagraph)
-  if (translatedSentences.length === sourceSentences.length && translatedSentences[sentenceIndex]) {
-    return translatedSentences[sentenceIndex]
-  }
-
-  return null
-}
-
-function findTranslatedContextSentenceOnPage(contextSentence: string): string | null {
-  const normalizedContextSentence = normalizeContextSentenceText(contextSentence)
-  if (!normalizedContextSentence) {
-    return null
-  }
-
-  const paragraphElements = Array.from(document.querySelectorAll<HTMLElement>(`[${PARAGRAPH_ATTRIBUTE}]`))
-  for (const paragraphElement of paragraphElements) {
-    const sourceParagraph = getOriginalParagraphText(paragraphElement)
-    if (!sourceParagraph || !sourceParagraph.includes(normalizedContextSentence)) {
-      continue
-    }
-
-    const translatedParagraph = getTranslatedParagraphText(paragraphElement)
-    if (!translatedParagraph) {
-      continue
-    }
-
-    const translatedSentence = resolveTranslatedSentenceFromParagraph(
-      sourceParagraph,
-      translatedParagraph,
-      normalizedContextSentence,
-    )
-    if (translatedSentence) {
-      return translatedSentence
-    }
-  }
-
-  return null
-}
-
-async function persistVocabularyContextSentenceTranslation({
-  item,
-  contextSentence,
-  providerConfig,
-  sourceUrl,
-  translateRequest,
-}: {
-  item: VocabularyItem
-  contextSentence: string
-  providerConfig: ProviderConfig
-  sourceUrl: string
-  translateRequest: SelectionToolbarTranslateRequestSlice
-}) {
-  const normalizedContextSentence = normalizeContextSentenceText(contextSentence)
-  if (!normalizedContextSentence) {
-    return
-  }
-
-  const matchingEntry = item.contextEntries?.find(entry => normalizeContextSentenceText(entry.sentence) === normalizedContextSentence)
-  if (matchingEntry?.translatedSentence?.trim()) {
-    return
-  }
-
-  const translatedSentence = findTranslatedContextSentenceOnPage(normalizedContextSentence)
-    || await translateWithStandardProvider({
-      text: normalizedContextSentence,
-      providerConfig,
-      translateRequest,
-    })
-
-  if (!normalizeContextSentenceText(translatedSentence)) {
-    return
-  }
-
-  await updateVocabularyItemContextTranslation({
-    itemId: item.id,
-    contextSentence: normalizedContextSentence,
-    translatedSentence,
-    sourceUrl,
-  })
-}
-
 async function saveVocabularyEvidenceFromReuse({
   contextSentence,
-  providerConfig,
   selectionText,
   sourceUrl,
   translateRequest,
@@ -395,14 +232,13 @@ async function saveVocabularyEvidenceFromReuse({
   vocabularySettings,
 }: {
   contextSentence: string | null
-  providerConfig: ProviderConfig
   selectionText: string
   sourceUrl: string
   translateRequest: SelectionToolbarTranslateRequestSlice
   translatedText: string
   vocabularySettings: VocabularySettings
 }) {
-  const savedItem = await saveTranslatedSelectionToVocabulary({
+  await saveTranslatedSelectionToVocabulary({
     sourceText: selectionText,
     translatedText,
     contextSentence: contextSentence ?? undefined,
@@ -411,16 +247,6 @@ async function saveVocabularyEvidenceFromReuse({
     targetLang: translateRequest.language.targetCode,
     settings: vocabularySettings,
   })
-
-  if (savedItem && contextSentence) {
-    await persistVocabularyContextSentenceTranslation({
-      item: savedItem,
-      contextSentence,
-      providerConfig,
-      sourceUrl,
-      translateRequest,
-    })
-  }
 }
 
 function getDictionaryFieldValue(
@@ -533,6 +359,13 @@ function extractVocabularyDetailsFromDictionaryResult(
   }
 }
 
+function extractContextSentenceTranslationFromDictionaryResult(
+  result: BackgroundStructuredObjectStreamSnapshot["output"] | null,
+  outputSchema: SelectionToolbarCustomActionOutputField[],
+) {
+  return getDictionaryFieldValue(result, outputSchema, "dictionary-context-sentence-translation")
+}
+
 function buildStoredDetailedExplanationValue(item: VocabularyItem): Record<string, string> | null {
   const wordFamilyCore = serializeWordFamilyGroup(item.wordFamily?.core)
   const wordFamilyContrast = serializeWordFamilyGroup(item.wordFamily?.contrast)
@@ -624,7 +457,7 @@ export function SelectionTranslationProvider({
   const [savedVocabularyItemId, setSavedVocabularyItemId] = useState<string | null>(null)
   const [savedVocabularyText, setSavedVocabularyText] = useState<string | null>(null)
   const [dictionaryReadyRunKey, setDictionaryReadyRunKey] = useState<string | null>(null)
-  const [thinking, setThinking] = useState<ThinkingSnapshot | null>(null)
+  const [, setThinking] = useState<ThinkingSnapshot | null>(null)
   const [error, setError] = useState<SelectionToolbarInlineError | null>(null)
   const [isTranslating, setIsTranslating] = useState(false)
   const [translationResumeVersion, setTranslationResumeVersion] = useState(0)
@@ -751,7 +584,6 @@ export function SelectionTranslationProvider({
     isRunning: isDetailedExplanationRunning,
     resetSessionState: resetDetailedExplanationState,
     result: detailedExplanationResult,
-    thinking: detailedExplanationThinking,
   } = useCustomActionExecution({
     analyticsSurface: sourceSurface,
     bodyRef,
@@ -924,7 +756,6 @@ export function SelectionTranslationProvider({
           if (providerConfig && isTranslateProviderConfig(providerConfig) && providerConfig.enabled) {
             void saveVocabularyEvidenceFromReuse({
               contextSentence,
-              providerConfig,
               selectionText,
               sourceUrl: window.location.href,
               translateRequest,
@@ -945,6 +776,21 @@ export function SelectionTranslationProvider({
     if (isActiveRun()) {
       setDictionaryReadyRunKey(currentTranslationRunKey)
       setVocabularyReuseState("miss")
+    }
+
+    if (dictionaryAction) {
+      if (isActiveRun()) {
+        setThinking(null)
+        setIsTranslating(false)
+        isTranslationInFlightRef.current = false
+        updateTranslationResumeSnapshot({
+          isTranslating: false,
+          thinking: null,
+          translatedText: undefined,
+          translationRunKey: currentTranslationRunKey,
+        })
+      }
+      return
     }
 
     if (!providerConfig || !isTranslateProviderConfig(providerConfig)) {
@@ -1083,16 +929,6 @@ export function SelectionTranslationProvider({
             setSavedVocabularyItemId(null)
             setSavedVocabularyText(null)
           }
-        }
-
-        if (savedItem && contextSentence) {
-          void persistVocabularyContextSentenceTranslation({
-            item: savedItem,
-            contextSentence,
-            providerConfig,
-            sourceUrl: window.location.href,
-            translateRequest,
-          }).catch(() => {})
         }
       }
 
@@ -1355,7 +1191,6 @@ export function SelectionTranslationProvider({
     : null
   const freshDetailedExplanationValue = dictionaryExecutionPlan.executionContext ? detailedExplanationResult : null
   const detailedExplanationValue = freshDetailedExplanationValue ?? storedDetailedExplanationValue
-  const detailedExplanationThinkingValue = dictionaryExecutionPlan.executionContext ? detailedExplanationThinking : null
   const headerStatus = useMemo(() => {
     const isLoading = isTranslating || detailedExplanationLoading
     const isFailed = Boolean(error)
@@ -1392,11 +1227,15 @@ export function SelectionTranslationProvider({
   }, [detailedExplanationLoading, detailedExplanationValue, error, isTranslating, translatedText])
 
   useEffect(() => {
-    if (!savedVocabularyItemId || !dictionaryAction || detailedExplanationLoading || !freshDetailedExplanationValue) {
+    if (!dictionaryAction || detailedExplanationLoading || !freshDetailedExplanationValue) {
       return
     }
 
     const details = extractVocabularyDetailsFromDictionaryResult(
+      freshDetailedExplanationValue,
+      dictionaryAction.outputSchema,
+    )
+    const contextSentenceTranslation = extractContextSentenceTranslationFromDictionaryResult(
       freshDetailedExplanationValue,
       dictionaryAction.outputSchema,
     )
@@ -1405,7 +1244,8 @@ export function SelectionTranslationProvider({
     }
 
     const syncKey = JSON.stringify({
-      itemId: savedVocabularyItemId,
+      itemId: savedVocabularyItemId ?? `new:${selectionText ?? ""}`,
+      contextSentenceTranslation,
       ...details,
     })
     if (lastVocabularyDetailsSyncKeyRef.current === syncKey) {
@@ -1413,19 +1253,79 @@ export function SelectionTranslationProvider({
     }
     lastVocabularyDetailsSyncKeyRef.current = syncKey
 
-    void Promise.resolve(updateVocabularyItemDetails(savedVocabularyItemId, details))
+    if (savedVocabularyItemId) {
+      void (async () => {
+        let updatedItem = await updateVocabularyItemDetails(savedVocabularyItemId, details)
+
+        if (contextSentenceTranslation && contextSentence) {
+          const contextUpdatedItem = await updateVocabularyItemContextTranslation({
+            itemId: savedVocabularyItemId,
+            contextSentence,
+            translatedSentence: contextSentenceTranslation,
+            sourceUrl: window.location.href,
+          })
+          updatedItem = contextUpdatedItem ?? updatedItem
+        }
+
+        return updatedItem
+      })()
+        .then((updatedItem) => {
+          if (updatedItem) {
+            if (reusedVocabularyItem?.id === updatedItem.id) {
+              setReusedVocabularyItem(updatedItem)
+              return
+            }
+
+            setSavedVocabularyItem(updatedItem)
+          }
+        })
+        .catch(() => {})
+      return
+    }
+
+    const dictionaryTranslatedText = details.definition?.trim()
+    const normalizedSelectionText = selectionText?.trim()
+    if (!normalizedSelectionText || !dictionaryTranslatedText) {
+      return
+    }
+
+    void Promise.resolve(saveTranslatedSelectionToVocabulary({
+      sourceText: normalizedSelectionText,
+      translatedText: dictionaryTranslatedText,
+      contextSentence: contextSentence ?? undefined,
+      translatedContextSentence: contextSentenceTranslation || undefined,
+      sourceUrl: window.location.href,
+      sourceLang: translateRequest.language.sourceCode,
+      targetLang: translateRequest.language.targetCode,
+      settings: vocabularySettings,
+    }))
+      .then(async (savedItem) => {
+        if (!savedItem) {
+          return null
+        }
+
+        setSavedVocabularyItem(savedItem)
+        setSavedVocabularyItemId(savedItem.id)
+        setSavedVocabularyText(savedItem.sourceText)
+
+        const updatedItem = await updateVocabularyItemDetails(savedItem.id, details)
+        const nextItem = updatedItem ?? savedItem
+
+        lastVocabularyDetailsSyncKeyRef.current = JSON.stringify({
+          itemId: savedItem.id,
+          contextSentenceTranslation,
+          ...details,
+        })
+
+        return nextItem
+      })
       .then((updatedItem) => {
         if (updatedItem) {
-          if (reusedVocabularyItem?.id === updatedItem.id) {
-            setReusedVocabularyItem(updatedItem)
-            return
-          }
-
           setSavedVocabularyItem(updatedItem)
         }
       })
       .catch(() => {})
-  }, [dictionaryAction, detailedExplanationLoading, freshDetailedExplanationValue, reusedVocabularyItem?.id, savedVocabularyItemId])
+  }, [contextSentence, dictionaryAction, detailedExplanationLoading, freshDetailedExplanationValue, reusedVocabularyItem?.id, savedVocabularyItemId, selectionText, translateRequest, vocabularySettings])
 
   const contextValue = useMemo<SelectionTranslationContextValue>(() => ({
     prepareToolbarOpen,
@@ -1442,12 +1342,13 @@ export function SelectionTranslationProvider({
         {children}
         <SelectionPopover.Content
           key={popoverSessionKey}
+          className="selection-translation-popover"
           container={shadowWrapper ?? document.body}
           finalFocus={false}
-          initialWidth={760}
-          minWidth={360}
+          initialWidth={840}
+          minWidth={760}
         >
-          <SelectionPopover.Header className="border-b">
+          <SelectionPopover.Header className="selection-translation-popover__header border-b">
             <SelectionToolbarTitleContent
               title="Translation"
               icon="ri:translate"
@@ -1459,33 +1360,31 @@ export function SelectionTranslationProvider({
             </div>
           </SelectionPopover.Header>
 
-          <SelectionPopover.Body ref={bodyRef}>
+          <SelectionPopover.Body ref={bodyRef} className="selection-translation-popover__body">
             <TranslationContent
               detailedExplanation={dictionaryAction
                 ? {
                     isLoading: detailedExplanationLoading,
                     outputSchema: dictionaryAction.outputSchema,
                     result: detailedExplanationValue,
-                    thinking: detailedExplanationThinkingValue,
                   }
                 : detailedExplanationValue
                   ? {
                       isLoading: false,
                       outputSchema: builtInDictionaryOutputSchema,
                       result: detailedExplanationValue,
-                      thinking: null,
                     }
                   : null}
               selectionContent={selectionText}
               translatedText={translatedText}
               isTranslating={isTranslating}
-              thinking={thinking}
               vocabularyItem={reusedVocabularyItem ?? savedVocabularyItem}
               contextSentence={contextSentence}
             />
             <SelectionToolbarErrorAlert error={error} className="-mt-3" />
           </SelectionPopover.Body>
           <SelectionToolbarFooterContent
+            className="selection-translation-popover__footer"
             paragraphsText={paragraphsText}
             titleText={titleText}
             onRegenerate={handleRegenerate}

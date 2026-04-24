@@ -108,4 +108,76 @@ describe("vocabularyDetailCard", () => {
 
     expect(screen.getByTestId("vocabulary-detail-card")).toHaveAttribute("data-variant", "page")
   })
+
+  it("shows up to three source-language context entries in the popover", () => {
+    render(
+      <VocabularyDetailCard
+        variant="popover"
+        copy={copy}
+        item={{
+          sourceText: "incoming",
+          translatedText: "传入的",
+          definition: "传入的",
+          sourceLang: "auto",
+          targetLang: "cmn",
+          contextEntries: [
+            {
+              sentence: "Vercel Functions are priced based on active CPU.",
+              translatedSentence: "Vercel 函数的定价基于活跃 CPU。",
+            },
+            {
+              sentence: "VOID scans data sources and imports provision databases.",
+              translatedSentence: "VOID 会扫描数据源。",
+            },
+            {
+              sentence: "The runtime records incoming requests.",
+              translatedSentence: "运行时会记录传入请求。",
+            },
+            {
+              sentence: "The fourth context should not be visible.",
+              translatedSentence: "第四条不应该显示。",
+            },
+          ],
+        }}
+      />,
+    )
+
+    expect(screen.getByText(/Vercel Functions are priced/)).toBeInTheDocument()
+    expect(screen.getByText("Vercel 函数的定价基于活跃 CPU。")).toBeInTheDocument()
+    expect(screen.getByText(/VOID scans data sources/)).toBeInTheDocument()
+    expect(screen.getByText("VOID 会扫描数据源。")).toBeInTheDocument()
+    expect(screen.getByText(/The runtime records incoming requests/)).toBeInTheDocument()
+    expect(screen.getByText("运行时会记录传入请求。")).toBeInTheDocument()
+    expect(screen.queryByText(/The fourth context should not be visible/)).toBeNull()
+  })
+
+  it("does not render target-language text as a quoted source context", () => {
+    render(
+      <VocabularyDetailCard
+        variant="popover"
+        copy={copy}
+        item={{
+          sourceText: "provision",
+          translatedText: "预配",
+          definition: "预配",
+          sourceLang: "auto",
+          targetLang: "cmn",
+          contextEntries: [
+            {
+              sentence: "Vercel Functions provision resources automatically.",
+              translatedSentence: "Vercel 函数会自动预配资源。",
+            },
+            {
+              sentence: "资源堆断：VOID 通过扫描源码推断所需资源，如 import DB from voy-db 时自动 provision 数据库。",
+              translatedSentence: "资源堆断：VOID 通过扫描源码推断所需资源。",
+            },
+          ],
+        }}
+      />,
+    )
+
+    expect(screen.getByText(/Vercel Functions provision resources automatically/)).toBeInTheDocument()
+    expect(screen.getByText("Vercel 函数会自动预配资源。")).toBeInTheDocument()
+    expect(screen.queryByText(/资源堆断/)).toBeNull()
+  })
 })

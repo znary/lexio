@@ -18,6 +18,7 @@ const BUILT_IN_DICTIONARY_FIELD_NAMES = {
   partOfSpeech: "partOfSpeech",
   definition: "definition",
   difficulty: "difficulty",
+  contextSentenceTranslation: "contextSentenceTranslation",
   nuance: "nuance",
   wordFamilyCore: "wordFamilyCore",
   wordFamilyContrast: "wordFamilyContrast",
@@ -35,14 +36,15 @@ Field rules:
 4. Return the part of speech or phrase type in English, such as noun, verb, adjective, idiom, or phrasal verb.
 5. Return the definition in {{targetLanguage}}, based on the contextual sense.
 6. Return the CEFR difficulty for the source-language entry using only A1, A2, B1, B2, C1, or C2.
-7. Return a nuance note in {{targetLanguage}} that explains the subtle sense in this context.
-8. Return wordFamilyCore, wordFamilyContrast, and wordFamilyRelated as newline-separated strings.
-9. Each line in a word family field must use exactly this format: term || partOfSpeech || definition
-10. For a word, these fields contain close word-family items. For a phrase, these fields contain nearby expressions that a learner may confuse or use in the same context.
-11. wordFamilyCore should contain up to 3 close entries. wordFamilyContrast should contain up to 2 contrasting entries. wordFamilyRelated should contain up to 2 related entries.
-12. If a field is unknown or a group has no natural entries, return null instead of guessing.
-13. Keep every value compact and useful for learners.
-14. Do not translate or rewrite the JSON keys.`
+7. Translate the sentence that contains the selected text into {{targetLanguage}} for contextSentenceTranslation. If the selected text appears in more than one sentence, choose the sentence that best explains the contextual meaning.
+8. Return a nuance note in {{targetLanguage}} that explains the subtle sense in this context.
+9. Return wordFamilyCore, wordFamilyContrast, and wordFamilyRelated as newline-separated strings.
+10. Each line in a word family field must use exactly this format: term || partOfSpeech || definition
+11. For a word, these fields contain close word-family items. For a phrase, these fields contain nearby expressions that a learner may confuse or use in the same context.
+12. wordFamilyCore should contain up to 3 close entries. wordFamilyContrast should contain up to 2 contrasting entries. wordFamilyRelated should contain up to 2 related entries.
+13. If a field is unknown or a group has no natural entries, return null instead of guessing.
+14. Keep every value compact and useful for learners.
+15. Do not translate or rewrite the JSON keys.`
 
 const BUILT_IN_DICTIONARY_PROMPT = `## Input
 Selected text: {{selection}}
@@ -125,6 +127,15 @@ export function createBuiltInDictionaryOutputSchema() {
       `${i18n.t(`${T_PREFIX}.fieldDifficultyDescription`)} This difficulty is for the source-language lemma.`,
       "dictionary-difficulty",
     ),
+    {
+      ...createOutputSchemaField(
+        BUILT_IN_DICTIONARY_FIELD_NAMES.contextSentenceTranslation,
+        "string",
+        "Translate the sentence that contains the selected text into {{targetLanguage}}. Return only that sentence translation.",
+        "dictionary-context-sentence-translation",
+      ),
+      hidden: true,
+    },
     {
       ...createOutputSchemaField(
         BUILT_IN_DICTIONARY_FIELD_NAMES.nuance,

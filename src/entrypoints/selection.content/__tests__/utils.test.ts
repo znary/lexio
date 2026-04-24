@@ -102,6 +102,36 @@ describe("buildContextSnapshot", () => {
     })
   })
 
+  it("excludes existing translated wrappers from captured context text", () => {
+    document.body.innerHTML = `
+      <article>
+        <p id="paragraph">
+          Vercel Functions are priced based on active CPU.
+          <span class="read-frog-translated-content-wrapper">
+            Vercel 函数的定价基于活跃 CPU。
+          </span>
+        </p>
+      </article>
+    `
+
+    const paragraph = document.getElementById("paragraph")
+    const selectionNode = paragraph?.firstChild
+    if (!selectionNode) {
+      throw new Error("Selection node not found")
+    }
+
+    const text = selectionNode.textContent ?? ""
+    const start = text.indexOf("priced")
+    const range = document.createRange()
+    range.setStart(selectionNode, start)
+    range.setEnd(selectionNode, start + "priced".length)
+
+    expect(buildContextSnapshot(createSelectionSnapshot(range))).toEqual({
+      text: "Vercel Functions are priced based on active CPU.",
+      paragraphs: ["Vercel Functions are priced based on active CPU."],
+    })
+  })
+
   it("falls back to semantic containers only when no smaller paragraph-like block exists", () => {
     document.body.innerHTML = `
       <article id="article">

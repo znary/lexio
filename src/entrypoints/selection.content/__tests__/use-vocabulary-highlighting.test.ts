@@ -539,7 +539,7 @@ describe("shouldHighlightAcrossElements", () => {
     expect(window.getSelection()?.toString()).toBe("")
   })
 
-  it("keeps existing highlights and patches small vocabulary changes when a full rescan is too large", async () => {
+  it("keeps existing highlights and applies small vocabulary additions incrementally", async () => {
     const integrationItem = createVocabularyItem({
       id: "item-1",
       sourceText: "integration",
@@ -574,6 +574,7 @@ describe("shouldHighlightAcrossElements", () => {
       const highlight = document.querySelector("p mark")
       expect(highlight?.textContent).toBe("Integration")
     })
+    const existingHighlight = document.querySelector("p mark")
 
     const largePageNodes = document.createDocumentFragment()
     for (let index = 0; index < 1810; index += 1) {
@@ -589,6 +590,55 @@ describe("shouldHighlightAcrossElements", () => {
       const highlights = [...document.querySelectorAll("main p mark")]
       expect(highlights.map(highlight => highlight.textContent)).toEqual(["Integration", "Keep"])
     })
+    expect(document.querySelector("main p mark")).toBe(existingHighlight)
+  })
+
+  it("reruns highlighting when a vocabulary change arrives during an active scan", async () => {
+    const integrationItem = createVocabularyItem({
+      id: "item-1",
+      sourceText: "integration",
+      normalizedText: "integration",
+      kind: "word",
+      wordCount: 1,
+    })
+    const incomingItem = createVocabularyItem({
+      id: "item-2",
+      sourceText: "incoming",
+      normalizedText: "incoming",
+      matchTerms: ["incoming"],
+      translatedText: "传入的",
+      kind: "word",
+      wordCount: 1,
+    })
+    let currentItems: VocabularyItem[] = [integrationItem]
+    let resolveInitialItems: (items: VocabularyItem[]) => void = () => {}
+
+    getVocabularyItemsMock
+      .mockReturnValueOnce(new Promise<VocabularyItem[]>((resolve) => {
+        resolveInitialItems = resolve
+      }))
+      .mockImplementation(async () => currentItems)
+
+    document.body.innerHTML = `
+      <main>
+        <p>Integration is working.</p>
+        <p>An incoming request arrived later.</p>
+      </main>
+    `
+
+    const container = document.createElement("div")
+    document.body.append(container)
+    render(createElement(VocabularyHighlightingHarness), { container })
+
+    currentItems = [integrationItem, incomingItem]
+    document.dispatchEvent(new CustomEvent("lexio:vocabulary-changed"))
+    resolveInitialItems([integrationItem])
+
+    await waitFor(() => {
+      const highlights = [...document.querySelectorAll("main p mark")]
+      expect(highlights.map(highlight => highlight.textContent)).toEqual(["Integration", "incoming"])
+    })
+    expect(getVocabularyItemsMock).toHaveBeenCalledTimes(2)
   })
 
   it("still highlights all words when the vocabulary list is large", async () => {

@@ -1,3 +1,5 @@
+import { CONTENT_WRAPPER_CLASS } from "@/utils/constants/dom-labels"
+
 export interface SelectionRangeSnapshot {
   startContainer: Node
   startOffset: number
@@ -321,6 +323,10 @@ function extractOwnerText(owner: ParagraphOwner) {
   const textParts: string[] = []
   const walker = document.createTreeWalker(owner, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
+      if (node.parentElement?.closest(`.${CONTENT_WRAPPER_CLASS}`)) {
+        return NodeFilter.FILTER_REJECT
+      }
+
       return normalizeParagraphText(node.textContent ?? "") === ""
         ? NodeFilter.FILTER_REJECT
         : NodeFilter.FILTER_ACCEPT

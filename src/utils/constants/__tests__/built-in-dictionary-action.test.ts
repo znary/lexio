@@ -17,6 +17,7 @@ describe("built-in dictionary action", () => {
       "dictionary-part-of-speech",
       "dictionary-definition",
       "dictionary-difficulty",
+      "dictionary-context-sentence-translation",
       "dictionary-nuance",
       "dictionary-word-family-core",
       "dictionary-word-family-contrast",
@@ -28,12 +29,14 @@ describe("built-in dictionary action", () => {
       "partOfSpeech",
       "definition",
       "difficulty",
+      "contextSentenceTranslation",
       "nuance",
       "wordFamilyCore",
       "wordFamilyContrast",
       "wordFamilyRelated",
     ])
     expect(action.outputSchema.filter(field => field.hidden).map(field => field.name)).toEqual([
+      "contextSentenceTranslation",
       "nuance",
       "wordFamilyCore",
       "wordFamilyContrast",
@@ -41,13 +44,16 @@ describe("built-in dictionary action", () => {
     ])
   })
 
-  it("does not ask the model to return paragraph fields", () => {
+  it("asks the model to return only the hidden translated sentence for the context quote", () => {
     const action = createBuiltInDictionaryAction("provider-1")
 
     expect(action.systemPrompt).not.toContain("Paragraphs Translation")
     expect(action.systemPrompt).not.toContain("段落翻译")
-    expect(action.systemPrompt).not.toContain("段落内容：")
-    expect(action.outputSchema.some(field => field.id.includes("context"))).toBe(false)
+    expect(action.systemPrompt).toContain("Translate the sentence that contains the selected text")
+    expect(action.outputSchema.find(field => field.id === "dictionary-context-sentence-translation")).toMatchObject({
+      hidden: true,
+      name: "contextSentenceTranslation",
+    })
   })
 
   it("keeps the lemma fields stable and only localizes the definition", () => {

@@ -1,10 +1,8 @@
 import type { VocabularyCardExtraField, VocabularyCardItem } from "@/components/vocabulary/vocabulary-card-data"
-import type { BackgroundStructuredObjectStreamSnapshot, ThinkingSnapshot } from "@/types/background-stream"
+import type { BackgroundStructuredObjectStreamSnapshot } from "@/types/background-stream"
 import type { SelectionToolbarCustomActionOutputField } from "@/types/config/selection-toolbar"
 import type { VocabularyItem, VocabularyWordFamily, VocabularyWordFamilyEntry } from "@/types/vocabulary"
 import { i18n } from "#imports"
-import { IconLoader2 } from "@tabler/icons-react"
-import { Thinking } from "@/components/thinking"
 import { VocabularyDetailCard } from "@/components/vocabulary/vocabulary-detail-card"
 import { CopyButton } from "../../components/copy-button"
 import { SpeakButton } from "../../components/speak-button"
@@ -13,7 +11,6 @@ interface DetailedExplanationSection {
   isLoading: boolean
   outputSchema: SelectionToolbarCustomActionOutputField[]
   result: BackgroundStructuredObjectStreamSnapshot["output"] | null
-  thinking: ThinkingSnapshot | null
 }
 
 interface SelectionTranslationVocabularyCardProps {
@@ -21,13 +18,13 @@ interface SelectionTranslationVocabularyCardProps {
   detailedExplanation?: DetailedExplanationSection | null
   isTranslating: boolean
   selectionContent: string | null | undefined
-  thinking: ThinkingSnapshot | null
   translatedText: string | undefined
   vocabularyItem?: VocabularyItem | null
 }
 
 const DICTIONARY_FIELD_IDS = {
   definition: "dictionary-definition",
+  contextSentenceTranslation: "dictionary-context-sentence-translation",
   difficulty: "dictionary-difficulty",
   lemma: "dictionary-term",
   nuance: "dictionary-nuance",
@@ -132,6 +129,18 @@ function extractDictionaryCardFields(detailedExplanation: DetailedExplanationSec
   }
 }
 
+function extractDictionaryContextSentenceTranslation(detailedExplanation: DetailedExplanationSection | null | undefined): string | null {
+  if (!detailedExplanation) {
+    return null
+  }
+
+  return getDictionaryFieldValue(
+    detailedExplanation.result,
+    detailedExplanation.outputSchema,
+    DICTIONARY_FIELD_IDS.contextSentenceTranslation,
+  )
+}
+
 function extractExtraFields(detailedExplanation: DetailedExplanationSection | null | undefined): VocabularyCardExtraField[] {
   if (!detailedExplanation?.result) {
     return []
@@ -160,19 +169,45 @@ function createCardItem({
   vocabularyItem,
 }: Pick<SelectionTranslationVocabularyCardProps, "contextSentence" | "detailedExplanation" | "selectionContent" | "translatedText" | "vocabularyItem">): VocabularyCardItem {
   const dictionaryFields = extractDictionaryCardFields(detailedExplanation)
+  const dictionaryContextSentenceTranslation = extractDictionaryContextSentenceTranslation(detailedExplanation)
   const sourceText = vocabularyItem?.sourceText?.trim()
     || selectionContent?.trim()
     || translatedText?.trim()
     || "—"
   const normalizedContextSentence = contextSentence?.trim()
+  const vocabularyContextEntries = vocabularyItem?.contextEntries
+  const contextEntries = vocabularyContextEntries?.length
+    ? vocabularyContextEntries.map((entry) => {
+        if (
+          dictionaryContextSentenceTranslation
+          && normalizedContextSentence
+          && entry.sentence.trim() === normalizedContextSentence
+          && !entry.translatedSentence?.trim()
+        ) {
+          return {
+            ...entry,
+            translatedSentence: dictionaryContextSentenceTranslation,
+          }
+        }
+
+        return entry
+      })
+    : normalizedContextSentence
+      ? [{
+          sentence: normalizedContextSentence,
+          ...(dictionaryContextSentenceTranslation
+            ? { translatedSentence: dictionaryContextSentenceTranslation }
+            : {}),
+        }]
+      : undefined
 
   return {
     ...(vocabularyItem ?? {}),
     ...dictionaryFields,
     sourceText,
     translatedText: vocabularyItem?.translatedText?.trim() || translatedText?.trim() || vocabularyItem?.translatedText,
-    ...(normalizedContextSentence && !vocabularyItem?.contextEntries?.length
-      ? { contextEntries: [{ sentence: normalizedContextSentence }] }
+    ...(contextEntries
+      ? { contextEntries }
       : {}),
   }
 }
@@ -202,7 +237,6 @@ export function SelectionTranslationVocabularyCard({
   detailedExplanation = null,
   isTranslating,
   selectionContent,
-  thinking,
   translatedText,
   vocabularyItem = null,
 }: SelectionTranslationVocabularyCardProps) {
@@ -217,17 +251,7 @@ export function SelectionTranslationVocabularyCard({
   const isDetailLoading = Boolean(detailedExplanation?.isLoading)
   const hasDefinition = Boolean(cardItem.definition?.trim())
   const sourceText = selectionContent?.trim() || cardItem.sourceText
-  const showThinking = thinking && !translatedText
   const showLoadingStatus = isTranslating || isDetailLoading
-
-  const statusPill = showLoadingStatus
-    ? (
-        <span className="selection-translation-card__status">
-          <IconLoader2 className="size-3 animate-spin" strokeWidth={1.8} />
-          <span>{i18n.t("translation.loadingStatus.translating")}</span>
-        </span>
-      )
-    : null
 
   return (
     <div className="selection-translation-card" data-testid="selection-translation-vocabulary-card">
@@ -238,17 +262,12 @@ export function SelectionTranslationVocabularyCard({
         extraFields={extraFields}
         headerActions={(
           <>
-            {statusPill}
             <CopyButton text={sourceText} />
             <SpeakButton text={sourceText} />
           </>
         )}
-        supportingContent={showThinking
-          ? <Thinking status={thinking.status} content={thinking.text} />
-          : null}
-        translationText={translatedText}
-        translationLoading={isTranslating && Boolean(translatedText?.trim())}
-        showDefinition={hasDefinition}
+        loading={showLoadingStatus}
+        showDefinition={hasDefinition || showLoadingStatus}
       />
     </div>
   )
