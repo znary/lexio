@@ -898,6 +898,7 @@ action:
   hideDetailedExplanation: Скрыть подробное объяснение
   viewDetailedExplanationHint: Открыть разбор значения, контекст и пояснения
   hideDetailedExplanationHint: Показать больше о значении и контексте
+  savedToVocabulary: Сохранено в словарь
   saveToNotebase: Сохранить в Notebase
   saveToNotebaseSaving: Сохранение...
   saveToNotebaseSuccess: Сохранено в Notebase
@@ -910,6 +911,17 @@ action:
   contextDetailsTitleLabel: Заголовок
   contextDetailsParagraphsLabel: Абзацы
   translation: Перевод
+  translationCard:
+    definition: Значение
+    inContext: В контексте
+    mastered: Освоено
+    missingContext: Контекст пока не сохранён.
+    moreInformation: Подробнее
+    practiceNow: Практика
+    wordFamily: Семейство слов
+    wordFamilyCore: Основные
+    wordFamilyContrast: Противопоставления
+    wordFamilyRelated: Связанные
   speak: Озвучить
   playing: Воспроизведение
 thinking:

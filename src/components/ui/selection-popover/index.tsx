@@ -317,11 +317,15 @@ function SelectionPopoverContent({
   children,
   container,
   finalFocus,
+  initialWidth,
+  minWidth: minWidthProp,
   render,
   ...props
 }: useRender.ComponentProps<"div"> & React.ComponentProps<"div"> & {
   container?: SelectionPopoverPortalContainer
   finalFocus?: DialogPrimitive.Popup.Props["finalFocus"]
+  initialWidth?: number
+  minWidth?: number
 }) {
   const { open, setOpen, anchor, triggerElement } = useSelectionPopoverRootContext()
   const bodyElementRef = React.useRef<HTMLDivElement | null>(null)
@@ -343,7 +347,9 @@ function SelectionPopoverContent({
     handleWheel,
   } = useSelectionPopoverLayout({
     anchor,
+    initialWidth,
     isVisible: open,
+    minWidth: minWidthProp,
   })
 
   const handleClose = React.useCallback(() => {

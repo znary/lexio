@@ -29,26 +29,33 @@ const BUILT_IN_DICTIONARY_SYSTEM_PROMPT = `You are a dictionary assistant for la
 Return one compact dictionary entry for the selected text based on the surrounding paragraphs.
 
 Field rules:
-1. Focus on the meaning that best matches the surrounding paragraphs.
-2. Return the lemma in the source language of the selected text.
-3. Return the phonetic transcription for that source-language lemma.
-4. Return the part of speech in English, such as noun, verb, or adjective.
+1. The selected text may be a word or a short phrase. Focus on the meaning that best matches the surrounding paragraphs.
+2. Return the lemma or canonical phrase in the source language of the selected text.
+3. Return the phonetic transcription when it is natural for that source-language entry.
+4. Return the part of speech or phrase type in English, such as noun, verb, adjective, idiom, or phrasal verb.
 5. Return the definition in {{targetLanguage}}, based on the contextual sense.
-6. Return the CEFR difficulty for the source-language lemma using only A1, A2, B1, B2, C1, or C2.
+6. Return the CEFR difficulty for the source-language entry using only A1, A2, B1, B2, C1, or C2.
 7. Return a nuance note in {{targetLanguage}} that explains the subtle sense in this context.
 8. Return wordFamilyCore, wordFamilyContrast, and wordFamilyRelated as newline-separated strings.
 9. Each line in a word family field must use exactly this format: term || partOfSpeech || definition
-10. wordFamilyCore should contain up to 3 close word-family items. wordFamilyContrast should contain up to 2 contrasting items. wordFamilyRelated should contain up to 2 related items.
-11. If a field is unknown or a group has no natural entries, return null instead of guessing.
-12. Keep every value compact and useful for learners.
-13. Do not translate or rewrite the JSON keys.`
+10. For a word, these fields contain close word-family items. For a phrase, these fields contain nearby expressions that a learner may confuse or use in the same context.
+11. wordFamilyCore should contain up to 3 close entries. wordFamilyContrast should contain up to 2 contrasting entries. wordFamilyRelated should contain up to 2 related entries.
+12. If a field is unknown or a group has no natural entries, return null instead of guessing.
+13. Keep every value compact and useful for learners.
+14. Do not translate or rewrite the JSON keys.`
 
 const BUILT_IN_DICTIONARY_PROMPT = `## Input
 Selected text: {{selection}}
 Paragraphs: {{paragraphs}}
 Target language: {{targetLanguage}}`
-const WHITESPACE_RE = /\s/
+const MAX_BUILT_IN_DICTIONARY_WORDS = 8
+const MAX_BUILT_IN_DICTIONARY_LENGTH = 80
+const DICTIONARY_WORD_SEPARATOR_RE = /\s+/
 const SENTENCE_PUNCTUATION_RE = /[.?!,;:。！？，；：]/
+
+function countDictionaryWords(value: string) {
+  return value.split(DICTIONARY_WORD_SEPARATOR_RE).filter(Boolean).length
+}
 
 export function shouldUseBuiltInDictionary(selectionText: string | null | undefined) {
   const value = selectionText?.trim() ?? ""
@@ -57,11 +64,11 @@ export function shouldUseBuiltInDictionary(selectionText: string | null | undefi
     return false
   }
 
-  if (value.length > 40) {
+  if (value.length > MAX_BUILT_IN_DICTIONARY_LENGTH) {
     return false
   }
 
-  if (WHITESPACE_RE.test(value)) {
+  if (countDictionaryWords(value) > MAX_BUILT_IN_DICTIONARY_WORDS) {
     return false
   }
 
@@ -131,7 +138,7 @@ export function createBuiltInDictionaryOutputSchema() {
       ...createOutputSchemaField(
         BUILT_IN_DICTIONARY_FIELD_NAMES.wordFamilyCore,
         "string",
-        "Up to 3 close word-family items. Use one line per item in the format: term || partOfSpeech || definition. Answer definitions in {{targetLanguage}}.",
+        "Up to 3 close word-family items or nearby phrase expressions. Use one line per item in the format: term || partOfSpeech || definition. Answer definitions in {{targetLanguage}}.",
         "dictionary-word-family-core",
       ),
       hidden: true,
@@ -149,7 +156,7 @@ export function createBuiltInDictionaryOutputSchema() {
       ...createOutputSchemaField(
         BUILT_IN_DICTIONARY_FIELD_NAMES.wordFamilyRelated,
         "string",
-        "Up to 2 related items. Use one line per item in the format: term || partOfSpeech || definition. Answer definitions in {{targetLanguage}}.",
+        "Up to 2 related word-family items or nearby phrase expressions. Use one line per item in the format: term || partOfSpeech || definition. Answer definitions in {{targetLanguage}}.",
         "dictionary-word-family-related",
       ),
       hidden: true,

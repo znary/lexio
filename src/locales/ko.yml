@@ -898,6 +898,7 @@ action:
   hideDetailedExplanation: 자세한 풀이 닫기
   viewDetailedExplanationHint: 의미 풀이, 문맥, 추가 설명 보기
   hideDetailedExplanationHint: 의미 풀이와 문맥 설명 더 보기
+  savedToVocabulary: 단어장에 저장됨
   saveToNotebase: Notebase에 저장
   saveToNotebaseSaving: 저장 중...
   saveToNotebaseSuccess: Notebase에 저장했습니다
@@ -910,6 +911,17 @@ action:
   contextDetailsTitleLabel: 제목
   contextDetailsParagraphsLabel: 문단 내용
   translation: 번역
+  translationCard:
+    definition: 뜻
+    inContext: 문맥
+    mastered: 학습 완료
+    missingContext: 저장된 문맥이 아직 없습니다.
+    moreInformation: 추가 정보
+    practiceNow: 지금 연습
+    wordFamily: 단어군
+    wordFamilyCore: 핵심
+    wordFamilyContrast: 대비
+    wordFamilyRelated: 관련
   speak: 읽기
   playing: 재생 중
 thinking:

@@ -898,6 +898,7 @@ action:
   hideDetailedExplanation: 詳しい解説を閉じる
   viewDetailedExplanationHint: 語義の分解、文脈、補足説明を見る
   hideDetailedExplanationHint: 語義の分解と文脈の説明をさらに表示
+  savedToVocabulary: 単語帳に保存しました
   saveToNotebase: Notebase に保存
   saveToNotebaseSaving: 保存中...
   saveToNotebaseSuccess: Notebase に保存しました
@@ -910,6 +911,17 @@ action:
   contextDetailsTitleLabel: タイトル
   contextDetailsParagraphsLabel: 段落内容
   translation: 翻訳
+  translationCard:
+    definition: 定義
+    inContext: 文脈
+    mastered: 習得済み
+    missingContext: 保存された文脈はまだありません。
+    moreInformation: その他の情報
+    practiceNow: 今すぐ練習
+    wordFamily: 単語ファミリー
+    wordFamilyCore: 中心
+    wordFamilyContrast: 対比
+    wordFamilyRelated: 関連
   speak: 読み上げ
   playing: 再生中
 thinking:

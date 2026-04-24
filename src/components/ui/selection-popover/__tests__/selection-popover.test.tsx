@@ -430,6 +430,19 @@ describe("selectionPopover", () => {
     })
   })
 
+  it("allows a popover consumer to choose a wider initial size", () => {
+    renderPopover({
+      contentProps: {
+        initialWidth: 760,
+        minWidth: 360,
+      },
+    })
+
+    expect(latestRndProps?.default.width).toBe(760)
+    expect(latestRndProps?.minWidth).toBe(360)
+    expectLatestPosition({ x: 120, y: 140 })
+  })
+
   it("keeps the body shrinkable so overflow can scroll after viewport changes", () => {
     const { element } = renderPopover()
 

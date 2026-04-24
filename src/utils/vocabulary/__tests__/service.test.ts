@@ -557,6 +557,57 @@ describe("vocabulary service", () => {
     }))
   })
 
+  it("stores nearby expressions for phrase vocabulary items in the word family field", async () => {
+    storageAdapterGetMock.mockResolvedValue([
+      {
+        id: "voc_phrase",
+        sourceText: "in favor of",
+        normalizedText: "in favor of",
+        translatedText: "支持",
+        sourceLang: "en",
+        targetLang: "zh-CN",
+        kind: "phrase",
+        wordCount: 3,
+        createdAt: 1,
+        lastSeenAt: 2,
+        hitCount: 3,
+        updatedAt: 4,
+        deletedAt: null,
+      },
+    ])
+
+    const { updateVocabularyItemDetails } = await import("../service")
+    const nearbyExpressions = {
+      core: [
+        { term: "be in favor of", definition: "支持，赞成" },
+      ],
+      contrast: [
+        { term: "be against", definition: "反对" },
+      ],
+      related: [
+        { term: "support", partOfSpeech: "verb", definition: "支持" },
+      ],
+    }
+
+    const updatedItem = await updateVocabularyItemDetails("voc_phrase", {
+      definition: "支持；赞成",
+      wordFamily: nearbyExpressions,
+    })
+
+    expect(apiUpdateVocabularyItemMock).toHaveBeenCalledWith(expect.objectContaining({
+      id: "voc_phrase",
+      definition: "支持；赞成",
+      kind: "phrase",
+      wordFamily: nearbyExpressions,
+    }))
+    expect(updatedItem).toEqual(expect.objectContaining({
+      id: "voc_phrase",
+      definition: "支持；赞成",
+      kind: "phrase",
+      wordFamily: nearbyExpressions,
+    }))
+  })
+
   it("marks an existing item as mastered with an optimistic cache update", async () => {
     storageAdapterGetMock.mockResolvedValue([
       {

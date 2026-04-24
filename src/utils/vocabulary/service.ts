@@ -1013,12 +1013,10 @@ export async function updateVocabularyItemDetails(
       : {}),
     ...(typeof details.partOfSpeech === "string" && details.partOfSpeech.trim() ? { partOfSpeech: details.partOfSpeech.trim() } : {}),
     ...(typeof details.phonetic === "string" && details.phonetic.trim() ? { phonetic: details.phonetic.trim() } : {}),
-    ...(existingItem.kind === "word"
-      ? (() => {
-          const normalizedWordFamily = normalizeVocabularyWordFamily(details.wordFamily)
-          return normalizedWordFamily ? { wordFamily: normalizedWordFamily } : {}
-        })()
-      : {}),
+    ...(() => {
+      const normalizedWordFamily = normalizeVocabularyWordFamily(details.wordFamily)
+      return normalizedWordFamily ? { wordFamily: normalizedWordFamily } : {}
+    })(),
   } as Partial<Pick<VocabularyItem, "definition" | "difficulty" | "lemma" | "nuance" | "partOfSpeech" | "phonetic" | "wordFamily">>
 
   if (Object.keys(nextDetails).length === 0) {

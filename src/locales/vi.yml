@@ -898,6 +898,7 @@ action:
   hideDetailedExplanation: Ẩn giải nghĩa chi tiết
   viewDetailedExplanationHint: Mở phân tích nghĩa, ngữ cảnh và giải thích thêm
   hideDetailedExplanationHint: Xem thêm phân tích nghĩa và ngữ cảnh
+  savedToVocabulary: Đã lưu vào sổ từ vựng
   saveToNotebase: Lưu vào Notebase
   saveToNotebaseSaving: Đang lưu...
   saveToNotebaseSuccess: Đã lưu vào Notebase
@@ -910,6 +911,17 @@ action:
   contextDetailsTitleLabel: Tiêu đề
   contextDetailsParagraphsLabel: Các đoạn văn
   translation: Dịch
+  translationCard:
+    definition: Định nghĩa
+    inContext: Trong ngữ cảnh
+    mastered: Đã thuộc
+    missingContext: Chưa có ngữ cảnh đã lưu.
+    moreInformation: Thông tin thêm
+    practiceNow: Luyện ngay
+    wordFamily: Họ từ
+    wordFamilyCore: Cốt lõi
+    wordFamilyContrast: Đối chiếu
+    wordFamilyRelated: Liên quan
   speak: Đọc
   playing: Đang phát
 thinking:

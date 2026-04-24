@@ -900,6 +900,7 @@ action:
   hideDetailedExplanation: 收起詳細釋義
   viewDetailedExplanationHint: 點開查看詞義拆解、語境和補充說明
   hideDetailedExplanationHint: 查看更多詞義拆解與上下文說明
+  savedToVocabulary: 已收藏到單字本
   saveToNotebase: 儲存到筆記庫
   saveToNotebaseSaving: 儲存中...
   saveToNotebaseSuccess: 已儲存到筆記庫
@@ -912,6 +913,17 @@ action:
   contextDetailsTitleLabel: 標題
   contextDetailsParagraphsLabel: 段落內容
   translation: 翻譯
+  translationCard:
+    definition: 釋義
+    inContext: 語境
+    mastered: 已掌握
+    missingContext: 暫時沒有儲存語境。
+    moreInformation: 更多資訊
+    practiceNow: 練這個詞
+    wordFamily: 詞族
+    wordFamilyCore: 核心
+    wordFamilyContrast: 對比
+    wordFamilyRelated: 相關
   speak: 朗讀
   playing: 播放中
 thinking:

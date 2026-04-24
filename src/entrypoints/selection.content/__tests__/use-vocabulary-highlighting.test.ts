@@ -539,6 +539,87 @@ describe("shouldHighlightAcrossElements", () => {
     expect(window.getSelection()?.toString()).toBe("")
   })
 
+  it("keeps existing highlights and patches small vocabulary changes when a full rescan is too large", async () => {
+    const integrationItem = createVocabularyItem({
+      id: "item-1",
+      sourceText: "integration",
+      normalizedText: "integration",
+      kind: "word",
+      wordCount: 1,
+    })
+    const keepItem = createVocabularyItem({
+      id: "item-2",
+      sourceText: "Keep",
+      normalizedText: "keep",
+      matchTerms: ["keep"],
+      translatedText: "保留",
+      kind: "word",
+      wordCount: 1,
+    })
+    let currentItems: VocabularyItem[] = [integrationItem]
+
+    getVocabularyItemsMock.mockImplementation(async () => currentItems)
+    document.body.innerHTML = `
+      <main>
+        <p>Integration is working.</p>
+        <p>Keep this selection intact.</p>
+      </main>
+    `
+
+    const container = document.createElement("div")
+    document.body.append(container)
+    render(createElement(VocabularyHighlightingHarness), { container })
+
+    await waitFor(() => {
+      const highlight = document.querySelector("p mark")
+      expect(highlight?.textContent).toBe("Integration")
+    })
+
+    const largePageNodes = document.createDocumentFragment()
+    for (let index = 0; index < 1810; index += 1) {
+      largePageNodes.append(document.createElement("span"))
+    }
+    document.body.append(largePageNodes)
+
+    currentItems = [integrationItem, keepItem]
+    document.dispatchEvent(new CustomEvent("lexio:vocabulary-changed"))
+
+    await waitFor(() => {
+      expect(getVocabularyItemsMock).toHaveBeenCalledTimes(2)
+      const highlights = [...document.querySelectorAll("main p mark")]
+      expect(highlights.map(highlight => highlight.textContent)).toEqual(["Integration", "Keep"])
+    })
+  })
+
+  it("still highlights all words when the vocabulary list is large", async () => {
+    const items = Array.from({ length: 60 }, (_, index) => {
+      const term = `term${String(index).padStart(2, "0")}`
+      return createVocabularyItem({
+        id: `item-${index}`,
+        sourceText: term,
+        normalizedText: term,
+        matchTerms: [term],
+        translatedText: `译文${index}`,
+      })
+    })
+
+    getVocabularyItemsMock.mockResolvedValue(items)
+    document.body.innerHTML = `
+      <main>
+        <p>${items.map(item => item.sourceText).join(" ")}</p>
+      </main>
+    `
+
+    const container = document.createElement("div")
+    document.body.append(container)
+    render(createElement(VocabularyHighlightingHarness), { container })
+
+    await waitFor(() => {
+      const highlights = [...document.querySelectorAll("main p mark")]
+      expect(highlights).toHaveLength(items.length)
+    })
+  })
+
   it("keeps the hover card open while the cursor crosses the bridge between the highlight and the card", async () => {
     const item = createVocabularyItem({
       sourceText: "integration",

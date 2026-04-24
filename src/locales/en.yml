@@ -1095,6 +1095,17 @@ action:
   contextDetailsTitleLabel: Title
   contextDetailsParagraphsLabel: Paragraphs
   translation: Translation
+  translationCard:
+    definition: Definition
+    inContext: In context
+    mastered: Mastered
+    missingContext: No context captured yet.
+    moreInformation: More information
+    practiceNow: Practice Now
+    wordFamily: Word Family
+    wordFamilyCore: Core
+    wordFamilyContrast: Contrast
+    wordFamilyRelated: Related
   speak: Speak
   explain: Explain
   playing: Playing

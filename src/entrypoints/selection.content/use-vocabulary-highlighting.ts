@@ -38,8 +38,16 @@ const HIGHLIGHT_EXCLUDE_SELECTORS = [
 ]
 const HIGHLIGHT_MARK_SELECTOR = `mark.${VOCABULARY_HIGHLIGHT_CLASS_NAME}[${VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE}]`
 const HIGHLIGHT_RESCAN_DELAY_MS = 400
-const MAX_HIGHLIGHTABLE_DOM_ELEMENTS = 1800
-const MAX_HIGHLIGHTABLE_TERMS = 600
+const HIGHLIGHT_BATCH_TERM_LIMIT = 48
+const HIGHLIGHT_BATCH_PATTERN_LENGTH_LIMIT = 2400
+const REGEXP_SPECIAL_CHAR_RE = /[.*+?^${}()|[\]\\]/g
+const CHAR_CLASS_SPECIAL_CHAR_RE = /[\\\]-]/g
+
+interface HighlightBatch {
+  acrossElements: boolean
+  itemByTerm: Map<string, VocabularyItem>
+  regex: RegExp
+}
 
 interface ActiveHoverHighlight {
   element: HTMLElement
@@ -117,28 +125,120 @@ function getActiveVocabularyItems(items: VocabularyItem[]): VocabularyItem[] {
     })
 }
 
-function markVocabularyTerm(
+function escapeRegExp(value: string): string {
+  return value.replace(REGEXP_SPECIAL_CHAR_RE, "\\$&")
+}
+
+function escapeCharClass(value: string): string {
+  return value.replace(CHAR_CLASS_SPECIAL_CHAR_RE, "\\$&")
+}
+
+function createHighlightBoundaryPattern(): string {
+  const escapedLimiters = VOCABULARY_HIGHLIGHT_BOUNDARY_LIMITERS
+    .map(limiter => escapeCharClass(limiter))
+    .join("")
+
+  return `\\s${escapedLimiters}`
+}
+
+function createHighlightRegex(terms: string[]): RegExp {
+  const alternation = terms.map(term => escapeRegExp(term)).join("|")
+  const boundaries = createHighlightBoundaryPattern()
+  return new RegExp(`(^|[${boundaries}])(${alternation})(?=$|[${boundaries}])`, "gi")
+}
+
+function buildHighlightBatches(
+  items: VocabularyItem[],
+  acrossElements: boolean,
+): HighlightBatch[] {
+  const entries: Array<{ item: VocabularyItem, term: string }> = []
+  const seenTerms = new Set<string>()
+
+  for (const item of items) {
+    if (shouldHighlightAcrossElements(item) !== acrossElements) {
+      continue
+    }
+
+    for (const term of getVocabularyHighlightTerms(item)) {
+      if (seenTerms.has(term)) {
+        continue
+      }
+
+      seenTerms.add(term)
+      entries.push({ item, term })
+    }
+  }
+
+  const batches: HighlightBatch[] = []
+  let currentBatchEntries: typeof entries = []
+  let currentPatternLength = 0
+
+  const pushBatch = () => {
+    if (currentBatchEntries.length === 0) {
+      return
+    }
+
+    const terms = currentBatchEntries.map(entry => entry.term)
+    batches.push({
+      acrossElements,
+      itemByTerm: new Map(currentBatchEntries.map(entry => [entry.term, entry.item])),
+      regex: createHighlightRegex(terms),
+    })
+    currentBatchEntries = []
+    currentPatternLength = 0
+  }
+
+  for (const entry of entries) {
+    const nextPatternLength = currentPatternLength + entry.term.length + 1
+    if (
+      currentBatchEntries.length >= HIGHLIGHT_BATCH_TERM_LIMIT
+      || nextPatternLength > HIGHLIGHT_BATCH_PATTERN_LENGTH_LIMIT
+    ) {
+      pushBatch()
+    }
+
+    currentBatchEntries.push(entry)
+    currentPatternLength += entry.term.length + 1
+  }
+
+  pushBatch()
+  return batches
+}
+
+function markHighlightBatch(
   markInstance: import("mark.js").default,
-  item: VocabularyItem,
-  term: string,
+  batch: HighlightBatch,
 ): Promise<void> {
   return new Promise((resolve) => {
-    markInstance.mark(term, {
-      acrossElements: shouldHighlightAcrossElements(item),
-      accuracy: {
-        value: "exactly",
-        limiters: VOCABULARY_HIGHLIGHT_BOUNDARY_LIMITERS,
-      },
+    let currentItem: VocabularyItem | null = null
+
+    markInstance.markRegExp(batch.regex, {
+      acrossElements: batch.acrossElements,
       caseSensitive: false,
       className: VOCABULARY_HIGHLIGHT_CLASS_NAME,
+      filter: (_node, match) => {
+        currentItem = batch.itemByTerm.get(normalizeVocabularyText(match)) ?? null
+        return currentItem != null
+      },
       each: (element) => {
+        if (!currentItem) {
+          return
+        }
+
         element.classList.add(NOTRANSLATE_CLASS)
-        element.setAttribute(VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE, item.id)
+        element.setAttribute(VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE, currentItem.id)
       },
       exclude: HIGHLIGHT_EXCLUDE_SELECTORS,
-      ignoreJoiners: true,
-      separateWordSearch: false,
+      ignoreGroups: 1,
       done: resolve,
+    })
+  })
+}
+
+function yieldToNextFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      resolve()
     })
   })
 }
@@ -147,9 +247,16 @@ async function markTerms(
   markInstance: import("mark.js").default,
   items: VocabularyItem[],
 ) {
-  for (const item of items) {
-    for (const term of getVocabularyHighlightTerms(item)) {
-      await markVocabularyTerm(markInstance, item, term)
+  const batches = [
+    ...buildHighlightBatches(items, false),
+    ...buildHighlightBatches(items, true),
+  ]
+
+  for (let index = 0; index < batches.length; index += 1) {
+    await markHighlightBatch(markInstance, batches[index]!)
+
+    if (index < batches.length - 1) {
+      await yieldToNextFrame()
     }
   }
 }
@@ -367,28 +474,23 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
         }
 
         const activeItems = vocabulary.highlightEnabled ? getActiveVocabularyItems(items) : []
-        const totalTerms = activeItems.reduce((count, item) => count + getVocabularyHighlightTerms(item).length, 0)
-        const shouldSkipHighlighting = activeItems.length > 0 && (
-          document.body.getElementsByTagName("*").length > MAX_HIGHLIGHTABLE_DOM_ELEMENTS
-          || totalTerms > MAX_HIGHLIGHTABLE_TERMS
-        )
-        const shouldClearSelection = activeItems.length > 0 || document.querySelector(HIGHLIGHT_MARK_SELECTOR) !== null
-
-        if (shouldClearSelection) {
-          clearActiveSelection()
-        }
-
         const markInstance = new Mark(document.body)
-        await unmark(markInstance)
-
         itemsByIdRef.current = new Map(activeItems.map(item => [item.id, item]))
 
-        if (!vocabulary.highlightEnabled || activeItems.length === 0 || shouldSkipHighlighting) {
+        if (!vocabulary.highlightEnabled || activeItems.length === 0) {
+          await unmark(markInstance)
           hideHoverPreview()
           return
         }
 
         ensureHighlightStyle(vocabulary.highlightColor)
+
+        const shouldClearSelection = activeItems.length > 0 || document.querySelector(HIGHLIGHT_MARK_SELECTOR) !== null
+        if (shouldClearSelection) {
+          clearActiveSelection()
+        }
+
+        await unmark(markInstance)
         await markTerms(markInstance, activeItems)
         refreshHoverPreview()
       }

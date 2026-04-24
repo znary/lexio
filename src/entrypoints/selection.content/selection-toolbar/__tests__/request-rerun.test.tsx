@@ -111,9 +111,13 @@ vi.mock("@/components/ui/selection-popover", async () => {
   function Content({
     children,
     finalFocus,
+    initialWidth,
+    minWidth,
   }: {
     children: React.ReactNode
     finalFocus?: boolean
+    initialWidth?: number
+    minWidth?: number
   }) {
     const { open } = usePopoverContext()
     return open
@@ -121,6 +125,8 @@ vi.mock("@/components/ui/selection-popover", async () => {
           <div
             data-testid="selection-popover-content"
             data-final-focus={finalFocus === false ? "false" : undefined}
+            data-initial-width={initialWidth}
+            data-min-width={minWidth}
             data-rf-selection-overlay-root=""
           >
             {children}
@@ -216,19 +222,24 @@ vi.mock("../translate-button/translation-content", () => ({
     selectionContent,
     translatedText,
     isTranslating,
+    vocabularyItem,
   }: {
     detailedExplanation?: {
+      isLoading?: boolean
       result: Record<string, unknown> | null
     } | null
     selectionContent: string | null | undefined
     translatedText: string | undefined
     isTranslating: boolean
+    vocabularyItem?: Record<string, unknown> | null
   }) => (
     <div data-testid="translation-content">
       <span data-testid="translation-selection">{selectionContent}</span>
       <span data-testid="translation-result">{translatedText ?? ""}</span>
       <span data-testid="translation-status">{String(isTranslating)}</span>
+      <span data-testid="translation-detailed-loading">{String(detailedExplanation?.isLoading ?? false)}</span>
       <span data-testid="translation-detailed">{JSON.stringify(detailedExplanation?.result ?? null)}</span>
+      <span data-testid="translation-vocabulary-item">{JSON.stringify(vocabularyItem ?? null)}</span>
       <span data-testid="translation-detailed-error"></span>
     </div>
   ),
@@ -651,6 +662,8 @@ describe("selection toolbar requests", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("selection-popover-content")).toHaveAttribute("data-final-focus", "false")
+      expect(screen.getByTestId("selection-popover-content")).toHaveAttribute("data-initial-width", "760")
+      expect(screen.getByTestId("selection-popover-content")).toHaveAttribute("data-min-width", "360")
     })
   })
 
@@ -1094,6 +1107,13 @@ describe("selection toolbar requests", () => {
       targetLang: "zh-CN",
       kind: "word",
       wordCount: 1,
+      wordFamily: {
+        core: [
+          { term: "think", partOfSpeech: "verb", definition: "思考" },
+        ],
+        contrast: [],
+        related: [],
+      },
       createdAt: 1,
       lastSeenAt: 2,
       hitCount: 3,
@@ -1139,6 +1159,80 @@ describe("selection toolbar requests", () => {
     await waitFor(() => {
       expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(1)
     })
+  })
+
+  it("enriches a reused vocabulary item when the cached item does not have word family details", async () => {
+    findVocabularyItemForSelectionMock.mockResolvedValue({
+      id: "voc_existing",
+      sourceText: "think",
+      normalizedText: "think",
+      lemma: "think",
+      matchTerms: ["think", "thinking", "thinks", "thought"],
+      translatedText: "思考",
+      phonetic: "/theta-ng-k/",
+      partOfSpeech: "verb",
+      definition: "思考；认为",
+      difficulty: "B1",
+      sourceLang: "en",
+      targetLang: "zh-CN",
+      kind: "word",
+      wordCount: 1,
+      createdAt: 1,
+      lastSeenAt: 2,
+      hitCount: 3,
+      updatedAt: 4,
+      deletedAt: null,
+    })
+    streamBackgroundStructuredObjectMock.mockResolvedValue(
+      createStructuredObjectSnapshot({
+        term: "think",
+        phonetic: "/theta-ng-k/",
+        partOfSpeech: "verb",
+        definition: "思考；认为",
+        difficulty: "B1",
+        wordFamilyCore: "think || verb || 思考\nthinker || noun || 思考者",
+        wordFamilyContrast: "thoughtless || adjective || 欠考虑的",
+        wordFamilyRelated: "thought || noun || 想法",
+      }),
+    )
+    getOrCreateWebPageContextMock.mockResolvedValue(null)
+
+    const store = createStore()
+    store.set(configAtom, createStandardTranslateConfig())
+    setSelectionState(store, { text: "thinking" })
+    renderWithProviders(<TranslateButton />, store)
+
+    fireEvent.click(screen.getByRole("button", { name: "action.translation" }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId("translation-result").textContent).toBe("思考")
+    })
+
+    expect(translateTextCoreMock).not.toHaveBeenCalled()
+    expect(streamManagedTranslationMock).not.toHaveBeenCalled()
+
+    await waitFor(() => {
+      expect(streamBackgroundStructuredObjectMock).toHaveBeenCalledTimes(1)
+    })
+
+    await waitFor(() => {
+      expect(updateVocabularyItemDetailsMock).toHaveBeenCalledWith("voc_existing", expect.objectContaining({
+        wordFamily: {
+          core: [
+            { term: "think", partOfSpeech: "verb", definition: "思考" },
+            { term: "thinker", partOfSpeech: "noun", definition: "思考者" },
+          ],
+          contrast: [
+            { term: "thoughtless", partOfSpeech: "adjective", definition: "欠考虑的" },
+          ],
+          related: [
+            { term: "thought", partOfSpeech: "noun", definition: "想法" },
+          ],
+        },
+      }))
+    })
+
+    expect(screen.getByTestId("translation-detailed").textContent).toContain("\"wordFamilyCore\"")
   })
 
   it("marks a mastered reused item as learning again when the user translates it again", async () => {

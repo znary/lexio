@@ -53,17 +53,20 @@ describe("built-in dictionary action", () => {
   it("keeps the lemma fields stable and only localizes the definition", () => {
     const action = createBuiltInDictionaryAction("provider-1")
 
-    expect(action.systemPrompt).toContain("Return the lemma in the source language")
-    expect(action.systemPrompt).toContain("Return the phonetic transcription for that source-language lemma")
+    expect(action.systemPrompt).toContain("Return the lemma or canonical phrase in the source language")
+    expect(action.systemPrompt).toContain("Return the phonetic transcription when it is natural")
     expect(action.systemPrompt).toContain("Return the definition in {{targetLanguage}}")
     expect(action.systemPrompt).toContain("Return a nuance note in {{targetLanguage}}")
+    expect(action.systemPrompt).toContain("For a phrase, these fields contain nearby expressions")
     expect(action.systemPrompt).toContain("term || partOfSpeech || definition")
   })
 
-  it("uses the built-in dictionary only for single-term selections", () => {
+  it("uses the built-in dictionary for words and short phrases", () => {
     expect(shouldUseBuiltInDictionary("planning")).toBe(true)
     expect(shouldUseBuiltInDictionary("plan-based")).toBe(true)
-    expect(shouldUseBuiltInDictionary("Selected text")).toBe(false)
+    expect(shouldUseBuiltInDictionary("Selected text")).toBe(true)
+    expect(shouldUseBuiltInDictionary("in favor of")).toBe(true)
     expect(shouldUseBuiltInDictionary("hello, world")).toBe(false)
+    expect(shouldUseBuiltInDictionary("one two three four five six seven eight nine")).toBe(false)
   })
 })

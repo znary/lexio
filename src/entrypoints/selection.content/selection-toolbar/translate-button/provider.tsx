@@ -534,15 +534,60 @@ function extractVocabularyDetailsFromDictionaryResult(
 }
 
 function buildStoredDetailedExplanationValue(item: VocabularyItem): Record<string, string> | null {
+  const wordFamilyCore = serializeWordFamilyGroup(item.wordFamily?.core)
+  const wordFamilyContrast = serializeWordFamilyGroup(item.wordFamily?.contrast)
+  const wordFamilyRelated = serializeWordFamilyGroup(item.wordFamily?.related)
   const value = {
     ...(item.lemma?.trim() ? { term: item.lemma.trim() } : item.sourceText.trim() ? { term: item.sourceText.trim() } : {}),
     ...(item.phonetic?.trim() ? { phonetic: item.phonetic.trim() } : {}),
     ...(item.partOfSpeech?.trim() ? { partOfSpeech: item.partOfSpeech.trim() } : {}),
     ...(item.definition?.trim() ? { definition: item.definition.trim() } : {}),
     ...(item.difficulty?.trim() ? { difficulty: item.difficulty.trim() } : {}),
+    ...(item.nuance?.trim() ? { nuance: item.nuance.trim() } : {}),
+    ...(wordFamilyCore ? { wordFamilyCore } : {}),
+    ...(wordFamilyContrast ? { wordFamilyContrast } : {}),
+    ...(wordFamilyRelated ? { wordFamilyRelated } : {}),
   }
 
   return Object.keys(value).length > 0 ? value : null
+}
+
+function hasStoredText(value: string | null | undefined) {
+  return Boolean(value?.trim())
+}
+
+function hasStoredWordFamilyDetails(wordFamily: VocabularyWordFamily | null | undefined) {
+  return Boolean(
+    wordFamily
+    && (
+      (wordFamily.core?.length ?? 0) > 0
+      || (wordFamily.contrast?.length ?? 0) > 0
+      || (wordFamily.related?.length ?? 0) > 0
+    ),
+  )
+}
+
+function shouldFetchVocabularyDetailsForReuse(item: VocabularyItem) {
+  return !hasStoredText(item.phonetic)
+    || !hasStoredText(item.partOfSpeech)
+    || !hasStoredText(item.definition)
+    || !hasStoredText(item.difficulty)
+    || !hasStoredWordFamilyDetails(item.wordFamily)
+}
+
+function serializeWordFamilyGroup(entries: VocabularyWordFamilyEntry[] | undefined): string {
+  if (!entries?.length) {
+    return ""
+  }
+
+  return entries
+    .map((entry) => {
+      const partOfSpeech = entry.partOfSpeech?.trim()
+      return partOfSpeech
+        ? `${entry.term} || ${partOfSpeech} || ${entry.definition}`
+        : `${entry.term} || ${entry.definition}`
+    })
+    .join("\n")
 }
 
 interface SelectionTranslationContextValue {
@@ -575,6 +620,7 @@ export function SelectionTranslationProvider({
   const [popoverSessionKey, setPopoverSessionKey] = useState(0)
   const [translatedText, setTranslatedText] = useState<string | undefined>(undefined)
   const [reusedVocabularyItem, setReusedVocabularyItem] = useState<VocabularyItem | null>(null)
+  const [savedVocabularyItem, setSavedVocabularyItem] = useState<VocabularyItem | null>(null)
   const [savedVocabularyItemId, setSavedVocabularyItemId] = useState<string | null>(null)
   const [savedVocabularyText, setSavedVocabularyText] = useState<string | null>(null)
   const [dictionaryReadyRunKey, setDictionaryReadyRunKey] = useState<string | null>(null)
@@ -669,7 +715,7 @@ export function SelectionTranslationProvider({
       : null,
     [dictionaryProviderId, shouldRenderDictionaryResult],
   )
-  const shouldRunDictionaryAction = vocabularyReuseState === "miss"
+  const shouldRunDictionaryAction = (vocabularyReuseState === "miss" || vocabularyReuseState === "hit")
     && activeTranslationRunKey != null
     && dictionaryReadyRunKey === activeTranslationRunKey
   const dictionaryActionExecution = shouldRunDictionaryAction ? dictionaryAction : null
@@ -729,6 +775,7 @@ export function SelectionTranslationProvider({
   const resetTranslationState = useCallback(() => {
     setIsTranslating(false)
     setReusedVocabularyItem(null)
+    setSavedVocabularyItem(null)
     setSavedVocabularyItemId(null)
     setTranslatedText(undefined)
     setSavedVocabularyText(null)
@@ -775,6 +822,9 @@ export function SelectionTranslationProvider({
     cancelCurrentTranslation()
     resetDetailedExplanation()
     setReusedVocabularyItem(null)
+    setSavedVocabularyItem(null)
+    setSavedVocabularyItemId(null)
+    setSavedVocabularyText(null)
     setVocabularyReuseState("miss")
     setRerunNonce(prev => prev + 1)
   }, [cancelCurrentTranslation, resetDetailedExplanation])
@@ -813,6 +863,9 @@ export function SelectionTranslationProvider({
     })
     setIsTranslating(true)
     setReusedVocabularyItem(null)
+    setSavedVocabularyItem(null)
+    setSavedVocabularyItemId(null)
+    setSavedVocabularyText(null)
     setTranslatedText(undefined)
     setThinking(null)
     setError(null)
@@ -842,13 +895,18 @@ export function SelectionTranslationProvider({
           if (reusableItem.masteredAt != null) {
             void Promise.resolve(setVocabularyItemMastered(reusableItem.id, false)).catch(() => {})
           }
-
           setReusedVocabularyItem(nextReusableItem)
+          setSavedVocabularyItem(null)
           setSavedVocabularyItemId(reusableItem.id)
           setSavedVocabularyText(reusableItem.sourceText)
           setTranslatedText(nextReusableItem.translatedText)
           setThinking(null)
           setError(null)
+          setDictionaryReadyRunKey(
+            dictionaryAction && shouldFetchVocabularyDetailsForReuse(nextReusableItem)
+              ? currentTranslationRunKey
+              : null,
+          )
           setVocabularyReuseState("hit")
           setIsTranslating(false)
           isTranslationInFlightRef.current = false
@@ -1014,12 +1072,14 @@ export function SelectionTranslationProvider({
           })
 
           if (isActiveRun()) {
+            setSavedVocabularyItem(savedItem)
             setSavedVocabularyItemId(savedItem?.id ?? null)
             setSavedVocabularyText(savedItem?.sourceText ?? null)
           }
         }
         catch {
           if (isActiveRun()) {
+            setSavedVocabularyItem(null)
             setSavedVocabularyItemId(null)
             setSavedVocabularyText(null)
           }
@@ -1066,7 +1126,7 @@ export function SelectionTranslationProvider({
         })
       }
     }
-  }, [contextSentence, resetTranslationState, selectionText, sourceSurface, translateRequest, updateTranslationResumeSnapshot, vocabularySettings])
+  }, [contextSentence, dictionaryAction, resetTranslationState, selectionText, sourceSurface, translateRequest, updateTranslationResumeSnapshot, vocabularySettings])
 
   const startTranslation = useEffectEvent((runId: number, options?: { forceRefresh?: boolean, translationRunKey: string }) => {
     void runTranslation(runId, options)
@@ -1290,12 +1350,12 @@ export function SelectionTranslationProvider({
         || dictionaryWebPageContext === undefined
       )
     )
-  const detailedExplanationValue = reusedVocabularyItem
+  const storedDetailedExplanationValue = reusedVocabularyItem
     ? buildStoredDetailedExplanationValue(reusedVocabularyItem)
-    : (dictionaryExecutionPlan.executionContext ? detailedExplanationResult : null)
-  const detailedExplanationThinkingValue = reusedVocabularyItem
-    ? null
-    : (dictionaryExecutionPlan.executionContext ? detailedExplanationThinking : null)
+    : null
+  const freshDetailedExplanationValue = dictionaryExecutionPlan.executionContext ? detailedExplanationResult : null
+  const detailedExplanationValue = freshDetailedExplanationValue ?? storedDetailedExplanationValue
+  const detailedExplanationThinkingValue = dictionaryExecutionPlan.executionContext ? detailedExplanationThinking : null
   const headerStatus = useMemo(() => {
     const isLoading = isTranslating || detailedExplanationLoading
     const isFailed = Boolean(error)
@@ -1332,12 +1392,12 @@ export function SelectionTranslationProvider({
   }, [detailedExplanationLoading, detailedExplanationValue, error, isTranslating, translatedText])
 
   useEffect(() => {
-    if (!savedVocabularyItemId || !dictionaryAction || detailedExplanationLoading || reusedVocabularyItem) {
+    if (!savedVocabularyItemId || !dictionaryAction || detailedExplanationLoading || !freshDetailedExplanationValue) {
       return
     }
 
     const details = extractVocabularyDetailsFromDictionaryResult(
-      detailedExplanationValue,
+      freshDetailedExplanationValue,
       dictionaryAction.outputSchema,
     )
     if (!details) {
@@ -1353,8 +1413,19 @@ export function SelectionTranslationProvider({
     }
     lastVocabularyDetailsSyncKeyRef.current = syncKey
 
-    void Promise.resolve(updateVocabularyItemDetails(savedVocabularyItemId, details)).catch(() => {})
-  }, [dictionaryAction, detailedExplanationLoading, detailedExplanationValue, reusedVocabularyItem, savedVocabularyItemId])
+    void Promise.resolve(updateVocabularyItemDetails(savedVocabularyItemId, details))
+      .then((updatedItem) => {
+        if (updatedItem) {
+          if (reusedVocabularyItem?.id === updatedItem.id) {
+            setReusedVocabularyItem(updatedItem)
+            return
+          }
+
+          setSavedVocabularyItem(updatedItem)
+        }
+      })
+      .catch(() => {})
+  }, [dictionaryAction, detailedExplanationLoading, freshDetailedExplanationValue, reusedVocabularyItem?.id, savedVocabularyItemId])
 
   const contextValue = useMemo<SelectionTranslationContextValue>(() => ({
     prepareToolbarOpen,
@@ -1373,6 +1444,8 @@ export function SelectionTranslationProvider({
           key={popoverSessionKey}
           container={shadowWrapper ?? document.body}
           finalFocus={false}
+          initialWidth={760}
+          minWidth={360}
         >
           <SelectionPopover.Header className="border-b">
             <SelectionToolbarTitleContent
@@ -1407,6 +1480,8 @@ export function SelectionTranslationProvider({
               translatedText={translatedText}
               isTranslating={isTranslating}
               thinking={thinking}
+              vocabularyItem={reusedVocabularyItem ?? savedVocabularyItem}
+              contextSentence={contextSentence}
             />
             <SelectionToolbarErrorAlert error={error} className="-mt-3" />
           </SelectionPopover.Body>
