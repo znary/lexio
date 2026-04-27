@@ -7,6 +7,7 @@ const {
   apiDeleteVocabularyItemMock,
   apiGetVocabularyItemsMock,
   apiGetVocabularyMetaMock,
+  pullPlatformSyncMock,
   apiUpdateVocabularyItemMock,
   getPlatformAuthSessionMock,
   storageAdapterGetMock,
@@ -18,6 +19,7 @@ const {
   apiDeleteVocabularyItemMock: vi.fn(),
   apiGetVocabularyItemsMock: vi.fn(),
   apiGetVocabularyMetaMock: vi.fn(),
+  pullPlatformSyncMock: vi.fn(),
   apiUpdateVocabularyItemMock: vi.fn(),
   getPlatformAuthSessionMock: vi.fn(),
   storageAdapterGetMock: vi.fn(),
@@ -31,6 +33,7 @@ vi.mock("@/utils/platform/api", () => ({
   deleteVocabularyItem: (...args: unknown[]) => apiDeleteVocabularyItemMock(...args),
   getVocabularyItems: (...args: unknown[]) => apiGetVocabularyItemsMock(...args),
   getVocabularyMeta: (...args: unknown[]) => apiGetVocabularyMetaMock(...args),
+  pullPlatformSync: (...args: unknown[]) => pullPlatformSyncMock(...args),
   updateVocabularyItem: (...args: unknown[]) => apiUpdateVocabularyItemMock(...args),
 }))
 
@@ -58,6 +61,7 @@ describe("vocabulary service", () => {
     apiDeleteVocabularyItemMock.mockResolvedValue({ ok: true })
     apiClearVocabularyItemsMock.mockResolvedValue({ ok: true })
     apiGetVocabularyMetaMock.mockResolvedValue({ updatedAt: null, count: 0 })
+    pullPlatformSyncMock.mockResolvedValue({ settings: null, vocabularyItems: [] })
     getPlatformAuthSessionMock.mockResolvedValue(null)
     storageAdapterGetMock.mockResolvedValue([])
     storageAdapterSetMock.mockResolvedValue(undefined)
@@ -128,6 +132,42 @@ describe("vocabulary service", () => {
       ],
       contextSentences: ["We said hello before the meeting."],
     }))
+
+    document.removeEventListener(VOCABULARY_CHANGED_EVENT, changedListener)
+  })
+
+  it("includes the latest local vocabulary snapshot in change events", async () => {
+    const { saveTranslatedSelectionToVocabulary, VOCABULARY_CHANGED_EVENT } = await import("../service")
+    const changeEvents: CustomEvent[] = []
+    const changedListener = (event: Event) => {
+      changeEvents.push(event as CustomEvent)
+    }
+    document.addEventListener(VOCABULARY_CHANGED_EVENT, changedListener)
+
+    await saveTranslatedSelectionToVocabulary({
+      sourceText: "cloud",
+      translatedText: "云",
+      contextSentence: "The cloud is local.",
+      sourceUrl: "https://example.com/cloud",
+      sourceLang: "en",
+      targetLang: "zh-CN",
+      settings: {
+        autoSave: true,
+        highlightEnabled: true,
+        maxPhraseWords: 3,
+        highlightColor: "#fde68a",
+      },
+    })
+
+    expect(changeEvents).toHaveLength(1)
+    expect(changeEvents[0]?.detail).toEqual({
+      items: [
+        expect.objectContaining({
+          sourceText: "cloud",
+          translatedText: "云",
+        }),
+      ],
+    })
 
     document.removeEventListener(VOCABULARY_CHANGED_EVENT, changedListener)
   })
@@ -892,6 +932,69 @@ describe("vocabulary service", () => {
     )
   })
 
+  it("reuses guest vocabulary for signed-in local-only reads when the account cache is empty", async () => {
+    getPlatformAuthSessionMock.mockResolvedValue({
+      token: "platform-token",
+      user: {
+        id: "user_1",
+        email: "user@example.com",
+      },
+      updatedAt: 1,
+    })
+    storageAdapterGetMock.mockImplementation(async (key: string) => {
+      if (key === "vocabularyItems:platform:user_1") {
+        return []
+      }
+
+      if (key === "vocabularyItems:guest") {
+        return [
+          {
+            id: "voc_guest",
+            sourceText: "cloud",
+            normalizedText: "cloud",
+            translatedText: "云",
+            sourceLang: "en",
+            targetLang: "zh-CN",
+            kind: "word",
+            wordCount: 1,
+            createdAt: 1,
+            lastSeenAt: 2,
+            hitCount: 3,
+            updatedAt: 4,
+            deletedAt: null,
+          },
+        ]
+      }
+
+      return []
+    })
+
+    const { getVocabularyItems } = await import("../service")
+    const items = await getVocabularyItems({ localOnly: true, skipRemoteProbe: true })
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        id: "voc_guest",
+      }),
+    ])
+    expect(storageAdapterGetMock).toHaveBeenCalledWith(
+      "vocabularyItems:guest",
+      [],
+      expect.anything(),
+    )
+    expect(storageAdapterSetMock).toHaveBeenCalledWith(
+      "vocabularyItems:platform:user_1",
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "voc_guest",
+        }),
+      ]),
+      expect.anything(),
+    )
+    expect(apiGetVocabularyItemsMock).not.toHaveBeenCalled()
+    expect(apiGetVocabularyMetaMock).not.toHaveBeenCalled()
+  })
+
   it("returns local items immediately and refreshes stale signed-in snapshots in the background", async () => {
     let resolveRemoteItems: ((items: Array<Record<string, unknown>>) => void) | null = null
     getPlatformAuthSessionMock.mockResolvedValue({
@@ -992,6 +1095,345 @@ describe("vocabulary service", () => {
         }),
       ])
     })
+  })
+
+  it("can return local signed-in items without starting a stale remote probe", async () => {
+    getPlatformAuthSessionMock.mockResolvedValue({
+      token: "platform-token",
+      user: {
+        id: "user_1",
+        email: "user@example.com",
+      },
+      updatedAt: 1,
+    })
+    storageAdapterGetMock.mockImplementation(async (key: string) => {
+      if (key === "vocabularyItems:platform:user_1") {
+        return [
+          {
+            id: "voc_local",
+            sourceText: "cloud",
+            normalizedText: "cloud",
+            translatedText: "云",
+            sourceLang: "en",
+            targetLang: "zh-CN",
+            kind: "word",
+            wordCount: 1,
+            createdAt: 1,
+            lastSeenAt: 2,
+            hitCount: 3,
+            updatedAt: 4,
+            deletedAt: null,
+          },
+        ]
+      }
+
+      if (key === "vocabularyMeta:platform:user_1") {
+        return {
+          checkedAt: 1,
+          fetchedAt: 1,
+          remoteUpdatedAt: 4,
+          count: 1,
+        }
+      }
+
+      return []
+    })
+
+    const { getVocabularyItems } = await import("../service")
+    const items = await getVocabularyItems({ skipRemoteProbe: true })
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        id: "voc_local",
+      }),
+    ])
+    expect(apiGetVocabularyMetaMock).not.toHaveBeenCalled()
+    expect(apiGetVocabularyItemsMock).not.toHaveBeenCalled()
+  })
+
+  it("does not fetch remote vocabulary during signed-in local-only reads when local storage is empty", async () => {
+    getPlatformAuthSessionMock.mockResolvedValue({
+      token: "platform-token",
+      user: {
+        id: "user_1",
+        email: "user@example.com",
+      },
+      updatedAt: 1,
+    })
+    storageAdapterGetMock.mockResolvedValue([])
+
+    const { getVocabularyItems } = await import("../service")
+    const items = await getVocabularyItems({ localOnly: true, skipRemoteProbe: true })
+
+    expect(items).toEqual([])
+    expect(apiGetVocabularyItemsMock).not.toHaveBeenCalled()
+    expect(apiGetVocabularyMetaMock).not.toHaveBeenCalled()
+  })
+
+  it("bootstraps signed-in local cache from platform sync when storage is empty", async () => {
+    getPlatformAuthSessionMock.mockResolvedValue({
+      token: "platform-token",
+      user: {
+        id: "user_1",
+        email: "user@example.com",
+      },
+      updatedAt: 1,
+    })
+    storageAdapterGetMock.mockResolvedValue([])
+    pullPlatformSyncMock.mockResolvedValue({
+      settings: null,
+      vocabularyItems: [
+        {
+          id: "voc_synced",
+          sourceText: "frustrating",
+          normalizedText: "frustrating",
+          translatedText: "令人懊恼的",
+          sourceLang: "en",
+          targetLang: "zh-CN",
+          kind: "word",
+          wordCount: 1,
+          createdAt: 1,
+          lastSeenAt: 2,
+          hitCount: 3,
+          updatedAt: 4,
+          deletedAt: null,
+        },
+      ],
+    })
+
+    const { getVocabularyItems, getCachedVocabularyItems } = await import("../service")
+    const items = await getVocabularyItems({ skipRemoteProbe: true })
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        id: "voc_synced",
+      }),
+    ])
+    expect(getCachedVocabularyItems()).toEqual([
+      expect.objectContaining({
+        id: "voc_synced",
+      }),
+    ])
+    expect(pullPlatformSyncMock).toHaveBeenCalledTimes(1)
+    expect(apiGetVocabularyItemsMock).not.toHaveBeenCalled()
+    expect(storageAdapterSetMock).toHaveBeenCalledWith(
+      "vocabularyItems:platform:user_1",
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "voc_synced",
+        }),
+      ]),
+      expect.anything(),
+    )
+  })
+
+  it("falls back to the vocabulary endpoint when platform sync bootstrap fails", async () => {
+    getPlatformAuthSessionMock.mockResolvedValue({
+      token: "platform-token",
+      user: {
+        id: "user_1",
+        email: "user@example.com",
+      },
+      updatedAt: 1,
+    })
+    storageAdapterGetMock.mockResolvedValue([])
+    pullPlatformSyncMock.mockRejectedValue(new Error("sync pull failed"))
+    apiGetVocabularyItemsMock.mockResolvedValue([
+      {
+        id: "voc_remote",
+        sourceText: "fundamental",
+        normalizedText: "fundamental",
+        translatedText: "基础的",
+        sourceLang: "en",
+        targetLang: "zh-CN",
+        kind: "word",
+        wordCount: 1,
+        createdAt: 1,
+        lastSeenAt: 2,
+        hitCount: 3,
+        updatedAt: 4,
+        deletedAt: null,
+      },
+    ])
+
+    const { getVocabularyItems } = await import("../service")
+    const items = await getVocabularyItems({ skipRemoteProbe: true })
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        id: "voc_remote",
+      }),
+    ])
+    expect(pullPlatformSyncMock).toHaveBeenCalledTimes(1)
+    expect(apiGetVocabularyItemsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("checks signed-in vocabulary reuse without starting a stale remote probe", async () => {
+    getPlatformAuthSessionMock.mockResolvedValue({
+      token: "platform-token",
+      user: {
+        id: "user_1",
+        email: "user@example.com",
+      },
+      updatedAt: 1,
+    })
+    storageAdapterGetMock.mockImplementation(async (key: string) => {
+      if (key === "vocabularyItems:platform:user_1") {
+        return [
+          {
+            id: "voc_local",
+            sourceText: "cloud",
+            normalizedText: "cloud",
+            translatedText: "云",
+            sourceLang: "en",
+            targetLang: "zh-CN",
+            kind: "word",
+            wordCount: 1,
+            createdAt: 1,
+            lastSeenAt: 2,
+            hitCount: 3,
+            updatedAt: 4,
+            deletedAt: null,
+          },
+        ]
+      }
+
+      if (key === "vocabularyMeta:platform:user_1") {
+        return {
+          checkedAt: 1,
+          fetchedAt: 1,
+          remoteUpdatedAt: 4,
+          count: 1,
+        }
+      }
+
+      return []
+    })
+
+    const { findVocabularyItemForSelection } = await import("../service")
+    const matchedItem = await findVocabularyItemForSelection({
+      sourceText: "cloud",
+      sourceLang: "en",
+      targetLang: "zh-CN",
+    })
+
+    expect(matchedItem).toEqual(expect.objectContaining({
+      id: "voc_local",
+    }))
+    await new Promise(resolve => window.setTimeout(resolve, 0))
+    expect(apiGetVocabularyMetaMock).not.toHaveBeenCalled()
+    expect(apiGetVocabularyItemsMock).not.toHaveBeenCalled()
+  })
+
+  it("does not let a stale remote probe clear local vocabulary saved after the probe started", async () => {
+    let resolveRemoteMeta: ((meta: { updatedAt: number, count: number }) => void) | null = null
+    let resolveCreate: ((value: { ok: true, id: string }) => void) | null = null
+
+    getPlatformAuthSessionMock.mockResolvedValue({
+      token: "platform-token",
+      user: {
+        id: "user_1",
+        email: "user@example.com",
+      },
+      updatedAt: 1,
+    })
+    storageAdapterGetMock.mockImplementation(async (key: string) => {
+      if (key === "vocabularyItems:platform:user_1") {
+        return [
+          {
+            id: "voc_existing",
+            sourceText: "cloud",
+            normalizedText: "cloud",
+            translatedText: "云",
+            sourceLang: "en",
+            targetLang: "zh-CN",
+            kind: "word",
+            wordCount: 1,
+            createdAt: 1,
+            lastSeenAt: 2,
+            hitCount: 3,
+            updatedAt: 4,
+            deletedAt: null,
+          },
+        ]
+      }
+
+      if (key === "vocabularyMeta:platform:user_1") {
+        return {
+          checkedAt: 1,
+          fetchedAt: 1,
+          remoteUpdatedAt: 4,
+          count: 1,
+        }
+      }
+
+      return []
+    })
+    apiGetVocabularyMetaMock.mockReturnValue(new Promise((resolve) => {
+      resolveRemoteMeta = resolve
+    }))
+    apiGetVocabularyItemsMock.mockResolvedValue([])
+    apiCreateVocabularyItemMock.mockReturnValue(new Promise((resolve) => {
+      resolveCreate = resolve
+    }))
+
+    const { getCachedVocabularyItems, getVocabularyItems, saveTranslatedSelectionToVocabulary } = await import("../service")
+    await expect(getVocabularyItems()).resolves.toEqual([
+      expect.objectContaining({
+        id: "voc_existing",
+      }),
+    ])
+    await vi.waitFor(() => {
+      expect(apiGetVocabularyMetaMock).toHaveBeenCalledTimes(1)
+    })
+
+    const savePromise = saveTranslatedSelectionToVocabulary({
+      sourceText: "highlight",
+      translatedText: "高亮",
+      contextSentence: "The page keeps every highlight visible.",
+      sourceUrl: "https://example.com/article",
+      sourceLang: "en",
+      targetLang: "zh-CN",
+      settings: {
+        autoSave: true,
+        highlightEnabled: true,
+        maxPhraseWords: 3,
+        highlightColor: "#fde68a",
+      },
+    })
+
+    await vi.waitFor(() => {
+      expect(getCachedVocabularyItems()).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: "voc_existing" }),
+        expect.objectContaining({ sourceText: "highlight" }),
+      ]))
+    })
+
+    if (!resolveRemoteMeta) {
+      throw new Error("remote meta resolver was not captured")
+    }
+
+    const finishRemoteMeta = resolveRemoteMeta as (meta: { updatedAt: number, count: number }) => void
+    finishRemoteMeta({ updatedAt: 99, count: 0 })
+    await vi.waitFor(() => {
+      expect(apiGetVocabularyItemsMock).toHaveBeenCalledTimes(1)
+    })
+
+    await new Promise(resolve => window.setTimeout(resolve, 0))
+    expect(getCachedVocabularyItems()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "voc_existing" }),
+      expect.objectContaining({ sourceText: "highlight" }),
+    ]))
+
+    if (!resolveCreate) {
+      throw new Error("create promise resolver was not captured")
+    }
+
+    const finishCreate = resolveCreate as (value: { ok: true, id: string }) => void
+    finishCreate({ ok: true, id: "voc_created" })
+    await expect(savePromise).resolves.toEqual(expect.objectContaining({
+      sourceText: "highlight",
+    }))
   })
 
   it("removes an item from the local cache before the delete request finishes", async () => {

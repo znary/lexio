@@ -20,6 +20,7 @@ import { initMockData } from "./mock-data"
 import { newUserGuide } from "./new-user-guide"
 import { handlePlatformAuthExternalMessage } from "./platform-auth"
 import { proxyFetch } from "./proxy-fetch"
+import { reinjectOpenTabsContentScripts } from "./reinject-open-tabs"
 import {
   openSidePanelForChatRequest,
   openSidePanelInActiveWindow,
@@ -50,6 +51,10 @@ export default defineBackground({
 
     browser.runtime.onInstalled.addListener(async (details) => {
       await ensureInitializedConfig()
+
+      if (details.reason === "install" || details.reason === "update") {
+        await reinjectOpenTabsContentScripts()
+      }
 
       // Open the authorization page so the site can redirect to sign-in if needed.
       if (details.reason === "install") {

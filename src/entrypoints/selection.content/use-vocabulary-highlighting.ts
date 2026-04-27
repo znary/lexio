@@ -1,5 +1,6 @@
 import type { VocabularyHighlightAnchorRect, VocabularyHoverPreview } from "./vocabulary-highlight-ui"
 import type { VocabularyItem } from "@/types/vocabulary"
+import type { VocabularyChangedEventDetail } from "@/utils/vocabulary/service"
 import { useAtomValue } from "jotai"
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
@@ -23,6 +24,7 @@ import {
 const HIGHLIGHT_EXCLUDE_SELECTORS = [
   `[${SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE}]`,
   `.${NOTRANSLATE_CLASS}`,
+  "#rf-debug-panel",
   "input",
   "textarea",
   "select",
@@ -37,9 +39,56 @@ const HIGHLIGHT_EXCLUDE_SELECTORS = [
   "[data-read-frog-host-toast]",
 ]
 const HIGHLIGHT_MARK_SELECTOR = `mark.${VOCABULARY_HIGHLIGHT_CLASS_NAME}[${VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE}]`
+const HIGHLIGHT_EXCLUDE_SELECTOR = HIGHLIGHT_EXCLUDE_SELECTORS.join(",")
+const HIGHLIGHT_ROOT_SELECTOR = [
+  "[data-read-frog-paragraph]",
+  "blockquote",
+  "caption",
+  "dd",
+  "dt",
+  "figcaption",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "li",
+  "p",
+  "summary",
+  "td",
+  "th",
+].join(",")
+const HIGHLIGHT_INLINE_TEXT_TAGS = new Set([
+  "A",
+  "ABBR",
+  "B",
+  "BDI",
+  "BDO",
+  "CITE",
+  "DATA",
+  "DFN",
+  "EM",
+  "I",
+  "KBD",
+  "LABEL",
+  "Q",
+  "S",
+  "SMALL",
+  "SPAN",
+  "STRONG",
+  "SUB",
+  "SUP",
+  "TIME",
+  "U",
+  "VAR",
+  "WBR",
+])
 const HIGHLIGHT_RESCAN_DELAY_MS = 400
 const HIGHLIGHT_BATCH_TERM_LIMIT = 48
 const HIGHLIGHT_BATCH_PATTERN_LENGTH_LIMIT = 2400
+const HIGHLIGHT_INTERSECTION_VERTICAL_MARGIN_PX = 800
+const HIGHLIGHT_INTERSECTION_ROOT_MARGIN = `${HIGHLIGHT_INTERSECTION_VERTICAL_MARGIN_PX}px 0px`
 const REGEXP_SPECIAL_CHAR_RE = /[.*+?^${}()|[\]\\]/g
 const CHAR_CLASS_SPECIAL_CHAR_RE = /[\\\]-]/g
 
@@ -49,9 +98,30 @@ interface HighlightBatch {
   regex: RegExp
 }
 
+interface IncrementalHighlightPlan {
+  itemIdsToUnmark: string[]
+  itemsToMark: VocabularyItem[]
+}
+
+type HighlightMode = "full" | "incremental"
+type HighlightContainer = Document | ShadowRoot
+type LazyRootWorkMode = "full" | "incremental"
+
+interface LazyRootWork {
+  itemIdsToUnmark: Set<string>
+  itemsToMark: VocabularyItem[]
+  mode: LazyRootWorkMode
+  version: number
+}
+
+interface CollectHighlightRootsOptions {
+  requireConnected?: boolean
+}
+
 interface ActiveHoverHighlight {
   element: HTMLElement
   itemId: string
+  root: HTMLElement | null
 }
 
 interface VocabularyHighlightingState {
@@ -77,13 +147,62 @@ function isSameRect(left: VocabularyHighlightAnchorRect, right: VocabularyHighli
     && left.height === right.height
 }
 
-function getHoverCardElement(target: EventTarget | null) {
+function getEventPathTargets(source: Event | EventTarget | null): EventTarget[] {
+  if (
+    source
+    && typeof source === "object"
+    && "composedPath" in source
+    && typeof source.composedPath === "function"
+  ) {
+    return source.composedPath()
+  }
+
+  return []
+}
+
+function getClosestElementAcrossShadowBoundary(element: Element | null, selector: string): Element | null {
+  let current: Element | null = element
+
+  while (current) {
+    const closestElement = current.closest(selector)
+    if (closestElement) {
+      return closestElement
+    }
+
+    const rootNode = current.getRootNode()
+    current = rootNode instanceof ShadowRoot ? rootNode.host : null
+  }
+
+  return null
+}
+
+function getClosestElementFromEventSource(source: Event | EventTarget | null, selector: string) {
+  for (const node of getEventPathTargets(source)) {
+    if (!(node instanceof Element)) {
+      continue
+    }
+
+    const closestElement = getClosestElementAcrossShadowBoundary(node, selector)
+    if (closestElement instanceof HTMLElement) {
+      return closestElement
+    }
+  }
+
+  const target = source instanceof Event ? source.target : source
   if (!(target instanceof Node)) {
     return null
   }
 
   const baseElement = target instanceof HTMLElement ? target : target.parentElement
-  return baseElement?.closest(`[${VOCABULARY_HOVER_CARD_ATTRIBUTE}]`) as HTMLElement | null
+  if (baseElement?.matches(selector)) {
+    return baseElement as HTMLElement
+  }
+
+  return getClosestElementAcrossShadowBoundary(baseElement, selector) as HTMLElement | null
+}
+
+function getHoverCardElement(source: Event | EventTarget | null) {
+  return getClosestElementFromEventSource(source, `[${VOCABULARY_HOVER_CARD_ATTRIBUTE}]`)
 }
 
 function ensureHighlightStyle(color: string) {
@@ -98,13 +217,53 @@ function ensureHighlightStyle(color: string) {
   styleElement.textContent = createVocabularyHighlightStyle(color)
 }
 
-function unmark(markInstance: import("mark.js").default): Promise<void> {
-  return new Promise((resolve) => {
-    markInstance.unmark({
-      className: VOCABULARY_HIGHLIGHT_CLASS_NAME,
-      done: resolve,
-    })
-  })
+function unwrapHighlightElement(element: HTMLElement): void {
+  const parent = element.parentNode
+  if (!parent) {
+    return
+  }
+
+  const fragment = document.createDocumentFragment()
+  while (element.firstChild) {
+    fragment.append(element.firstChild)
+  }
+
+  parent.replaceChild(fragment, element)
+}
+
+function getHighlightElements(root: ParentNode): HTMLElement[] {
+  return root instanceof HTMLElement && root.matches(HIGHLIGHT_MARK_SELECTOR)
+    ? [root, ...root.querySelectorAll<HTMLElement>(HIGHLIGHT_MARK_SELECTOR)]
+    : [...root.querySelectorAll<HTMLElement>(HIGHLIGHT_MARK_SELECTOR)]
+}
+
+function unmarkVocabularyHighlightsInRoot(root: ParentNode): void {
+  for (const element of getHighlightElements(root)) {
+    unwrapHighlightElement(element)
+  }
+}
+
+function unmarkVocabularyItemsInRoot(root: ParentNode, itemIds: Set<string>): void {
+  for (const element of getHighlightElements(root)) {
+    const itemId = element.getAttribute(VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE)
+    if (itemId && itemIds.has(itemId)) {
+      unwrapHighlightElement(element)
+    }
+  }
+}
+
+function unmarkVocabularyItems(itemIds: Set<string>): void {
+  for (const element of document.querySelectorAll<HTMLElement>(HIGHLIGHT_MARK_SELECTOR)) {
+    const itemId = element.getAttribute(VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE)
+    if (itemId && itemIds.has(itemId)) {
+      unwrapHighlightElement(element)
+    }
+  }
+}
+
+function findHighlightElementByItemId(root: ParentNode, itemId: string): HTMLElement | null {
+  return getHighlightElements(root)
+    .find(element => element.getAttribute(VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE) === itemId) ?? null
 }
 
 function getVocabularyHighlightTerms(item: VocabularyItem): string[] {
@@ -144,37 +303,64 @@ function doHighlightTermsConflict(leftTerms: string[], rightTerms: string[]): bo
   )
 }
 
-function getIncrementalAddedVocabularyItems(
+function getIncrementalHighlightPlan(
   currentItems: VocabularyItem[],
   nextItems: VocabularyItem[],
-): VocabularyItem[] | null {
+): IncrementalHighlightPlan | null {
   const currentById = new Map(currentItems.map(item => [item.id, item]))
   const nextById = new Map(nextItems.map(item => [item.id, item]))
+  const retainedItems: VocabularyItem[] = []
+  const changedTermSets: string[][] = []
+  const itemIdsToUnmark = new Set<string>()
+  const itemIdsToRefresh = new Set<string>()
 
   for (const currentItem of currentItems) {
     const nextItem = nextById.get(currentItem.id)
     if (!nextItem) {
-      return null
+      itemIdsToUnmark.add(currentItem.id)
+      changedTermSets.push(getVocabularyHighlightTerms(currentItem))
+      continue
     }
 
     if (getHighlightSignature(currentItem) !== getHighlightSignature(nextItem)) {
-      return null
+      itemIdsToUnmark.add(nextItem.id)
+      itemIdsToRefresh.add(nextItem.id)
+      changedTermSets.push(
+        getVocabularyHighlightTerms(currentItem),
+        getVocabularyHighlightTerms(nextItem),
+      )
+    }
+    else {
+      retainedItems.push(nextItem)
     }
   }
 
-  const addedItems = nextItems.filter(item => !currentById.has(item.id))
-  if (addedItems.length === 0) {
-    return []
-  }
-
-  const currentTerms = currentItems.flatMap(getVocabularyHighlightTerms)
-  for (const addedItem of addedItems) {
-    if (doHighlightTermsConflict(currentTerms, getVocabularyHighlightTerms(addedItem))) {
-      return null
+  for (const item of nextItems) {
+    if (!currentById.has(item.id)) {
+      itemIdsToRefresh.add(item.id)
+      changedTermSets.push(getVocabularyHighlightTerms(item))
     }
   }
 
-  return addedItems
+  if (itemIdsToUnmark.size === 0 && itemIdsToRefresh.size === 0) {
+    return {
+      itemIdsToUnmark: [],
+      itemsToMark: [],
+    }
+  }
+
+  for (const retainedItem of retainedItems) {
+    const retainedTerms = getVocabularyHighlightTerms(retainedItem)
+    if (changedTermSets.some(terms => doHighlightTermsConflict(retainedTerms, terms))) {
+      itemIdsToUnmark.add(retainedItem.id)
+      itemIdsToRefresh.add(retainedItem.id)
+    }
+  }
+
+  return {
+    itemIdsToUnmark: [...itemIdsToUnmark],
+    itemsToMark: nextItems.filter(item => itemIdsToRefresh.has(item.id)),
+  }
 }
 
 function escapeRegExp(value: string): string {
@@ -313,13 +499,232 @@ async function markTerms(
   }
 }
 
-function getHighlightElement(target: EventTarget | null) {
-  if (!(target instanceof Node)) {
+function getHighlightElement(source: Event | EventTarget | null) {
+  return getClosestElementFromEventSource(
+    source,
+    `mark.${VOCABULARY_HIGHLIGHT_CLASS_NAME}[${VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE}]`,
+  )
+}
+
+function isHighlightExcludedElement(element: Element): boolean {
+  return getClosestElementAcrossShadowBoundary(element, HIGHLIGHT_EXCLUDE_SELECTOR) != null
+    || getClosestElementAcrossShadowBoundary(element, HIGHLIGHT_MARK_SELECTOR) != null
+}
+
+function hasMeaningfulText(node: Node): boolean {
+  return Boolean(node.textContent?.trim())
+}
+
+function hasMeasuredLayoutBox(rect: DOMRectReadOnly): boolean {
+  return rect.width !== 0
+    || rect.height !== 0
+    || rect.top !== 0
+    || rect.right !== 0
+    || rect.bottom !== 0
+    || rect.left !== 0
+}
+
+function isHighlightRootNearViewport(root: HTMLElement): boolean {
+  const rect = root.getBoundingClientRect()
+  if (!hasMeasuredLayoutBox(rect)) {
+    return false
+  }
+
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth
+
+  return rect.bottom >= -HIGHLIGHT_INTERSECTION_VERTICAL_MARGIN_PX
+    && rect.top <= viewportHeight + HIGHLIGHT_INTERSECTION_VERTICAL_MARGIN_PX
+    && rect.right >= 0
+    && rect.left <= viewportWidth
+}
+
+function getPreferredHighlightRoot(element: HTMLElement): HTMLElement | null {
+  const preferredRoot = element.closest(HIGHLIGHT_ROOT_SELECTOR)
+  if (preferredRoot instanceof HTMLElement && !isHighlightExcludedElement(preferredRoot)) {
+    return preferredRoot
+  }
+
+  return null
+}
+
+function getGenericHighlightRoot(element: HTMLElement): HTMLElement | null {
+  let root: HTMLElement | null = element
+
+  while (root && root.parentElement && root.parentElement !== document.body) {
+    const parent: HTMLElement = root.parentElement
+    if (isHighlightExcludedElement(parent)) {
+      return null
+    }
+
+    if (parent.matches(HIGHLIGHT_ROOT_SELECTOR)) {
+      return parent
+    }
+
+    if (!HIGHLIGHT_INLINE_TEXT_TAGS.has(root.tagName)) {
+      break
+    }
+
+    root = parent
+  }
+
+  if (!root || root === document.body || root === document.documentElement || isHighlightExcludedElement(root)) {
     return null
   }
 
-  const baseElement = target instanceof HTMLElement ? target : target.parentElement
-  return baseElement?.closest(`mark.${VOCABULARY_HIGHLIGHT_CLASS_NAME}[${VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE}]`) as HTMLElement | null
+  return hasMeaningfulText(root) ? root : null
+}
+
+function getHighlightRootForTextNode(textNode: Text): HTMLElement | null {
+  const parentElement = textNode.parentElement
+  if (!parentElement || isHighlightExcludedElement(parentElement)) {
+    return null
+  }
+
+  return getPreferredHighlightRoot(parentElement) ?? getGenericHighlightRoot(parentElement)
+}
+
+function getHighlightRootForElement(element: HTMLElement): HTMLElement | null {
+  if (isHighlightExcludedElement(element)) {
+    return null
+  }
+
+  return getPreferredHighlightRoot(element) ?? getGenericHighlightRoot(element)
+}
+
+function getHighlightRootForNode(node: Node): HTMLElement | null {
+  if (node instanceof Text) {
+    return getHighlightRootForTextNode(node)
+  }
+
+  if (node instanceof HTMLElement) {
+    return getHighlightRootForElement(node)
+  }
+
+  return null
+}
+
+function collectHighlightRoots(root: Node, options: CollectHighlightRootsOptions = {}): HTMLElement[] {
+  if (!document.body) {
+    return []
+  }
+
+  const { requireConnected = true } = options
+
+  if (root instanceof Text) {
+    const highlightRoot = hasMeaningfulText(root) ? getHighlightRootForTextNode(root) : null
+    return highlightRoot && (!requireConnected || highlightRoot.isConnected) ? [highlightRoot] : []
+  }
+
+  if (root instanceof ShadowRoot && isHighlightExcludedElement(root.host)) {
+    return []
+  }
+
+  const container = root instanceof Document ? document.body : root
+  if (!(container instanceof HTMLElement || container instanceof DocumentFragment)) {
+    return []
+  }
+
+  if (container instanceof HTMLElement && isHighlightExcludedElement(container)) {
+    return []
+  }
+
+  const roots = new Set<HTMLElement>()
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+  let textNode = walker.nextNode()
+
+  while (textNode) {
+    if (hasMeaningfulText(textNode)) {
+      const highlightRoot = getHighlightRootForTextNode(textNode as Text)
+      if (highlightRoot && (!requireConnected || highlightRoot.isConnected)) {
+        roots.add(highlightRoot)
+      }
+    }
+    textNode = walker.nextNode()
+  }
+
+  return [...roots]
+}
+
+function collectAccessibleHighlightContainers(root: Node): HighlightContainer[] {
+  const containers = new Set<HighlightContainer>()
+
+  const visitNode = (node: Node | null) => {
+    if (!node) {
+      return
+    }
+
+    if (node instanceof Document) {
+      containers.add(node)
+      visitNode(node.body)
+      return
+    }
+
+    if (node instanceof ShadowRoot) {
+      if (isHighlightExcludedElement(node.host)) {
+        return
+      }
+
+      containers.add(node)
+      for (const childNode of node.childNodes) {
+        visitNode(childNode)
+      }
+      return
+    }
+
+    if (node instanceof Element) {
+      if (isHighlightExcludedElement(node)) {
+        return
+      }
+
+      if (node.shadowRoot) {
+        visitNode(node.shadowRoot)
+      }
+
+      for (const child of node.children) {
+        visitNode(child)
+      }
+      return
+    }
+
+    if (node instanceof DocumentFragment) {
+      for (const childNode of node.childNodes) {
+        visitNode(childNode)
+      }
+    }
+  }
+
+  visitNode(root)
+  return [...containers]
+}
+
+function isVocabularyHighlightNode(node: Node): boolean {
+  if (!(node instanceof Element)) {
+    return false
+  }
+
+  return node.matches(HIGHLIGHT_MARK_SELECTOR) || node.querySelector(HIGHLIGHT_MARK_SELECTOR) != null
+}
+
+function isVocabularyHighlightMutation(mutation: MutationRecord): boolean {
+  return mutation.target instanceof Element && mutation.target.closest(HIGHLIGHT_MARK_SELECTOR) != null
+}
+
+function hasAddedHighlightableContent(mutation: MutationRecord): boolean {
+  const changedNodes = [...mutation.addedNodes, ...mutation.removedNodes]
+  if (changedNodes.some(node => isVocabularyHighlightNode(node))) {
+    return false
+  }
+
+  return [...mutation.addedNodes].some(node => hasMeaningfulText(node))
+}
+
+function hasRemovedHighlightableContent(mutation: MutationRecord): boolean {
+  return [...mutation.removedNodes].some(node => isVocabularyHighlightNode(node) || hasMeaningfulText(node))
+}
+
+function shouldDirtyRootForChildListMutation(mutation: MutationRecord): boolean {
+  return hasAddedHighlightableContent(mutation) || hasRemovedHighlightableContent(mutation)
 }
 
 function clearActiveSelection() {
@@ -382,18 +787,43 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
     })
   })
 
+  const resolveActiveHoverHighlight = useEffectEvent((activeHighlight: ActiveHoverHighlight) => {
+    if (activeHighlight.element.isConnected) {
+      return activeHighlight
+    }
+
+    const root = activeHighlight.root
+    if (!root?.isConnected) {
+      return null
+    }
+
+    const replacementHighlight = findHighlightElementByItemId(root, activeHighlight.itemId)
+    if (!replacementHighlight) {
+      return null
+    }
+
+    return {
+      element: replacementHighlight,
+      itemId: activeHighlight.itemId,
+      root,
+    } satisfies ActiveHoverHighlight
+  })
+
   const refreshHoverPreview = useEffectEvent(() => {
     const activeHighlight = hoverHighlightRef.current
     if (!activeHighlight) {
       return
     }
 
-    if (!activeHighlight.element.isConnected) {
+    const resolvedHighlight = resolveActiveHoverHighlight(activeHighlight)
+    if (!resolvedHighlight) {
       hideHoverPreview()
       return
     }
 
-    const item = itemsByIdRef.current.get(activeHighlight.itemId)
+    hoverHighlightRef.current = resolvedHighlight
+
+    const item = itemsByIdRef.current.get(resolvedHighlight.itemId)
     if (!item || !item.translatedText.trim()) {
       hideHoverPreview()
       return
@@ -401,7 +831,7 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
 
     updateHoverPreview({
       item,
-      anchorRect: toVocabularyHighlightAnchorRect(activeHighlight.element.getBoundingClientRect()),
+      anchorRect: toVocabularyHighlightAnchorRect(resolvedHighlight.element.getBoundingClientRect()),
     })
   })
 
@@ -423,6 +853,7 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
     hoverHighlightRef.current = {
       element,
       itemId,
+      root: getHighlightRootForElement(element.parentElement ?? element),
     }
     isPointerInsideHoverCardRef.current = false
 
@@ -461,13 +892,13 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
       return true
     }
 
-    const hoveredHighlight = getHighlightElement(event.target)
+    const hoveredHighlight = getHighlightElement(event)
     const hoveredItemId = hoveredHighlight?.getAttribute(VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE)
     if (hoveredItemId === activeItemId) {
       return true
     }
 
-    if (getHoverCardElement(event.target)) {
+    if (getHoverCardElement(event)) {
       return true
     }
 
@@ -490,17 +921,48 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
 
   useEffect(() => {
     let disposed = false
-    let isApplyingHighlights = false
+    let isApplyingHighlightRequest = false
+    let isProcessingRootHighlights = false
     let rehighlightTimer: number | null = null
-    let pendingHighlightMode: "full" | "incremental" | null = null
-    let queuedHighlightMode: "full" | "incremental" | null = null
+    let clearMutationSuppressionTimer: number | null = null
+    let pendingHighlightMode: HighlightMode | null = null
+    let pendingVocabularyItems: VocabularyItem[] | null = null
+    let queuedHighlightMode: HighlightMode | null = null
+    let queuedVocabularyItems: VocabularyItem[] | null = null
+    let MarkConstructor: typeof import("mark.js").default | null = null
+    let activeLazyItems: VocabularyItem[] = []
+    let lazyVocabularyVersion = 0
+    let lazyRootVersions = new WeakMap<HTMLElement, number>()
+    let rootHighlightTimer: number | null = null
+    let intersectionObserver: IntersectionObserver | null = null
+    let suppressHighlightMutationReactions = false
+    const observedRoots = new Set<HTMLElement>()
+    const observedContainers = new Set<HighlightContainer>()
+    const mutationObservers = new Map<HighlightContainer, MutationObserver>()
+    const visibleRoots = new Set<HTMLElement>()
+    const pendingRootWork = new Map<HTMLElement, LazyRootWork>()
 
-    const mergeHighlightMode = (current: "full" | "incremental" | null, next: "full" | "incremental") => {
+    const mergeHighlightMode = (current: HighlightMode | null, next: HighlightMode) => {
       return current === "full" || next === "full" ? "full" : "incremental"
     }
 
-    const scheduleHighlight = (mode: "full" | "incremental", delay = HIGHLIGHT_RESCAN_DELAY_MS) => {
+    const canUseLazyHighlighting = () => {
+      return typeof IntersectionObserver !== "undefined" && typeof MutationObserver !== "undefined"
+    }
+
+    const scheduleHighlight = (
+      mode: HighlightMode,
+      delay = HIGHLIGHT_RESCAN_DELAY_MS,
+      vocabularyItems?: VocabularyItem[],
+    ) => {
       pendingHighlightMode = mergeHighlightMode(pendingHighlightMode, mode)
+      if (vocabularyItems) {
+        pendingVocabularyItems = vocabularyItems
+      }
+      else if (mode === "full") {
+        pendingVocabularyItems = null
+      }
+
       if (rehighlightTimer) {
         window.clearTimeout(rehighlightTimer)
       }
@@ -508,8 +970,10 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
       rehighlightTimer = window.setTimeout(() => {
         rehighlightTimer = null
         const nextMode = pendingHighlightMode ?? "full"
+        const nextVocabularyItems = pendingVocabularyItems
         pendingHighlightMode = null
-        void applyHighlights(nextMode)
+        pendingVocabularyItems = null
+        void applyHighlights(nextMode, nextVocabularyItems ?? undefined)
       }, delay)
     }
 
@@ -517,15 +981,389 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
       scheduleHighlight("full", delay)
     }
 
+    const beginHighlightMutationSuppression = () => {
+      if (clearMutationSuppressionTimer !== null) {
+        window.clearTimeout(clearMutationSuppressionTimer)
+        clearMutationSuppressionTimer = null
+      }
+
+      suppressHighlightMutationReactions = true
+    }
+
+    const scheduleEndHighlightMutationSuppression = () => {
+      if (clearMutationSuppressionTimer !== null) {
+        window.clearTimeout(clearMutationSuppressionTimer)
+      }
+
+      clearMutationSuppressionTimer = window.setTimeout(() => {
+        clearMutationSuppressionTimer = null
+        suppressHighlightMutationReactions = false
+      }, 0)
+    }
+
     const queueHighlight = () => {
       scheduleFullHighlight()
     }
 
-    async function loadActiveVocabularyItems() {
+    const clearAllHighlightMarkup = () => {
+      for (const container of collectAccessibleHighlightContainers(document)) {
+        unmarkVocabularyHighlightsInRoot(container)
+      }
+    }
+
+    const hasAnyHighlightMarkup = () => {
+      return collectAccessibleHighlightContainers(document)
+        .some(container => getHighlightElements(container).length > 0)
+    }
+
+    const getMarkConstructor = async () => {
+      if (MarkConstructor) {
+        return MarkConstructor
+      }
+
+      const { default: Mark } = await import("mark.js")
+      MarkConstructor = Mark
+      return Mark
+    }
+
+    const mergeVocabularyItemsById = (left: VocabularyItem[], right: VocabularyItem[]) => {
+      const itemsById = new Map<string, VocabularyItem>()
+      for (const item of [...left, ...right]) {
+        itemsById.set(item.id, item)
+      }
+      return [...itemsById.values()]
+    }
+
+    const flushQueuedHighlightRequest = () => {
+      if (!queuedHighlightMode) {
+        return
+      }
+
+      const nextMode = queuedHighlightMode
+      const nextVocabularyItems = queuedVocabularyItems
+      queuedHighlightMode = null
+      queuedVocabularyItems = null
+      scheduleHighlight(nextMode, 0, nextVocabularyItems ?? undefined)
+    }
+
+    const forgetHighlightRoot = (root: HTMLElement) => {
+      intersectionObserver?.unobserve(root)
+      observedRoots.delete(root)
+      visibleRoots.delete(root)
+      pendingRootWork.delete(root)
+      lazyRootVersions.delete(root)
+    }
+
+    const disconnectContainerObserver = (container: HighlightContainer) => {
+      mutationObservers.get(container)?.disconnect()
+      mutationObservers.delete(container)
+      observedContainers.delete(container)
+    }
+
+    const cleanupRemovedHighlightRoots = (node: Node) => {
+      for (const root of collectHighlightRoots(node, { requireConnected: false })) {
+        forgetHighlightRoot(root)
+      }
+    }
+
+    const cleanupRemovedHighlightContainers = (node: Node) => {
+      for (const container of collectAccessibleHighlightContainers(node)) {
+        if (container instanceof ShadowRoot) {
+          disconnectContainerObserver(container)
+        }
+      }
+    }
+
+    const scheduleQueuedRootHighlights = () => {
+      if (rootHighlightTimer !== null) {
+        return
+      }
+
+      rootHighlightTimer = window.setTimeout(() => {
+        rootHighlightTimer = null
+        void processQueuedRootHighlights()
+      }, 0)
+    }
+
+    const queueRootHighlight = (
+      root: HTMLElement,
+      mode: LazyRootWorkMode,
+      itemsToMark: VocabularyItem[],
+      itemIdsToUnmark = new Set<string>(),
+    ) => {
+      if (!root.isConnected || !visibleRoots.has(root)) {
+        return
+      }
+
+      const currentWork = pendingRootWork.get(root)
+      if (!currentWork || mode === "full" || currentWork.mode === "full") {
+        pendingRootWork.set(root, {
+          itemIdsToUnmark: mode === "full" ? new Set() : new Set(itemIdsToUnmark),
+          itemsToMark: mode === "full" ? activeLazyItems : itemsToMark,
+          mode: mode === "full" || currentWork?.mode === "full" ? "full" : "incremental",
+          version: lazyVocabularyVersion,
+        })
+      }
+      else {
+        pendingRootWork.set(root, {
+          itemIdsToUnmark: new Set([...currentWork.itemIdsToUnmark, ...itemIdsToUnmark]),
+          itemsToMark: mergeVocabularyItemsById(currentWork.itemsToMark, itemsToMark),
+          mode: "incremental",
+          version: lazyVocabularyVersion,
+        })
+      }
+
+      scheduleQueuedRootHighlights()
+    }
+
+    async function processQueuedRootHighlights() {
+      if (disposed) {
+        return
+      }
+
+      if (isProcessingRootHighlights || isApplyingHighlightRequest) {
+        scheduleQueuedRootHighlights()
+        return
+      }
+
+      isProcessingRootHighlights = true
+      beginHighlightMutationSuppression()
+
+      try {
+        const Mark = await getMarkConstructor()
+        const workEntries = [...pendingRootWork.entries()]
+        pendingRootWork.clear()
+
+        for (const [root, work] of workEntries) {
+          if (disposed) {
+            return
+          }
+
+          if (!root.isConnected || !visibleRoots.has(root)) {
+            continue
+          }
+
+          const rootVersion = lazyRootVersions.get(root)
+          const shouldRunFullHighlight = work.mode === "full" || rootVersion !== work.version - 1
+          const markInstance = new Mark(root)
+
+          if (shouldRunFullHighlight) {
+            unmarkVocabularyHighlightsInRoot(root)
+            if (activeLazyItems.length > 0) {
+              await markTerms(markInstance, activeLazyItems)
+            }
+          }
+          else {
+            if (work.itemIdsToUnmark.size > 0) {
+              unmarkVocabularyItemsInRoot(root, work.itemIdsToUnmark)
+            }
+            if (work.itemsToMark.length > 0) {
+              await markTerms(markInstance, work.itemsToMark)
+            }
+          }
+
+          lazyRootVersions.set(root, work.version)
+          refreshHoverPreview()
+          await yieldToNextFrame()
+        }
+      }
+      finally {
+        isProcessingRootHighlights = false
+        scheduleEndHighlightMutationSuppression()
+        flushQueuedHighlightRequest()
+        if (pendingRootWork.size > 0) {
+          scheduleQueuedRootHighlights()
+        }
+      }
+    }
+
+    const observeHighlightRoot = (root: HTMLElement) => {
+      if (observedRoots.has(root) || isHighlightExcludedElement(root)) {
+        return
+      }
+
+      observedRoots.add(root)
+      intersectionObserver?.observe(root)
+      if (isHighlightRootNearViewport(root)) {
+        visibleRoots.add(root)
+        if (activeLazyItems.length > 0 && lazyRootVersions.get(root) !== lazyVocabularyVersion) {
+          queueRootHighlight(root, "full", activeLazyItems)
+        }
+      }
+    }
+
+    const observeHighlightRoots = (root: Node) => {
+      for (const highlightRoot of collectHighlightRoots(root)) {
+        observeHighlightRoot(highlightRoot)
+      }
+    }
+
+    const observeHighlightContainer = (container: HighlightContainer) => {
+      const observationTarget = container instanceof Document ? container.body : container
+      if (!observationTarget) {
+        return
+      }
+
+      if (!observedContainers.has(container)) {
+        const mutationObserver = new MutationObserver(handleDomMutations)
+        mutationObserver.observe(observationTarget, {
+          characterData: true,
+          childList: true,
+          subtree: true,
+        })
+        observedContainers.add(container)
+        mutationObservers.set(container, mutationObserver)
+      }
+
+      observeHighlightRoots(container)
+    }
+
+    const observeHighlightContainers = (root: Node) => {
+      for (const container of collectAccessibleHighlightContainers(root)) {
+        observeHighlightContainer(container)
+      }
+    }
+
+    const scheduleVisibleRootsFullHighlight = () => {
+      for (const root of visibleRoots) {
+        queueRootHighlight(root, "full", activeLazyItems)
+      }
+    }
+
+    const handleIntersectingRoots: IntersectionObserverCallback = (entries) => {
+      for (const entry of entries) {
+        const root = entry.target
+        if (!(root instanceof HTMLElement)) {
+          continue
+        }
+
+        if (entry.isIntersecting || entry.intersectionRatio > 0) {
+          visibleRoots.add(root)
+          if (lazyRootVersions.get(root) !== lazyVocabularyVersion) {
+            queueRootHighlight(root, "full", activeLazyItems)
+          }
+        }
+        else {
+          visibleRoots.delete(root)
+        }
+      }
+    }
+
+    function handleDomMutations(mutations: MutationRecord[]) {
+      if (!activeLazyItems.length) {
+        return
+      }
+
+      if ((isApplyingHighlightRequest || isProcessingRootHighlights || suppressHighlightMutationReactions) && !mutations.some(hasAddedHighlightableContent)) {
+        return
+      }
+
+      const dirtyRoots = new Set<HTMLElement>()
+
+      for (const mutation of mutations) {
+        if (isVocabularyHighlightMutation(mutation)) {
+          continue
+        }
+
+        if (mutation.type === "characterData" && mutation.target instanceof Text) {
+          const root = getHighlightRootForTextNode(mutation.target)
+          if (root) {
+            dirtyRoots.add(root)
+          }
+          continue
+        }
+
+        if (mutation.type !== "childList") {
+          continue
+        }
+
+        const targetRoot = getHighlightRootForNode(mutation.target)
+        if (targetRoot && shouldDirtyRootForChildListMutation(mutation)) {
+          dirtyRoots.add(targetRoot)
+        }
+
+        for (const node of mutation.removedNodes) {
+          cleanupRemovedHighlightRoots(node)
+          cleanupRemovedHighlightContainers(node)
+        }
+
+        for (const node of mutation.addedNodes) {
+          observeHighlightContainers(node)
+          observeHighlightRoots(node)
+          for (const root of collectHighlightRoots(node)) {
+            dirtyRoots.add(root)
+          }
+        }
+      }
+
+      for (const root of dirtyRoots) {
+        if (!root.isConnected) {
+          forgetHighlightRoot(root)
+          continue
+        }
+
+        observeHighlightRoot(root)
+        lazyRootVersions.delete(root)
+        if (visibleRoots.has(root)) {
+          queueRootHighlight(root, "full", activeLazyItems)
+        }
+      }
+
+      refreshHoverPreview()
+    }
+
+    const ensureLazyObservers = () => {
+      if (!document.body || !canUseLazyHighlighting()) {
+        return false
+      }
+
+      if (!intersectionObserver) {
+        intersectionObserver = new IntersectionObserver(handleIntersectingRoots, {
+          root: null,
+          rootMargin: HIGHLIGHT_INTERSECTION_ROOT_MARGIN,
+          threshold: 0,
+        })
+      }
+
+      observeHighlightContainers(document)
+
+      return true
+    }
+
+    const resetLazyHighlightRoots = () => {
+      intersectionObserver?.disconnect()
+      observedRoots.clear()
+      visibleRoots.clear()
+      pendingRootWork.clear()
+      lazyRootVersions = new WeakMap()
+      observeHighlightContainers(document)
+    }
+
+    const disconnectLazyObservers = () => {
+      intersectionObserver?.disconnect()
+      intersectionObserver = null
+      for (const container of [...observedContainers]) {
+        disconnectContainerObserver(container)
+      }
+      observedRoots.clear()
+      visibleRoots.clear()
+      pendingRootWork.clear()
+      lazyRootVersions = new WeakMap()
+      if (rootHighlightTimer !== null) {
+        window.clearTimeout(rootHighlightTimer)
+        rootHighlightTimer = null
+      }
+    }
+
+    async function loadActiveVocabularyItems(vocabularyItems?: VocabularyItem[]) {
       const [{ default: Mark }, items] = await Promise.all([
         import("mark.js"),
-        vocabulary.highlightEnabled ? getVocabularyItems() : Promise.resolve([] as VocabularyItem[]),
+        vocabulary.highlightEnabled
+          ? Promise.resolve(vocabularyItems ?? getVocabularyItems({ skipRemoteProbe: true }))
+          : Promise.resolve([] as VocabularyItem[]),
       ])
+
+      MarkConstructor = Mark
 
       return {
         Mark,
@@ -533,8 +1371,8 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
       }
     }
 
-    async function applyIncrementalHighlights() {
-      const { Mark, activeItems } = await loadActiveVocabularyItems()
+    async function applyIncrementalHighlights(vocabularyItems?: VocabularyItem[]) {
+      const { Mark, activeItems } = await loadActiveVocabularyItems(vocabularyItems)
       if (disposed) {
         return true
       }
@@ -542,33 +1380,88 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
       const currentItems = [...itemsByIdRef.current.values()]
       const markInstance = new Mark(document.body)
 
-      if (!vocabulary.highlightEnabled || activeItems.length === 0) {
+      if (!vocabulary.highlightEnabled) {
         return false
       }
 
-      if (currentItems.length === 0 && document.querySelector(HIGHLIGHT_MARK_SELECTOR) !== null) {
+      if (currentItems.length === 0 && hasAnyHighlightMarkup()) {
         return false
       }
 
-      const addedItems = getIncrementalAddedVocabularyItems(currentItems, activeItems)
-      if (addedItems == null) {
+      if (activeItems.length === 0) {
+        if (currentItems.length === 0) {
+          return true
+        }
+
+        clearActiveSelection()
+        disconnectLazyObservers()
+        beginHighlightMutationSuppression()
+        clearAllHighlightMarkup()
+        scheduleEndHighlightMutationSuppression()
+        itemsByIdRef.current = new Map()
+        activeLazyItems = []
+        hideHoverPreview()
+        return true
+      }
+
+      const plan = getIncrementalHighlightPlan(currentItems, activeItems)
+      if (plan == null) {
         return false
       }
 
       itemsByIdRef.current = new Map(activeItems.map(item => [item.id, item]))
+      activeLazyItems = activeItems
       ensureHighlightStyle(vocabulary.highlightColor)
 
-      if (addedItems.length > 0) {
+      const hasPlanChanges = plan.itemIdsToUnmark.length > 0 || plan.itemsToMark.length > 0
+      if (!hasPlanChanges) {
+        refreshHoverPreview()
+        return true
+      }
+
+      lazyVocabularyVersion += 1
+
+      if (hasPlanChanges) {
         clearActiveSelection()
-        await markTerms(markInstance, addedItems)
+      }
+
+      if (canUseLazyHighlighting()) {
+        if (ensureLazyObservers()) {
+          const itemIdsToUnmark = new Set(plan.itemIdsToUnmark)
+          for (const root of visibleRoots) {
+            const rootVersion = lazyRootVersions.get(root)
+            queueRootHighlight(
+              root,
+              rootVersion === lazyVocabularyVersion - 1 ? "incremental" : "full",
+              plan.itemsToMark,
+              itemIdsToUnmark,
+            )
+          }
+          refreshHoverPreview()
+          return true
+        }
+      }
+
+      if (plan.itemIdsToUnmark.length > 0) {
+        beginHighlightMutationSuppression()
+        unmarkVocabularyItems(new Set(plan.itemIdsToUnmark))
+      }
+
+      if (plan.itemsToMark.length > 0) {
+        beginHighlightMutationSuppression()
+        await markTerms(markInstance, plan.itemsToMark)
+      }
+
+      if (plan.itemIdsToUnmark.length > 0 || plan.itemsToMark.length > 0) {
+        scheduleEndHighlightMutationSuppression()
       }
 
       refreshHoverPreview()
       return true
     }
 
-    async function applyFullHighlights() {
-      const { Mark, activeItems } = await loadActiveVocabularyItems()
+    async function applyFullHighlights(vocabularyItems?: VocabularyItem[]) {
+      const { Mark, activeItems } = await loadActiveVocabularyItems(vocabularyItems)
 
       if (disposed) {
         return
@@ -576,52 +1469,77 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
 
       const markInstance = new Mark(document.body)
       itemsByIdRef.current = new Map(activeItems.map(item => [item.id, item]))
+      activeLazyItems = activeItems
+      lazyVocabularyVersion += 1
 
       if (!vocabulary.highlightEnabled || activeItems.length === 0) {
-        await unmark(markInstance)
+        disconnectLazyObservers()
+        beginHighlightMutationSuppression()
+        clearAllHighlightMarkup()
+        scheduleEndHighlightMutationSuppression()
+        activeLazyItems = []
         hideHoverPreview()
         return
       }
 
       ensureHighlightStyle(vocabulary.highlightColor)
 
-      const shouldClearSelection = activeItems.length > 0 || document.querySelector(HIGHLIGHT_MARK_SELECTOR) !== null
+      const shouldClearSelection = activeItems.length > 0 || hasAnyHighlightMarkup()
       if (shouldClearSelection) {
         clearActiveSelection()
       }
 
-      await unmark(markInstance)
+      if (canUseLazyHighlighting()) {
+        if (ensureLazyObservers()) {
+          beginHighlightMutationSuppression()
+          clearAllHighlightMarkup()
+          resetLazyHighlightRoots()
+          scheduleEndHighlightMutationSuppression()
+          scheduleVisibleRootsFullHighlight()
+          refreshHoverPreview()
+          return
+        }
+      }
+
+      beginHighlightMutationSuppression()
+      clearAllHighlightMarkup()
       await markTerms(markInstance, activeItems)
+      scheduleEndHighlightMutationSuppression()
       refreshHoverPreview()
     }
 
-    async function applyHighlights(mode: "full" | "incremental") {
-      if (disposed || !document.body || isApplyingHighlights) {
+    async function applyHighlights(mode: HighlightMode, vocabularyItems?: VocabularyItem[]) {
+      if (disposed || !document.body || isApplyingHighlightRequest) {
         queuedHighlightMode = mergeHighlightMode(queuedHighlightMode, mode)
+        if (vocabularyItems) {
+          queuedVocabularyItems = vocabularyItems
+        }
+        else if (mode === "full") {
+          queuedVocabularyItems = null
+        }
         return
       }
 
-      isApplyingHighlights = true
+      isApplyingHighlightRequest = true
 
       try {
-        if (mode === "incremental" && await applyIncrementalHighlights()) {
+        if (mode === "incremental" && await applyIncrementalHighlights(vocabularyItems)) {
           return
         }
 
-        await applyFullHighlights()
+        await applyFullHighlights(vocabularyItems)
       }
       finally {
-        isApplyingHighlights = false
-        if (queuedHighlightMode) {
-          const nextMode = queuedHighlightMode
-          queuedHighlightMode = null
-          scheduleHighlight(nextMode, 0)
+        isApplyingHighlightRequest = false
+        flushQueuedHighlightRequest()
+        if (pendingRootWork.size > 0) {
+          scheduleQueuedRootHighlights()
         }
       }
     }
 
     const handlePointerMove = (event: PointerEvent) => {
-      const target = getHighlightElement(event.target)
+      const target = getHighlightElement(event)
       if (target) {
         showHoverPreview(target)
         return
@@ -641,7 +1559,7 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
     }
 
     const handlePointerOver = (event: PointerEvent) => {
-      const target = getHighlightElement(event.target)
+      const target = getHighlightElement(event)
       if (target) {
         showHoverPreview(target)
         return
@@ -660,8 +1578,10 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
       scheduleHideHoverPreview()
     }
 
-    const handleVocabularyChanged = () => {
-      scheduleHighlight("incremental", 0)
+    const handleVocabularyChanged = (event: Event) => {
+      const detail = (event as CustomEvent<VocabularyChangedEventDetail>).detail
+      const vocabularyItems = Array.isArray(detail?.items) ? detail.items : undefined
+      scheduleHighlight("incremental", 0, vocabularyItems)
     }
 
     document.addEventListener("pointerover", handlePointerOver, true)
@@ -681,6 +1601,10 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
       if (rehighlightTimer) {
         window.clearTimeout(rehighlightTimer)
       }
+      if (clearMutationSuppressionTimer !== null) {
+        window.clearTimeout(clearMutationSuppressionTimer)
+      }
+      disconnectLazyObservers()
       document.removeEventListener("pointerover", handlePointerOver, true)
       document.removeEventListener("pointermove", handlePointerMove, true)
       document.removeEventListener("pointerleave", handlePointerLeave, true)
