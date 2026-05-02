@@ -61,6 +61,18 @@ if (!globalThis.ResizeObserver) {
   globalThis.ResizeObserver = ResizeObserverMock
 }
 
+if (typeof Element !== "undefined" && !("getAnimations" in Element.prototype)) {
+  Object.defineProperty(Element.prototype, "getAnimations", {
+    configurable: true,
+    value: () => [],
+  })
+}
+
+Object.defineProperty(globalThis, "BASE_UI_ANIMATIONS_DISABLED", {
+  configurable: true,
+  value: true,
+})
+
 // Mock @wxt-dev/i18n module to avoid browser.i18n.getMessage not implemented error
 vi.mock("#i18n", () => ({
   i18n: {
