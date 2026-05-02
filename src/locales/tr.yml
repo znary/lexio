@@ -898,6 +898,7 @@ action:
   hideDetailedExplanation: Ayrıntılı açıklamayı gizle
   viewDetailedExplanationHint: Anlam çözümlemesi, bağlam ve ek açıklamaları aç
   hideDetailedExplanationHint: Anlam çözümlemesi ve bağlamı daha fazla göster
+  savedToVocabulary: Kelime listesine kaydedildi
   saveToNotebase: Notebase'e Kaydet
   saveToNotebaseSaving: Kaydediliyor...
   saveToNotebaseSuccess: Notebase'e kaydedildi
@@ -910,6 +911,17 @@ action:
   contextDetailsTitleLabel: Başlık
   contextDetailsParagraphsLabel: Paragraflar
   translation: Çeviri
+  translationCard:
+    definition: Tanım
+    inContext: Bağlamda
+    mastered: Öğrenildi
+    missingContext: Henüz bağlam kaydedilmedi.
+    moreInformation: Daha fazla bilgi
+    practiceNow: Şimdi pratik yap
+    wordFamily: Kelime ailesi
+    wordFamilyCore: Temel
+    wordFamilyContrast: Karşıt
+    wordFamilyRelated: İlgili
   speak: Oku
   playing: Çalınıyor
 thinking:

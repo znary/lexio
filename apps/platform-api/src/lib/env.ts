@@ -16,6 +16,7 @@ export interface Env {
   AI_GATEWAY_API_KEY: string
   AI_GATEWAY_MODEL_FREE?: string
   AI_GATEWAY_MODEL_PRO?: string
+  LEXIO_BACKFILL_DEV?: string
   PLATFORM_CHAT_WEB_FETCH_ENABLED?: string
   PADDLE_WEBHOOK_SECRET?: string
   PADDLE_PRO_PRICE_ID?: string

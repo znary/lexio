@@ -6,14 +6,7 @@ const WXT_API_KEY_PATTERN = /^WXT_.*API_KEY/
 const ALLOWED_BUNDLED_API_KEYS = new Set([
   "WXT_POSTHOG_API_KEY",
 ])
-const DEFAULT_WEBSITE_URL = "https://lexio.example.com"
-const REQUIRED_PLATFORM_ENV_VARS = [
-  "WXT_PLATFORM_API_URL",
-  "WXT_WEBSITE_URL",
-  "WXT_PLATFORM_SIGN_IN_PATH",
-  "WXT_PLATFORM_PRICING_PATH",
-  "WXT_PLATFORM_EXTENSION_SYNC_PATH",
-] as const
+const DEFAULT_WEBSITE_URL = "https://lexio-platform-web.lznwpu.workers.dev"
 
 function valueLooksLocal(urlLike: string | undefined): boolean {
   const value = urlLike?.trim()
@@ -142,16 +135,6 @@ export default defineConfig({
                   `\n\nFound WXT_*_API_KEY environment variables that may be bundled:\n`
                   + `${apiKeyVars.map(k => `   - ${k}`).join("\n")}\n\n`
                   + `Please unset these variables before building for production.\n`,
-                )
-              }
-
-              const missingPlatformEnvVars = REQUIRED_PLATFORM_ENV_VARS.filter(key => !process.env[key]?.trim())
-
-              if (missingPlatformEnvVars.length > 0) {
-                throw new Error(
-                  `\n\nMissing required platform environment variables for production:\n`
-                  + `${missingPlatformEnvVars.map(key => `   - ${key}`).join("\n")}\n\n`
-                  + `Set them before building the production extension.\n`,
                 )
               }
 

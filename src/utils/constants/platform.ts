@@ -1,4 +1,4 @@
-const DEFAULT_PLATFORM_API_URL = "http://127.0.0.1:8787"
+const DEFAULT_PLATFORM_API_URL = "https://lexio-platform-api.lznwpu.workers.dev"
 
 export const MANAGED_CLOUD_PROVIDER_ID = "managed-cloud-default"
 export const MANAGED_CLOUD_PROVIDER_NAME = "Lexio Cloud"

@@ -29,10 +29,16 @@ describe("selection toolbar text wrapping", () => {
         <div>
           <SelectionSourceContent text={sourceText} />
           <TranslationContent
+            detailedExplanation={{
+              isLoading: false,
+              outputSchema: [
+                { id: "dictionary-definition", name: "definition", type: "string", description: "", speaking: false },
+              ],
+              result: { definition: translatedText },
+            }}
             selectionContent={sourceText}
             translatedText={translatedText}
             isTranslating={false}
-            thinking={null}
           />
         </div>
       </TooltipProvider>,

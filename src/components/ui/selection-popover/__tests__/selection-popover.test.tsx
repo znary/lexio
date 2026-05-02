@@ -65,9 +65,12 @@ vi.mock("react-rnd", async () => {
           top: position.y + mockRndOffset.top,
         })
       },
-      updateSize: (size: { width: number, height: number }) => {
+      updateSize: (size: { width: number | string, height: number | string }) => {
         updateSizeSpy(size)
-        updateMockRect({ width: size.width, height: size.height })
+        updateMockRect({
+          ...(typeof size.width === "number" ? { width: size.width } : {}),
+          ...(typeof size.height === "number" ? { height: size.height } : {}),
+        })
       },
       getSelfElement: () => elementRef.current,
     }), [])
@@ -350,6 +353,30 @@ function ReopenablePopoverHarness() {
   )
 }
 
+function LockHeightPopoverHarness() {
+  const [lockHeight, setLockHeight] = React.useState(true)
+
+  return (
+    <SelectionPopover.Root
+      open
+      anchor={{ x: 120, y: 140 }}
+      onOpenChange={onOpenChangeSpy}
+    >
+      <SelectionPopover.Content lockHeight={lockHeight}>
+        <SelectionPopover.Header className="border-b">
+          <SelectionPopover.Title>Locked Popover</SelectionPopover.Title>
+          <button type="button" onClick={() => setLockHeight(false)}>
+            Finish
+          </button>
+        </SelectionPopover.Header>
+        <SelectionPopover.Body>
+          <div>Streaming content</div>
+        </SelectionPopover.Body>
+      </SelectionPopover.Content>
+    </SelectionPopover.Root>
+  )
+}
+
 describe("selectionPopover", () => {
   const originalResizeObserver = globalThis.ResizeObserver
   const originalRequestAnimationFrame = window.requestAnimationFrame
@@ -430,12 +457,44 @@ describe("selectionPopover", () => {
     })
   })
 
+  it("allows a popover consumer to choose a wider initial size", () => {
+    renderPopover({
+      contentProps: {
+        initialWidth: 760,
+        minWidth: 360,
+      },
+    })
+
+    expect(latestRndProps?.default.width).toBe(760)
+    expect(latestRndProps?.minWidth).toBe(360)
+    expectLatestPosition({ x: 120, y: 140 })
+  })
+
   it("keeps the body shrinkable so overflow can scroll after viewport changes", () => {
     const { element } = renderPopover()
 
     expect(element).toHaveStyle({ display: "flex" })
     expect(screen.getByText("Test Popover").parentElement?.parentElement).toHaveClass("flex-1", "h-full", "min-h-0")
     expect(screen.getByText("Popover content").parentElement).toHaveClass("min-h-0", "flex-1", "overflow-y-auto")
+  })
+
+  it("can lock the current height while streamed content is incomplete and release it afterwards", () => {
+    render(<LockHeightPopoverHarness />)
+    flushRaf()
+
+    expect(updateSizeSpy).toHaveBeenCalledWith({
+      width: 500,
+      height: 220,
+    })
+
+    updateSizeSpy.mockReset()
+
+    fireEvent.click(screen.getByRole("button", { name: "Finish" }))
+
+    expect(updateSizeSpy).toHaveBeenCalledWith({
+      width: 500,
+      height: "auto",
+    })
   })
 
   it("renders the popover inside a fixed viewport host so page scroll does not move it", () => {

@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { VocabularyMasteryToggleButton } from "@/components/vocabulary/mastery-toggle-button"
 import { setVocabularyItemMastered } from "@/utils/vocabulary/service"
+import { SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE } from "../overlay-layers"
 import { selectionToolbarRectAtom } from "../selection-toolbar/atoms"
 import {
   getVocabularyHoverCardPosition,
@@ -102,7 +103,10 @@ export function VocabularyHoverCard({
   }
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[2147483647]">
+    <div
+      className="pointer-events-none fixed inset-0 z-[2147483647]"
+      {...{ [SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE]: "" }}
+    >
       <div
         ref={cardRef}
         {...{ [VOCABULARY_HOVER_CARD_ATTRIBUTE]: "" }}

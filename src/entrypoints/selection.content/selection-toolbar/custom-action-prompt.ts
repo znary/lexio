@@ -65,10 +65,11 @@ ${fieldsAndTypes}
 1. Include every required key exactly once.
 2. Do not add any extra keys.
 3. Use the exact key names shown above.
-4. Output valid JSON only. Use double quotes for keys and string values.
-5. Do not wrap the JSON in markdown or code fences.
-6. If a value is unknown, use null.
-7. Number fields must be JSON numbers, never quoted strings.
+4. Write keys in the exact order shown above so important fields can stream first.
+5. Output valid JSON only. Use double quotes for keys and string values.
+6. Do not wrap the JSON in markdown or code fences.
+7. If a value is unknown, use null.
+8. Number fields must be JSON numbers, never quoted strings.
 `
 }
 

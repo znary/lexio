@@ -358,7 +358,9 @@ describe("word bank page speech controls", () => {
       }))
     })
 
-    expect(audioInstances).toHaveLength(2)
+    await waitFor(() => {
+      expect(audioInstances).toHaveLength(2)
+    })
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 

@@ -51,6 +51,16 @@ Object.defineProperty(globalThis, "sessionStorage", {
   value: new MemoryStorage(),
 })
 
+if (!globalThis.ResizeObserver) {
+  class ResizeObserverMock implements ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+
+  globalThis.ResizeObserver = ResizeObserverMock
+}
+
 // Mock @wxt-dev/i18n module to avoid browser.i18n.getMessage not implemented error
 vi.mock("#i18n", () => ({
   i18n: {

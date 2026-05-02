@@ -41,6 +41,9 @@ describe("forwardChatCompletions", () => {
       thinking: { type: "enabled" },
       messages: [{ role: "user", content: "hello" }],
       stream: false,
+      response_format: {
+        type: "json_object",
+      },
     }, "free")
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -60,6 +63,7 @@ describe("forwardChatCompletions", () => {
       messages: [{ role: "user", content: "hello" }],
     }))
     expect(body.model).not.toBe("user-picked-model")
+    expect(body.response_format).toBeUndefined()
   })
 
   it("accepts ARK_* env vars without the generic gateway vars", async () => {

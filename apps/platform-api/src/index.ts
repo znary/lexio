@@ -12,7 +12,7 @@ import {
   handleChatThreadMessageStream,
 } from "./routes/chat"
 import { handleHealthCheck } from "./routes/health"
-import { handleLlmChatCompletions } from "./routes/llm"
+import { handleBackfillLlmChatCompletions, handleLlmChatCompletions } from "./routes/llm"
 import { handleMe } from "./routes/me"
 import { handlePaddleWebhook } from "./routes/paddle"
 import { handlePracticeSession, handleVocabularyPracticeResult } from "./routes/practice"
@@ -71,6 +71,10 @@ const handler: ExportedHandler<PlatformEnv> = {
 
       if (request.method === "POST" && url.pathname === "/webhooks/paddle") {
         return handlePaddleWebhook(request, env)
+      }
+
+      if (request.method === "POST" && url.pathname === "/__backfill/llm/chat/completions") {
+        return handleBackfillLlmChatCompletions(request, env)
       }
 
       session = await requireSession(request, env)

@@ -1088,6 +1088,17 @@ action:
   contextDetailsTitleLabel: 标题
   contextDetailsParagraphsLabel: 段落内容
   translation: 翻译
+  translationCard:
+    definition: 释义
+    inContext: 语境
+    mastered: 已掌握
+    missingContext: 暂时没有保存语境。
+    moreInformation: 更多信息
+    practiceNow: 练这个词
+    wordFamily: 词族
+    wordFamilyCore: 核心
+    wordFamilyContrast: 对比
+    wordFamilyRelated: 相关
   speak: 朗读
   playing: 播放中
 thinking:

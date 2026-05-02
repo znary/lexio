@@ -10,7 +10,7 @@ import { SignInPage } from "../routes/sign-in"
 import { WordBankPage } from "../routes/word-bank"
 import { AccountOutlineIcon, GlobeIcon, MoonIcon } from "./icons"
 import { PlatformAuthBridge } from "./platform-auth-bridge"
-import { APP_ROUTES, normalizePathname } from "./routes"
+import { APP_ROUTES, isRouteOrChildPath, normalizePathname } from "./routes"
 import { useSitePreferences } from "./site-preferences"
 
 interface ResolvedPage {
@@ -20,15 +20,19 @@ interface ResolvedPage {
 }
 
 function resolvePage(pathname: string): ResolvedPage {
-  switch (normalizePathname(pathname)) {
+  const normalizedPathname = normalizePathname(pathname)
+
+  if (isRouteOrChildPath(normalizedPathname, APP_ROUTES.signIn)) {
+    return { layout: "standalone", headerVariant: "hero", content: <SignInPage /> }
+  }
+
+  switch (normalizedPathname) {
     case APP_ROUTES.wordBank:
       return { layout: "site", headerVariant: "library", content: <WordBankPage /> }
     case APP_ROUTES.practice:
       return { layout: "site", headerVariant: "practice", content: <PracticePage /> }
     case APP_ROUTES.pricing:
       return { layout: "site", headerVariant: "library", content: <PricingPage /> }
-    case APP_ROUTES.signIn:
-      return { layout: "standalone", headerVariant: "hero", content: <SignInPage /> }
     case APP_ROUTES.checkoutSuccess:
       return { layout: "standalone", headerVariant: "hero", content: <CheckoutSuccessPage /> }
     case APP_ROUTES.extensionSync:

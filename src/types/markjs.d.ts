@@ -6,7 +6,10 @@ declare module "mark.js" {
     className?: string
     each?: (element: HTMLElement) => void
     exclude?: string[]
+    filter?: (node: Text, match: string, totalMatches: number, matches: number) => boolean
+    ignoreGroups?: number
     ignoreJoiners?: boolean
+    noMatch?: (value: string | RegExp) => void
     separateWordSearch?: boolean
     done?: () => void
   }
@@ -14,6 +17,7 @@ declare module "mark.js" {
   export default class Mark {
     constructor(ctx: Node | Node[] | NodeList | string)
     mark(keyword: string | string[], options?: MarkOptions): void
+    markRegExp(regexp: RegExp, options?: MarkOptions): void
     unmark(options?: MarkOptions): void
   }
 }

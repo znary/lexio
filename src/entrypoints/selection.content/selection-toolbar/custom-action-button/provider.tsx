@@ -112,6 +112,7 @@ export function SelectionCustomActionProvider({
     [cleanSelection, customActionRequest, paragraphsText, webPageContext],
   )
   const {
+    finalResult,
     isRunning,
     resetSessionState,
     result,
@@ -125,6 +126,7 @@ export function SelectionCustomActionProvider({
     rerunNonce,
   })
   const displayedResult = executionPlan.executionContext ? result : null
+  const displayedFinalResult = executionPlan.executionContext ? finalResult : null
   const displayedIsRunning = (isOpen && webPageContext === undefined) || (executionPlan.executionContext ? isRunning : false)
   const displayedThinking = executionPlan.executionContext ? thinking : null
 
@@ -358,7 +360,7 @@ export function SelectionCustomActionProvider({
               <SaveToNotebaseButton
                 action={activeAction}
                 isRunning={displayedIsRunning}
-                result={displayedResult}
+                result={displayedFinalResult}
               />
             )}
           </SelectionToolbarFooterContent>

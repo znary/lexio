@@ -14,7 +14,7 @@ import type {
   StreamRuntimeOptions,
   ThinkingSnapshot,
 } from "@/types/background-stream"
-import { streamText } from "ai"
+import { Output, streamText } from "ai"
 import { z } from "zod"
 import { BACKGROUND_STREAM_PORTS } from "@/types/background-stream"
 import { extractAISDKErrorMessage } from "@/utils/error/extract-message"
@@ -225,31 +225,20 @@ function createStreamSnapshot<TOutput>(
   }
 }
 
-const JSON_FENCE_START_REGEX = /^```(?:json)?\s*/i
-const JSON_FENCE_END_REGEX = /\s*```$/
-const THINK_BLOCK_REGEX = /<think>[\s\S]*?<\/think>/gi
-const THINK_END_REGEX = /<\/think>/gi
+type StructuredObjectOutputField = Array<{ name: string, type: "string" | "number" }>
 
-function sanitizeStructuredObjectText(text: string): string {
-  const trimmed = text.trim()
-  if (!trimmed) {
-    return trimmed
+function createStructuredObjectZodSchema(outputSchema: StructuredObjectOutputField) {
+  const shape: Record<string, z.ZodTypeAny> = {}
+
+  for (const field of outputSchema) {
+    const valueSchema = field.type === "number"
+      ? z.number()
+      : z.string()
+
+    shape[field.name] = valueSchema.nullable().optional()
   }
 
-  const withoutFences = trimmed
-    .replace(THINK_BLOCK_REGEX, "")
-    .replace(THINK_END_REGEX, "")
-    .replace(JSON_FENCE_START_REGEX, "")
-    .replace(JSON_FENCE_END_REGEX, "")
-    .trim()
-
-  const objectStart = withoutFences.indexOf("{")
-  const objectEnd = withoutFences.lastIndexOf("}")
-  if (objectStart >= 0 && objectEnd > objectStart) {
-    return withoutFences.slice(objectStart, objectEnd + 1)
-  }
-
-  return withoutFences
+  return z.object(shape).strict()
 }
 
 function normalizeStructuredObjectValue(value: unknown, type: "string" | "number"): string | number | null {
@@ -283,7 +272,7 @@ function normalizeStructuredObjectValue(value: unknown, type: "string" | "number
 
 function normalizeStructuredObject(
   value: unknown,
-  outputSchema: Array<{ name: string, type: "string" | "number" }>,
+  outputSchema: StructuredObjectOutputField,
   fillMissingKeys: boolean,
 ): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -307,25 +296,6 @@ function normalizeStructuredObject(
   }
 
   return hasKnownField ? normalized : null
-}
-
-function tryParseStructuredObject(
-  text: string,
-  outputSchema: Array<{ name: string, type: "string" | "number" }>,
-  fillMissingKeys = false,
-): Record<string, unknown> | null {
-  const sanitized = sanitizeStructuredObjectText(text)
-  if (!sanitized) {
-    return null
-  }
-
-  try {
-    const parsed = JSON.parse(sanitized)
-    return normalizeStructuredObject(parsed, outputSchema, fillMissingKeys)
-  }
-  catch {
-    return null
-  }
 }
 
 export async function runStreamTextInBackground(
@@ -412,58 +382,43 @@ export async function runStructuredObjectStreamInBackground(
     text: "",
   }
 
+  const structuredOutputSchema = createStructuredObjectZodSchema(outputSchema)
   const result = streamText({
     ...(streamParams as Parameters<typeof streamText>[0]),
     model,
+    output: Output.object({
+      schema: structuredOutputSchema,
+    }),
     abortSignal: signal,
     onError: ({ error }) => {
       onError?.(error)
     },
   })
-  let cumulativeText = ""
 
-  for await (const part of result.fullStream) {
+  for await (const partialOutput of result.partialOutputStream) {
     if (signal?.aborted) {
       throw new DOMException("stream aborted", "AbortError")
     }
 
-    switch (part.type) {
-      case "text-delta": {
-        cumulativeText += part.text
-        const parsed = tryParseStructuredObject(cumulativeText, outputSchema)
-        if (parsed) {
-          cumulativeValue = parsed
-        }
-        onChunk?.(createStreamSnapshot(cumulativeValue, thinking))
-        break
-      }
-      case "reasoning-delta": {
-        thinking = {
-          status: "thinking",
-          text: thinking.text + part.text,
-        }
-        onChunk?.(createStreamSnapshot(cumulativeValue, thinking))
-        break
-      }
-      case "reasoning-end": {
-        thinking = {
-          ...thinking,
-          status: "complete",
-        }
-        onChunk?.(createStreamSnapshot(cumulativeValue, thinking))
-        break
+    const normalized = normalizeStructuredObject(partialOutput, outputSchema, false)
+    if (normalized) {
+      cumulativeValue = {
+        ...cumulativeValue,
+        ...normalized,
       }
     }
+    onChunk?.(createStreamSnapshot(cumulativeValue, thinking))
   }
 
-  const finalText = await result.output
-  const finalValue = tryParseStructuredObject(finalText, outputSchema, true)
-    ?? (Object.keys(cumulativeValue).length > 0
-      ? normalizeStructuredObject(cumulativeValue, outputSchema, true)
-      : null)
+  if (signal?.aborted) {
+    throw new DOMException("stream aborted", "AbortError")
+  }
+
+  const finalOutput = await result.output
+  const finalValue = normalizeStructuredObject(finalOutput, outputSchema, true)
 
   if (!finalValue) {
-    throw new Error("Failed to parse structured JSON output")
+    throw new Error("Failed to validate structured JSON output")
   }
 
   thinking = {

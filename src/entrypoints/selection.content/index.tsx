@@ -20,6 +20,7 @@ import { addStyleToShadow } from "@/utils/styles"
 import { queryClient } from "@/utils/tanstack-query"
 import { getLocalThemeMode } from "@/utils/theme"
 import App from "./app"
+import { SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE } from "./overlay-layers"
 import "@/assets/styles/theme.css"
 
 function HydrateAtoms({
@@ -34,8 +35,13 @@ function HydrateAtoms({
 }
 
 const selectionContentCss = `
+  :host {
+    pointer-events: none;
+  }
+
   body {
     opacity: var(--rf-selection-opacity, 1);
+    pointer-events: none;
   }
 `
 
@@ -59,6 +65,7 @@ async function mountSelectionUI(ctx: ContentScriptContext) {
     anchor: "body",
     css: selectionContentCss,
     onMount: (container, shadow, shadowHost) => {
+      shadowHost.setAttribute(SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE, "")
       const wrapper = insertShadowRootUIWrapperInto(container)
       shadowWrapper = wrapper
       addStyleToShadow(shadow)

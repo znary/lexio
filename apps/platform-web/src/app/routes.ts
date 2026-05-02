@@ -30,6 +30,17 @@ export function normalizePathname(pathname: string): string {
   return normalizePath(pathname, APP_ROUTES.home)
 }
 
+export function isRouteOrChildPath(pathname: string, routePath: string): boolean {
+  const normalizedPathname = normalizePathname(pathname)
+  const normalizedRoutePath = normalizePath(routePath, APP_ROUTES.home)
+
+  if (normalizedRoutePath === APP_ROUTES.home) {
+    return normalizedPathname === normalizedRoutePath
+  }
+
+  return normalizedPathname === normalizedRoutePath || normalizedPathname.startsWith(`${normalizedRoutePath}/`)
+}
+
 export function getPracticeHref(): string {
   return APP_ROUTES.practice
 }

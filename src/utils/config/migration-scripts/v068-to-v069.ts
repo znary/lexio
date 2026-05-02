@@ -15,7 +15,7 @@ export function migrate(oldConfig: any): any {
     description: "Managed by your Lexio account.",
     enabled: true,
     provider: "openai-compatible",
-    baseURL: "https://lexio.example.com/v1/llm",
+    baseURL: "https://lexio-platform-api.lznwpu.workers.dev/v1/llm",
     model: {
       model: "use-custom-model",
       isCustomModel: true,

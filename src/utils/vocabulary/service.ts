@@ -16,11 +16,16 @@ import {
   getVocabularyItems as apiGetVocabularyItems,
   getVocabularyMeta as apiGetVocabularyMeta,
   updateVocabularyItem as apiUpdateVocabularyItem,
+  pullPlatformSync,
 } from "../platform/api"
 import { getPlatformAuthSession, watchPlatformAuthSession } from "../platform/storage"
 import { buildVocabularyTermMetadata, countVocabularyWords, isEnglishVocabularyCandidate, normalizeVocabularyText } from "./normalization"
 
 export const VOCABULARY_CHANGED_EVENT = "lexio:vocabulary-changed"
+
+export interface VocabularyChangedEventDetail {
+  items?: VocabularyItem[]
+}
 
 const LEGACY_VOCABULARY_STORAGE_KEY = "vocabularyItems"
 const GUEST_VOCABULARY_SCOPE_KEY = "guest"
@@ -66,9 +71,9 @@ let activeVocabularyScope: VocabularyAccountScope = {
 }
 let authTrackingPromise: Promise<void> | null = null
 
-function notifyVocabularyChanged(): void {
+function notifyVocabularyChanged(detail?: VocabularyChangedEventDetail): void {
   if (typeof document !== "undefined") {
-    document.dispatchEvent(new CustomEvent(VOCABULARY_CHANGED_EVENT))
+    document.dispatchEvent(new CustomEvent<VocabularyChangedEventDetail>(VOCABULARY_CHANGED_EVENT, { detail }))
   }
 }
 
@@ -221,6 +226,12 @@ function normalizeVocabularyWordFamily(wordFamily: VocabularyWordFamily | null |
     : null
 }
 
+function getVocabularyWordFamilyCoreMatchTerms(wordFamily: VocabularyWordFamily | null | undefined): string[] {
+  return (wordFamily?.core ?? [])
+    .map(entry => normalizeVocabularyText(entry.term))
+    .filter(Boolean)
+}
+
 function resolveVocabularyContextEntries(
   item: Pick<VocabularyItem, "contextEntries" | "contextSentence" | "contextSentences">,
   nextContextSentence?: string | null,
@@ -260,8 +271,10 @@ function hydrateVocabularyItem(item: VocabularyItem): VocabularyItem {
   const metadata = buildVocabularyTermMetadata(item.sourceText, {
     preferredLemma,
   })
+  const normalizedWordFamily = normalizeVocabularyWordFamily(item.wordFamily)
   const matchTerms = new Set([
     ...metadata.matchTerms,
+    ...getVocabularyWordFamilyCoreMatchTerms(normalizedWordFamily),
     ...(item.matchTerms ?? []).map(term => normalizeVocabularyText(term)).filter(Boolean),
   ])
   const nextContextEntries = resolveVocabularyContextEntries({
@@ -269,7 +282,6 @@ function hydrateVocabularyItem(item: VocabularyItem): VocabularyItem {
     contextSentence,
     contextSentences,
   })
-  const normalizedWordFamily = normalizeVocabularyWordFamily(item.wordFamily)
   const normalizedNuance = typeof nuance === "string" && nuance.trim()
     ? nuance.trim()
     : null
@@ -447,7 +459,7 @@ function setVocabularyItemsCache(
   void storageAdapter.set(scope.itemsStorageKey, nextItems, vocabularyItemsSchema).catch(() => {})
 
   if (options?.notify !== false && !areVocabularyItemsEquivalent(previousItems, nextItems)) {
-    notifyVocabularyChanged()
+    notifyVocabularyChanged({ items: cloneVocabularyItems(nextItems) })
   }
 
   return nextItems
@@ -484,6 +496,18 @@ async function loadVocabularyItemsFromStorage(scope: VocabularyAccountScope): Pr
     )
   }
 
+  if (scope.isSignedIn && storedItems.length === 0) {
+    storedItems = parseVocabularyItems(
+      await storageAdapter.get(GUEST_VOCABULARY_STORAGE_KEY, [], vocabularyItemsSchema),
+    )
+
+    if (storedItems.length === 0) {
+      storedItems = parseVocabularyItems(
+        await storageAdapter.get(LEGACY_VOCABULARY_STORAGE_KEY, [], vocabularyItemsSchema),
+      )
+    }
+  }
+
   return cloneVocabularyItems(setVocabularyItemsCache(scope, storedItems, { notify: false }))
 }
 
@@ -517,11 +541,12 @@ async function refreshVocabularyItemsFromRemote(
   scope: VocabularyAccountScope,
   options?: {
     checkedAt?: number
+    mutationVersion?: number
     remoteUpdatedAt?: number | null
   },
 ): Promise<VocabularyItem[]> {
   const state = getVocabularyAccountState(scope)
-  const mutationVersion = state.mutationVersion
+  const mutationVersion = options?.mutationVersion ?? state.mutationVersion
   const remoteItems = await apiGetVocabularyItems()
 
   if (state.mutationVersion !== mutationVersion) {
@@ -537,10 +562,50 @@ async function refreshVocabularyItemsFromRemote(
   return cloneVocabularyItems(nextItems)
 }
 
-async function probeVocabularyRemote(scope: VocabularyAccountScope): Promise<VocabularyItem[]> {
+async function bootstrapVocabularyItemsFromRemote(
+  scope: VocabularyAccountScope,
+  options?: {
+    checkedAt?: number
+    mutationVersion?: number
+    remoteUpdatedAt?: number | null
+  },
+): Promise<VocabularyItem[]> {
+  if (scope.isSignedIn) {
+    const state = getVocabularyAccountState(scope)
+    const mutationVersion = options?.mutationVersion ?? state.mutationVersion
+
+    try {
+      const remotePayload = await pullPlatformSync()
+
+      if (state.mutationVersion !== mutationVersion) {
+        return cloneVocabularyItems(state.items ?? [])
+      }
+
+      const nextItems = setVocabularyItemsCache(scope, remotePayload.vocabularyItems ?? [])
+      setVocabularySyncState(scope, buildVocabularySyncState(nextItems, {
+        checkedAt: options?.checkedAt,
+        remoteUpdatedAt: options?.remoteUpdatedAt,
+      }))
+
+      return cloneVocabularyItems(nextItems)
+    }
+    catch {
+      // Fall back to the dedicated vocabulary endpoint when the broader sync pull fails.
+    }
+  }
+
+  return await refreshVocabularyItemsFromRemote(scope, options)
+}
+
+async function probeVocabularyRemote(
+  scope: VocabularyAccountScope,
+  options?: { mutationVersion?: number },
+): Promise<VocabularyItem[]> {
+  const state = getVocabularyAccountState(scope)
+  const mutationVersion = options?.mutationVersion ?? state.mutationVersion
   const { items, meta } = await ensureVocabularySnapshot(scope)
   if (items.length === 0) {
-    return await refreshVocabularyItemsFromRemote(scope)
+    return await bootstrapVocabularyItemsFromRemote(scope, { mutationVersion })
   }
 
   const remoteMeta = await apiGetVocabularyMeta()
@@ -548,6 +613,10 @@ async function probeVocabularyRemote(scope: VocabularyAccountScope): Promise<Voc
   const checkedAt = Date.now()
 
   if (meta && meta.remoteUpdatedAt === nextRemoteUpdatedAt && meta.count === remoteMeta.count) {
+    if (state.mutationVersion !== mutationVersion) {
+      return cloneVocabularyItems(state.items ?? [])
+    }
+
     setVocabularySyncState(scope, {
       ...meta,
       checkedAt,
@@ -559,6 +628,7 @@ async function probeVocabularyRemote(scope: VocabularyAccountScope): Promise<Voc
 
   return await refreshVocabularyItemsFromRemote(scope, {
     checkedAt,
+    mutationVersion,
     remoteUpdatedAt: nextRemoteUpdatedAt,
   })
 }
@@ -573,9 +643,10 @@ function scheduleVocabularyRemoteProbe(scope: VocabularyAccountScope): void {
     return
   }
 
+  const mutationVersion = state.mutationVersion
   state.refreshPromise = (async () => {
     try {
-      return await probeVocabularyRemote(scope)
+      return await probeVocabularyRemote(scope, { mutationVersion })
     }
     catch {
       return cloneVocabularyItems(state.items ?? [])
@@ -781,7 +852,7 @@ export function getCachedVocabularyItems(): VocabularyItem[] | null {
   return cloneVocabularyItems(state.items)
 }
 
-export async function getVocabularyItems(options?: { forceRefresh?: boolean }): Promise<VocabularyItem[]> {
+export async function getVocabularyItems(options?: { forceRefresh?: boolean, localOnly?: boolean, skipRemoteProbe?: boolean }): Promise<VocabularyItem[]> {
   const scope = await getActiveVocabularyScope()
   const state = getVocabularyAccountState(scope)
 
@@ -800,7 +871,7 @@ export async function getVocabularyItems(options?: { forceRefresh?: boolean }): 
   }
 
   if (state.itemsLoaded && state.items != null) {
-    if (scope.isSignedIn && isVocabularySyncStateStale(state.meta)) {
+    if (!options?.localOnly && !options?.skipRemoteProbe && scope.isSignedIn && isVocabularySyncStateStale(state.meta)) {
       scheduleVocabularyRemoteProbe(scope)
     }
     return cloneVocabularyItems(state.items)
@@ -808,14 +879,18 @@ export async function getVocabularyItems(options?: { forceRefresh?: boolean }): 
 
   const { items, meta } = await ensureVocabularySnapshot(scope)
   if (items.length > 0) {
-    if (scope.isSignedIn && isVocabularySyncStateStale(meta)) {
+    if (!options?.localOnly && !options?.skipRemoteProbe && scope.isSignedIn && isVocabularySyncStateStale(meta)) {
       scheduleVocabularyRemoteProbe(scope)
     }
     return cloneVocabularyItems(items)
   }
 
+  if (options?.localOnly) {
+    return cloneVocabularyItems(items)
+  }
+
   try {
-    return await refreshVocabularyItemsFromRemote(scope)
+    return await bootstrapVocabularyItemsFromRemote(scope)
   }
   catch {
     return cloneVocabularyItems(items)
@@ -836,7 +911,7 @@ export async function findVocabularyItemForSelection({
     return null
   }
 
-  const items = await getVocabularyItems()
+  const items = await getVocabularyItems({ skipRemoteProbe: true })
   return items.find(item => isVocabularyItemSelectionMatch(item, lookup, sourceLang, targetLang)) ?? null
 }
 
@@ -867,7 +942,7 @@ export async function saveTranslatedSelectionToVocabulary({
   const now = Date.now()
   const wordCount = countVocabularyWords(sourceText)
   const lookup = buildVocabularySelectionLookup(sourceText)
-  const items = await getVocabularyItems()
+  const items = await getVocabularyItems({ skipRemoteProbe: true })
   const existingItem = items.find(item => isVocabularyItemSelectionMatch(item, lookup, sourceLang, targetLang))
   const state = getVocabularyAccountState(scope)
   const currentItems = state.items ?? items
@@ -948,7 +1023,7 @@ export async function updateVocabularyItemContextTranslation({
   }
 
   const scope = await getActiveVocabularyScope()
-  const previousItems = await getVocabularyItems()
+  const previousItems = await getVocabularyItems({ skipRemoteProbe: true })
   const existingItem = previousItems.find(item => item.id === itemId)
   if (!existingItem) {
     return null
@@ -998,7 +1073,7 @@ export async function updateVocabularyItemDetails(
   details: Partial<Pick<VocabularyItem, "definition" | "difficulty" | "lemma" | "nuance" | "partOfSpeech" | "phonetic" | "wordFamily">>,
 ): Promise<VocabularyItem | null> {
   const scope = await getActiveVocabularyScope()
-  const previousItems = await getVocabularyItems()
+  const previousItems = await getVocabularyItems({ skipRemoteProbe: true })
   const existingItem = previousItems.find(item => item.id === itemId)
   if (!existingItem) {
     return null
@@ -1013,12 +1088,10 @@ export async function updateVocabularyItemDetails(
       : {}),
     ...(typeof details.partOfSpeech === "string" && details.partOfSpeech.trim() ? { partOfSpeech: details.partOfSpeech.trim() } : {}),
     ...(typeof details.phonetic === "string" && details.phonetic.trim() ? { phonetic: details.phonetic.trim() } : {}),
-    ...(existingItem.kind === "word"
-      ? (() => {
-          const normalizedWordFamily = normalizeVocabularyWordFamily(details.wordFamily)
-          return normalizedWordFamily ? { wordFamily: normalizedWordFamily } : {}
-        })()
-      : {}),
+    ...(() => {
+      const normalizedWordFamily = normalizeVocabularyWordFamily(details.wordFamily)
+      return normalizedWordFamily ? { wordFamily: normalizedWordFamily } : {}
+    })(),
   } as Partial<Pick<VocabularyItem, "definition" | "difficulty" | "lemma" | "nuance" | "partOfSpeech" | "phonetic" | "wordFamily">>
 
   if (Object.keys(nextDetails).length === 0) {
@@ -1055,7 +1128,7 @@ export async function updateVocabularyItemDetails(
 
 export async function setVocabularyItemMastered(itemId: string, mastered: boolean): Promise<VocabularyItem | null> {
   const scope = await getActiveVocabularyScope()
-  const previousItems = await getVocabularyItems()
+  const previousItems = await getVocabularyItems({ skipRemoteProbe: true })
   const existingItem = previousItems.find(item => item.id === itemId)
   if (!existingItem) {
     return null
@@ -1089,7 +1162,7 @@ export async function removeVocabularyItem(itemId: string): Promise<void> {
 
 export async function removeVocabularyItems(itemIds: string[]): Promise<void> {
   const scope = await getActiveVocabularyScope()
-  const previousItems = await getVocabularyItems()
+  const previousItems = await getVocabularyItems({ skipRemoteProbe: true })
   const uniqueItemIds = [...new Set(itemIds.map(id => id.trim()).filter(Boolean))]
 
   if (uniqueItemIds.length === 0) {
@@ -1121,7 +1194,7 @@ export async function removeVocabularyItems(itemIds: string[]): Promise<void> {
 
 export async function clearVocabularyItems(): Promise<void> {
   const scope = await getActiveVocabularyScope()
-  await getVocabularyItems()
+  await getVocabularyItems({ skipRemoteProbe: true })
   const snapshot = beginVocabularyMutation(scope)
   setVocabularyItemsCache(scope, [])
 

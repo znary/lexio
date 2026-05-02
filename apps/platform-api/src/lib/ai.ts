@@ -44,8 +44,11 @@ export async function forwardChatCompletions(
 
   const model = resolveArkModel(env, plan)
   const upstreamUrl = `${trimTrailingSlash(resolveArkBaseUrl(env))}/chat/completions`
+  // Ark model selection and JSON-output guidance are controlled by the platform,
+  // so do not forward OpenAI-only request fields emitted by compatible clients.
   const {
     model: _ignoredModel,
+    response_format: _ignoredResponseFormat,
     thinking: _ignoredThinking,
     reasoning: _ignoredReasoning,
     reasoning_effort: _ignoredReasoningEffort,

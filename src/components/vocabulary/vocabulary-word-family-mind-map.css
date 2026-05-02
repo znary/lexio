@@ -1,0 +1,234 @@
+.word-family-map {
+  --word-family-map-line: rgba(177, 189, 196, 0.74);
+  --word-family-map-node-border: rgba(223, 230, 233, 0.94);
+  --word-family-map-node-bg: rgba(247, 249, 250, 0.94);
+  --word-family-map-core: rgba(42, 189, 130, 0.92);
+  --word-family-map-contrast: rgba(238, 119, 77, 0.9);
+  --word-family-map-related: rgba(129, 101, 232, 0.9);
+}
+
+.word-family-map__canvas {
+  position: relative;
+  min-height: 520px;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.word-family-map__canvas .react-flow {
+  background: transparent;
+}
+
+.word-family-map__canvas .react-flow__renderer,
+.word-family-map__canvas .react-flow__pane,
+.word-family-map__canvas .react-flow__viewport {
+  cursor: default;
+}
+
+.word-family-map__canvas .react-flow__node {
+  cursor: default;
+  font-family: inherit;
+}
+
+.word-family-map__handle {
+  width: 1px;
+  height: 1px;
+  min-width: 1px;
+  min-height: 1px;
+  border: 0;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.word-family-map__edge {
+  stroke: var(--word-family-map-line);
+  stroke-width: 2;
+  fill: none;
+}
+
+.word-family-map__node {
+  width: 100%;
+  border: 1px solid var(--word-family-map-node-border);
+  background: var(--word-family-map-node-bg);
+  color: var(--vocabulary-card-text, rgba(28, 37, 44, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 12px 26px rgba(150, 165, 176, 0.08);
+  text-align: left;
+}
+
+.word-family-map__node--root {
+  width: 156px;
+  min-height: 116px;
+  padding: 18px 16px;
+  border-radius: 18px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.word-family-map__node--entry {
+  width: 320px;
+  min-height: 72px;
+  padding: 12px 14px 12px 16px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.word-family-map__node--skeleton {
+  align-items: flex-start;
+}
+
+.word-family-map__entry-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 10px;
+}
+
+.word-family-map__entry-copy--skeleton {
+  width: 100%;
+  display: grid;
+  gap: 9px;
+}
+
+.word-family-map__term {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--vocabulary-card-text, rgba(28, 37, 44, 0.96));
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.word-family-map__node--root .word-family-map__term {
+  font-size: 22px;
+  font-weight: 750;
+}
+
+.word-family-map__definition {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--vocabulary-card-soft, rgba(108, 119, 126, 0.84));
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.word-family-map__part-of-speech {
+  flex: 0 0 auto;
+  width: fit-content;
+  min-width: max-content;
+  max-width: none;
+  min-height: 26px;
+  padding: 4px 9px;
+  border: 1px solid rgba(100, 214, 170, 0.34);
+  border-radius: 10px;
+  color: var(--word-family-map-core);
+  background: rgba(240, 253, 248, 0.82);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.1;
+  overflow-wrap: normal;
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
+.word-family-map__part-of-speech--contrast {
+  border-color: rgba(247, 160, 110, 0.34);
+  color: var(--word-family-map-contrast);
+  background: rgba(255, 247, 242, 0.86);
+}
+
+.word-family-map__part-of-speech--related {
+  border-color: rgba(172, 151, 246, 0.34);
+  color: var(--word-family-map-related);
+  background: rgba(248, 245, 255, 0.88);
+}
+
+.word-family-map__group-label {
+  min-height: 26px;
+  color: var(--vocabulary-card-soft, rgba(108, 119, 126, 0.84));
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.word-family-map__group-marker {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--word-family-map-core);
+  flex: 0 0 auto;
+}
+
+.word-family-map__group-label--contrast .word-family-map__group-marker {
+  background: var(--word-family-map-contrast);
+}
+
+.word-family-map__group-label--related .word-family-map__group-marker {
+  background: var(--word-family-map-related);
+}
+
+.word-family-map--loading .word-family-map__edge {
+  stroke-dasharray: 4 6;
+}
+
+.dark .word-family-map,
+[data-theme="dark"] .word-family-map,
+:root[data-theme="dark"] .word-family-map {
+  --vocabulary-card-text: rgba(236, 242, 244, 0.96);
+  --vocabulary-card-soft: rgba(175, 190, 197, 0.78);
+  --word-family-map-line: rgba(92, 112, 124, 0.72);
+  --word-family-map-node-border: rgba(96, 171, 165, 0.28);
+  --word-family-map-node-bg: rgba(31, 43, 50, 0.92);
+  --word-family-map-core: rgba(130, 226, 178, 0.96);
+  --word-family-map-contrast: rgba(247, 154, 112, 0.95);
+  --word-family-map-related: rgba(178, 157, 255, 0.96);
+}
+
+.dark .word-family-map__node,
+[data-theme="dark"] .word-family-map__node,
+:root[data-theme="dark"] .word-family-map__node {
+  box-shadow: none;
+}
+
+.dark .word-family-map__part-of-speech,
+[data-theme="dark"] .word-family-map__part-of-speech,
+:root[data-theme="dark"] .word-family-map__part-of-speech {
+  background: rgba(20, 52, 45, 0.72);
+}
+
+.dark .word-family-map__part-of-speech--contrast,
+[data-theme="dark"] .word-family-map__part-of-speech--contrast,
+:root[data-theme="dark"] .word-family-map__part-of-speech--contrast {
+  background: rgba(70, 42, 30, 0.72);
+}
+
+.dark .word-family-map__part-of-speech--related,
+[data-theme="dark"] .word-family-map__part-of-speech--related,
+:root[data-theme="dark"] .word-family-map__part-of-speech--related {
+  background: rgba(45, 39, 74, 0.74);
+}
+
+@container (max-width: 420px) {
+  .vocabulary-detail-card--popover .word-family-map__canvas {
+    min-height: 430px;
+  }
+}

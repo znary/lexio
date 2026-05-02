@@ -216,3 +216,12 @@ async function handleManagedChat(
 export async function handleLlmChatCompletions(request: Request, env: Env, session: SessionContext) {
   return await handleManagedChat(request, env, session)
 }
+
+export async function handleBackfillLlmChatCompletions(request: Request, env: Env) {
+  if (env.LEXIO_BACKFILL_DEV !== "true") {
+    throw new HttpError(404, "Not found")
+  }
+
+  const body = await readJson<Record<string, unknown>>(request)
+  return await forwardChatCompletions(env, body, "pro", request.signal)
+}

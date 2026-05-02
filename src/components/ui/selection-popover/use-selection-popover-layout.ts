@@ -24,7 +24,9 @@ interface LayoutMemory {
 
 interface UseSelectionPopoverLayoutOptions {
   anchor: Position | null
+  initialWidth?: number
   isVisible: boolean
+  minWidth?: number
 }
 
 interface UseSelectionPopoverLayoutResult {
@@ -82,22 +84,22 @@ function getViewportMaxHeight() {
   return Math.max(window.innerHeight, 0)
 }
 
-function getEffectiveMinWidth(maxWidth: number) {
-  return Math.min(MIN_WIDTH, Math.max(maxWidth, 1))
+function getEffectiveMinWidth(maxWidth: number, minWidth = MIN_WIDTH) {
+  return Math.min(minWidth, Math.max(maxWidth, 1))
 }
 
 function getEffectiveMinHeight(maxHeight: number) {
   return Math.min(MIN_HEIGHT, Math.max(maxHeight, 1))
 }
 
-function getInitialWidth(maxWidth: number) {
-  return maxWidth > 0 ? Math.min(DEFAULT_WIDTH, maxWidth) : DEFAULT_WIDTH
+function getInitialWidth(maxWidth: number, initialWidth = DEFAULT_WIDTH) {
+  return maxWidth > 0 ? Math.min(initialWidth, maxWidth) : initialWidth
 }
 
-function getInitialPosition(anchor: Position | null) {
+function getInitialPosition(anchor: Position | null, initialWidth = DEFAULT_WIDTH) {
   const maxWidth = getViewportMaxWidth()
-  const initialWidth = getInitialWidth(maxWidth)
-  const maxX = Math.max(0, window.innerWidth - initialWidth)
+  const resolvedInitialWidth = getInitialWidth(maxWidth, initialWidth)
+  const maxX = Math.max(0, window.innerWidth - resolvedInitialWidth)
   const maxY = Math.max(0, window.innerHeight)
 
   return {
@@ -188,7 +190,9 @@ function getPopoverRect(rndRef: React.RefObject<Rnd | null>) {
 
 export function useSelectionPopoverLayout({
   anchor,
+  initialWidth = DEFAULT_WIDTH,
   isVisible,
+  minWidth = MIN_WIDTH,
 }: UseSelectionPopoverLayoutOptions): UseSelectionPopoverLayoutResult {
   const rndRef = useRef<Rnd | null>(null)
   const resizeFrameRef = useRef<number | null>(null)
@@ -523,13 +527,13 @@ export function useSelectionPopoverLayout({
   return {
     rndRef,
     isDragging,
-    position: position ?? getInitialPosition(anchor),
+    position: position ?? getInitialPosition(anchor, initialWidth),
     defaultLayout: {
-      ...getInitialPosition(anchor),
-      width: getInitialWidth(getViewportMaxWidth()),
+      ...getInitialPosition(anchor, initialWidth),
+      width: getInitialWidth(getViewportMaxWidth(), initialWidth),
       height: "auto",
     },
-    minWidth: getEffectiveMinWidth(getViewportMaxWidth()),
+    minWidth: getEffectiveMinWidth(getViewportMaxWidth(), minWidth),
     minHeight: getEffectiveMinHeight(getViewportMaxHeight()),
     handleDragStart,
     handleDrag,

@@ -2,6 +2,7 @@ import type { BackgroundStructuredObjectStreamSnapshot } from "@/types/backgroun
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const streamTextMock = vi.fn()
+const outputObjectMock = vi.fn()
 const getModelByIdMock = vi.fn()
 
 class MockNoOutputGeneratedError extends Error {
@@ -11,6 +12,9 @@ class MockNoOutputGeneratedError extends Error {
 }
 
 vi.mock("ai", () => ({
+  Output: {
+    object: outputObjectMock,
+  },
   streamText: streamTextMock,
   NoOutputGeneratedError: MockNoOutputGeneratedError,
 }))
@@ -78,16 +82,20 @@ describe("background-stream", () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
+    outputObjectMock.mockImplementation((options: Record<string, unknown>) => ({
+      kind: "mock-output-object",
+      ...options,
+    }))
   })
 
   it("streams structured object output from background", async () => {
     getModelByIdMock.mockResolvedValue("mock-model")
     streamTextMock.mockReturnValue({
-      fullStream: (async function* () {
-        yield { type: "text-delta", text: "{\"score\":97," }
-        yield { type: "text-delta", text: "\"summary\":\"Strong argument structure\"}" }
+      partialOutputStream: (async function* () {
+        yield { score: 97 }
+        yield { score: 97, summary: "Strong argument structure" }
       })(),
-      output: Promise.resolve("{\"score\":97,\"summary\":\"Strong argument structure\"}"),
+      output: Promise.resolve({ score: 97, summary: "Strong argument structure" }),
     })
 
     const chunkSnapshots: BackgroundStructuredObjectStreamSnapshot[] = []
@@ -111,8 +119,17 @@ describe("background-stream", () => {
     expect(getModelByIdMock).toHaveBeenCalledWith("openai-default")
     expect(streamTextMock).toHaveBeenCalledWith(expect.objectContaining({
       model: "mock-model",
+      output: expect.objectContaining({
+        kind: "mock-output-object",
+      }),
       prompt: "Analyze selection",
     }))
+    const zodSchema = outputObjectMock.mock.calls[0]?.[0]?.schema as {
+      safeParse: (value: unknown) => { success: boolean }
+    }
+    expect(zodSchema.safeParse({ score: 97 }).success).toBe(true)
+    expect(zodSchema.safeParse({ score: "97" }).success).toBe(false)
+    expect(zodSchema.safeParse({ score: 97, extra: "ignored" }).success).toBe(false)
     expect(result).toEqual({
       output: {
         score: 97,
@@ -125,7 +142,7 @@ describe("background-stream", () => {
     })
     expect(chunkSnapshots).toEqual([
       {
-        output: {},
+        output: { score: 97 },
         thinking: {
           status: "thinking",
           text: "",
@@ -144,10 +161,10 @@ describe("background-stream", () => {
   it("fills missing structured fields with null in the final result", async () => {
     getModelByIdMock.mockResolvedValue("mock-model")
     streamTextMock.mockReturnValue({
-      fullStream: (async function* () {
-        yield { type: "text-delta", text: "{\"term\":\"manner\"}" }
+      partialOutputStream: (async function* () {
+        yield { term: "manner" }
       })(),
-      output: Promise.resolve("{\"term\":\"manner\"}"),
+      output: Promise.resolve({ term: "manner" }),
     })
 
     const { runStructuredObjectStreamInBackground } = await import("../background-stream")
@@ -173,14 +190,14 @@ describe("background-stream", () => {
     })
   })
 
-  it("falls back to prompt-constrained JSON parsing for managed cloud structured output", async () => {
+  it("uses AI SDK structured output for managed cloud structured output", async () => {
     getModelByIdMock.mockResolvedValue("mock-model")
     streamTextMock.mockReturnValue({
-      fullStream: (async function* () {
-        yield { type: "text-delta", text: "{\"term\":\"manner\"," }
-        yield { type: "text-delta", text: "\"definition\":\"方式\"}" }
+      partialOutputStream: (async function* () {
+        yield { term: "manner" }
+        yield { term: "manner", definition: "方式" }
       })(),
-      output: Promise.resolve("{\"term\":\"manner\",\"definition\":\"方式\"}"),
+      output: Promise.resolve({ term: "manner", definition: "方式" }),
     })
 
     const { runStructuredObjectStreamInBackground } = await import("../background-stream")

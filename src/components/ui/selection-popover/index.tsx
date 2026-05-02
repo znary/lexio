@@ -317,11 +317,17 @@ function SelectionPopoverContent({
   children,
   container,
   finalFocus,
+  initialWidth,
+  lockHeight,
+  minWidth: minWidthProp,
   render,
   ...props
 }: useRender.ComponentProps<"div"> & React.ComponentProps<"div"> & {
   container?: SelectionPopoverPortalContainer
   finalFocus?: DialogPrimitive.Popup.Props["finalFocus"]
+  initialWidth?: number
+  lockHeight?: boolean
+  minWidth?: number
 }) {
   const { open, setOpen, anchor, triggerElement } = useSelectionPopoverRootContext()
   const bodyElementRef = React.useRef<HTMLDivElement | null>(null)
@@ -343,12 +349,65 @@ function SelectionPopoverContent({
     handleWheel,
   } = useSelectionPopoverLayout({
     anchor,
+    initialWidth,
     isVisible: open,
+    minWidth: minWidthProp,
   })
 
   const handleClose = React.useCallback(() => {
     setOpen(false)
   }, [setOpen])
+
+  const lockedHeightRef = React.useRef<number | null>(null)
+  const lockHeightFrameRef = React.useRef<number | null>(null)
+
+  React.useLayoutEffect(() => {
+    if (!open || !lockHeight) {
+      if (lockHeightFrameRef.current !== null) {
+        cancelAnimationFrame(lockHeightFrameRef.current)
+        lockHeightFrameRef.current = null
+      }
+
+      if (lockedHeightRef.current !== null) {
+        lockedHeightRef.current = null
+        const element = rndRef.current?.getSelfElement()
+        const width = element?.getBoundingClientRect().width
+        if (width) {
+          rndRef.current?.updateSize({
+            width,
+            height: "auto",
+          })
+        }
+      }
+      return
+    }
+
+    if (lockedHeightRef.current !== null || lockHeightFrameRef.current !== null) {
+      return
+    }
+
+    lockHeightFrameRef.current = requestAnimationFrame(() => {
+      lockHeightFrameRef.current = null
+      const element = rndRef.current?.getSelfElement()
+      const rect = element?.getBoundingClientRect()
+      if (!rect || rect.width <= 0 || rect.height <= 0) {
+        return
+      }
+
+      lockedHeightRef.current = rect.height
+      rndRef.current?.updateSize({
+        width: rect.width,
+        height: rect.height,
+      })
+    })
+
+    return () => {
+      if (lockHeightFrameRef.current !== null) {
+        cancelAnimationFrame(lockHeightFrameRef.current)
+        lockHeightFrameRef.current = null
+      }
+    }
+  }, [lockHeight, open, rndRef])
 
   usePreventScrollThrough({
     isEnabled: open,

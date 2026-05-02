@@ -170,6 +170,7 @@ export function useCustomActionExecution({
 }) {
   const [isRunning, setIsRunning] = useState(false)
   const [result, setResult] = useState<Record<string, unknown> | null>(null)
+  const [finalResult, setFinalResult] = useState<Record<string, unknown> | null>(null)
   const [error, setError] = useState<SelectionToolbarInlineError | null>(null)
   const [thinking, setThinking] = useState<ThinkingSnapshot | null>(null)
   const lastRunKeyRef = useRef<string | null>(null)
@@ -177,6 +178,7 @@ export function useCustomActionExecution({
   const resetSessionState = useCallback(() => {
     setIsRunning(false)
     setResult(null)
+    setFinalResult(null)
     setError(null)
     setThinking(null)
   }, [])
@@ -232,6 +234,7 @@ export function useCustomActionExecution({
 
       setIsRunning(true)
       setResult(null)
+      setFinalResult(null)
       setError(null)
       setThinking({
         status: "thinking",
@@ -268,6 +271,7 @@ export function useCustomActionExecution({
         }
 
         setResult(finalResult.output)
+        setFinalResult(finalResult.output)
         setThinking(finalResult.thinking)
         void trackFeatureUsed({
           ...analyticsContext,
@@ -313,6 +317,7 @@ export function useCustomActionExecution({
 
   return {
     error,
+    finalResult,
     isRunning,
     resetSessionState,
     result,
