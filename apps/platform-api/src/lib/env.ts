@@ -8,6 +8,7 @@ export interface Env {
   CLERK_AUTHORIZED_PARTIES?: string
   PLATFORM_EXTENSION_TOKEN_SECRET?: string
   LLM_API_KEY?: string
+  LLM_API_KEY_2?: string
   LLM_BASE_URL?: string
   LLM_MODEL?: string
   LLM_EXTRA_BODY?: string

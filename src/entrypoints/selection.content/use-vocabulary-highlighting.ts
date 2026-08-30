@@ -274,6 +274,31 @@ function unmarkVocabularyItems(itemIds: Set<string>): void {
   }
 }
 
+function getStaleVocabularyHighlightItemIds(activeItemIds: Set<string>, root?: ParentNode): Set<string> {
+  const staleItemIds = new Set<string>()
+  const highlightedElements = root
+    ? getHighlightElements(root)
+    : document.querySelectorAll<HTMLElement>(HIGHLIGHT_MARK_SELECTOR)
+
+  for (const element of highlightedElements) {
+    const itemId = element.getAttribute(VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE)
+    if (itemId && !activeItemIds.has(itemId)) {
+      staleItemIds.add(itemId)
+    }
+  }
+
+  return staleItemIds
+}
+
+function removeStaleVocabularyItemIds(activeItemIds: Set<string>): void {
+  for (const container of collectAccessibleHighlightContainers(document)) {
+    const staleItemIds = getStaleVocabularyHighlightItemIds(activeItemIds, container)
+    if (staleItemIds.size > 0) {
+      unmarkVocabularyItemsInRoot(container, staleItemIds)
+    }
+  }
+}
+
 function findHighlightElementByItemId(root: ParentNode, itemId: string): HTMLElement | null {
   return getHighlightElements(root)
     .find(element => element.getAttribute(VOCABULARY_HIGHLIGHT_ITEM_ID_ATTRIBUTE) === itemId) ?? null
@@ -505,10 +530,6 @@ async function markTerms(
 
   for (let index = 0; index < batches.length; index += 1) {
     await markHighlightBatch(markInstance, batches[index]!)
-
-    if (index < batches.length - 1) {
-      await yieldToNextFrame()
-    }
   }
 }
 
@@ -1202,7 +1223,11 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
           const markInstance = new Mark(root)
 
           if (shouldRunFullHighlight) {
-            unmarkVocabularyHighlightsInRoot(root)
+            const activeItemIds = new Set(activeLazyItems.map(item => item.id))
+            const staleItemIds = getStaleVocabularyHighlightItemIds(activeItemIds, root)
+            if (staleItemIds.size > 0) {
+              unmarkVocabularyItemsInRoot(root, staleItemIds)
+            }
             if (activeLazyItems.length > 0) {
               await markTerms(markInstance, activeLazyItems)
             }
@@ -1385,7 +1410,7 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
 
         observeHighlightRoot(root)
         if (visibleRoots.has(root)) {
-          queueRootHighlight(root, "incremental", activeLazyItems, itemIdsToUnmark, HIGHLIGHT_RESCAN_DELAY_MS)
+          queueRootHighlight(root, "incremental", activeLazyItems, itemIdsToUnmark, itemIdsToUnmark.size > 0 ? 0 : HIGHLIGHT_RESCAN_DELAY_MS)
         }
       }
 
@@ -1572,8 +1597,9 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
 
       if (canUseLazyHighlighting()) {
         if (ensureLazyObservers()) {
+          const activeItemIds = new Set(activeItems.map(item => item.id))
           beginHighlightMutationSuppression()
-          clearAllHighlightMarkup()
+          removeStaleVocabularyItemIds(activeItemIds)
           resetLazyHighlightRoots()
           scheduleEndHighlightMutationSuppression()
           scheduleVisibleRootsFullHighlight()
@@ -1582,8 +1608,9 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
         }
       }
 
+      const activeItemIds = new Set(activeItems.map(item => item.id))
       beginHighlightMutationSuppression()
-      clearAllHighlightMarkup()
+      removeStaleVocabularyItemIds(activeItemIds)
       await markTerms(markInstance, activeItems)
       scheduleEndHighlightMutationSuppression()
       refreshHoverPreview()

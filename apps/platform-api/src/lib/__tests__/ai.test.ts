@@ -142,4 +142,40 @@ describe("forwardChatCompletions", () => {
     }, "free")).rejects.toMatchObject({ status: 429, message: "rate limited" })
     expect(fetchMock).toHaveBeenCalledTimes(2)
   }, 15_000)
+
+  it("distributes requests across LLM_API_KEY and LLM_API_KEY_2", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: "stub" } }],
+    }), { status: 200 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const { forwardChatCompletions } = await import("../ai")
+    const env = createEnv({ LLM_API_KEY_2: "llm-key-2" })
+    await forwardChatCompletions(env, { messages: [] }, "free")
+    await forwardChatCompletions(env, { messages: [] }, "free")
+
+    const usedKeys = fetchMock.mock.calls.map(([, init]) => {
+      const headers = new Headers(init?.headers)
+      return headers.get("Authorization")
+    })
+    expect(new Set(usedKeys)).toEqual(new Set(["Bearer llm-key", "Bearer llm-key-2"]))
+  })
+
+  it("falls back to the other key when one returns 429", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response("rate limited", { status: 429 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: "ok" } }],
+      }), { status: 200 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const { forwardChatCompletions } = await import("../ai")
+    const env = createEnv({ LLM_API_KEY_2: "llm-key-2", LLM_MAX_RETRIES: "1" })
+    const response = await forwardChatCompletions(env, { messages: [] }, "free")
+
+    expect(response.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const usedKeys = fetchMock.mock.calls.map(([, init]) => new Headers(init?.headers).get("Authorization"))
+    expect(new Set(usedKeys)).toEqual(new Set(["Bearer llm-key", "Bearer llm-key-2"]))
+  }, 15_000)
 })

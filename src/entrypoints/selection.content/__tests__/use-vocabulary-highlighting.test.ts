@@ -1994,4 +1994,45 @@ describe("shouldHighlightAcrossElements", () => {
 
     expect(document.querySelector("[data-testid='hover-card-probe']")).not.toBeNull()
   })
+
+  it("reuses existing marks instead of tearing them down on a full re-highlight of an unchanged set", async () => {
+    const observer = installMockIntersectionObserver()
+    const integrationItem = createVocabularyItem({
+      id: "item-1",
+      sourceText: "integration",
+      normalizedText: "integration",
+      kind: "word",
+      wordCount: 1,
+    })
+
+    getVocabularyItemsMock.mockResolvedValue([integrationItem])
+    document.body.innerHTML = `
+      <main>
+        <p id="visible-paragraph">Integration is working.</p>
+      </main>
+    `
+
+    const container = document.createElement("div")
+    document.body.append(container)
+    render(createElement(VocabularyHighlightingHarness), { container })
+
+    const paragraph = document.querySelector("#visible-paragraph")
+    expect(paragraph).not.toBeNull()
+
+    await waitFor(() => {
+      expect(observer.instances[0]?.observedTargets.has(paragraph!)).toBe(true)
+    })
+    observer.triggerIntersecting(paragraph!)
+
+    const initialHighlight = await waitFor(() => {
+      const node = document.querySelector("#visible-paragraph mark") as HTMLElement | null
+      expect(node?.textContent).toBe("Integration")
+      return node as HTMLElement
+    })
+
+    window.dispatchEvent(new Event("hashchange"))
+    await new Promise(resolve => window.setTimeout(resolve, 500))
+
+    expect(document.querySelector("#visible-paragraph mark")).toBe(initialHighlight)
+  })
 })

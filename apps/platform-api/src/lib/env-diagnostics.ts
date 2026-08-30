@@ -67,6 +67,7 @@ export interface PublicEnvDiagnostics {
       looksLikeChatCompletionsEndpoint: boolean
     }
     llmApiKey: boolean
+    llmApiKey2: boolean
     llmModelConfigured: boolean
     paddleWebhookSecret: boolean
     paddleProPriceId: boolean
@@ -93,6 +94,7 @@ export function buildPublicEnvDiagnostics(env: Env): PublicEnvDiagnostics {
       looksLikeChatCompletionsEndpoint: looksLikeChatCompletionsEndpoint(llmBaseUrl),
     },
     llmApiKey: Boolean(llmApiKey),
+    llmApiKey2: Boolean(firstConfiguredValue(env.LLM_API_KEY_2)),
     llmModelConfigured: Boolean(llmModel),
     paddleWebhookSecret: Boolean(normalizeOptionalValue(env.PADDLE_WEBHOOK_SECRET)),
     paddleProPriceId: Boolean(normalizeOptionalValue(env.PADDLE_PRO_PRICE_ID)),

@@ -32,9 +32,10 @@
 |---|---|---|---|
 | `LLM_BASE_URL` | 是 | 无（缺则报 `500 LLM_BASE_URL is not configured`） | OpenAI 兼容 API 根地址（不含 `/chat/completions`），如 `https://api.b.ai/v1`、`https://api.openai.com/v1`。 |
 | `LLM_API_KEY` | 是 | 无 | 上游 API Key。用 `npx wrangler secret put LLM_API_KEY` 设置，**不要写进 wrangler.jsonc**。 |
+| `LLM_API_KEY_2` | 否 | 无 | 第二个上游 API Key，用于**负载均衡**。`forwardChatCompletions` 按请求轮换两个 key（也用于每次重试）；某个 key 被 429 限流时，下一次尝试自动落到另一个 key。轮换游标**以随机数启动**，所以并发的第一批请求会直接分散到两个 key，而不是先扎堆压垮 `key[0]` 再靠重试回退。同样用 `wrangler secret put` 设置。 |
 | `LLM_MODEL` | 是 | 无 | 模型 ID，如 `deepseek-v4-flash`、`gemini-3.6-flash`、`gpt-5.4-nano`。 |
 | `LLM_EXTRA_BODY` | 否 | `{}` | JSON，**合并进请求体**，用于服务商特有字段（见 §5）。 |
-| `LLM_MAX_RETRIES` | 否 | `4` | 对 `429/500/502/503` 的指数退避重试次数（基础 300ms × 2^n + 抖动，尊重 AbortSignal）。 |
+| `LLM_MAX_RETRIES` | 否 | `4` | 对 `429/500/502/503` 的退避重试次数（基础 300ms × 2^n + 抖动，**单次最多等 1s**，尊重 AbortSignal）。因为重试主要用来换 key 灾备，所以故意把等待压短，避免请求长时间停在 loading。 |
 | `MANAGED_TRANSLATION_ENGINE` | 否 | `managed-llm` | `/v1/translate` 使用的引擎路由标签：`managed-llm`（走 LLM 网关）或 `cf-workers-ai`（Cloudflare Workers AI `@cf/meta/m2m100-1.2b`）。 |
 
 > 相关绑定：`AI`（Workers AI binding，仅在 `cf-workers-ai` 引擎用）；`WORKERS_AI_TRANSLATION_MODEL`（Workers AI 模型名，默认 `@cf/meta/m2m100-1.2b`）。
