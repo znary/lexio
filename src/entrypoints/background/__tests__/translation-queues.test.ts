@@ -277,7 +277,7 @@ describe("translation queue helpers", () => {
       MANAGED_TRANSLATION_QUEUE_TIMEOUT_MS,
     } = await import("../translation-queues")
 
-    expect(MANAGED_TRANSLATION_MAX_CONCURRENCY).toBe(100)
+    expect(MANAGED_TRANSLATION_MAX_CONCURRENCY).toBe(4)
     expect(MANAGED_TRANSLATION_QUEUE_TIMEOUT_MS).toBe(180_000)
   })
 
