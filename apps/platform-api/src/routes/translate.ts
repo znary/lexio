@@ -1,11 +1,13 @@
 import type { SessionContext } from "../lib/auth"
 import type { Env } from "../lib/env"
 import { forwardChatCompletions } from "../lib/ai"
+import { runWorkersAITranslation } from "../lib/ai-workers"
 import { getPlanForUser, recordUsage, syncUserFromClerk } from "../lib/db"
 import { HttpError, json, readJson, withCors } from "../lib/http"
 
 const SUPPORTED_TRANSLATION_ENGINES = [
-  "ark",
+  "managed-llm",
+  "cf-workers-ai",
   "google-translate",
   "microsoft-translate",
   "deepl",
@@ -57,7 +59,7 @@ function logManagedTranslatePerf(event: string, details: Record<string, unknown>
 function resolveManagedTranslationEngine(env: Env): SupportedTranslationEngine {
   const rawValue = env.MANAGED_TRANSLATION_ENGINE?.trim()
   if (!rawValue) {
-    return "ark"
+    return "managed-llm"
   }
 
   if (SUPPORTED_TRANSLATION_ENGINES.includes(rawValue as SupportedTranslationEngine)) {
@@ -68,7 +70,7 @@ function resolveManagedTranslationEngine(env: Env): SupportedTranslationEngine {
 }
 
 function assertTranslationEngineImplemented(engine: SupportedTranslationEngine): void {
-  if (engine === "ark") {
+  if (engine === "managed-llm" || engine === "cf-workers-ai") {
     return
   }
 
@@ -150,6 +152,65 @@ export function extractDeltaText(payloadText: string): string {
 function buildTranslationFeatureName(scene?: string | null): string {
   const normalizedScene = scene?.trim()
   return normalizedScene ? `managed-translate:${normalizedScene}` : "managed-translate"
+}
+
+function streamWorkersAITranslationText(text: string, init: ResponseInit = {}): Response {
+  const encoder = new TextEncoder()
+  const chunkEvent = `event: chunk\ndata: ${JSON.stringify({ text })}\n\n`
+  const completedEvent = `event: completed\ndata: ${JSON.stringify({ text })}\n\n`
+
+  return new Response(encoder.encode(chunkEvent + completedEvent), {
+    status: init.status ?? 200,
+    headers: withCors({
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache",
+      ...init.headers,
+    }),
+  })
+}
+
+async function handleWorkersAITranslation(
+  env: Env,
+  userId: string,
+  feature: string,
+  scene: string | null,
+  body: ManagedTranslateRequest,
+  stream: boolean,
+  requestId: string,
+  startedAt: number,
+): Promise<Response> {
+  const modelStartedAt = Date.now()
+  const result = await runWorkersAITranslation(env, body)
+  const modelMs = Date.now() - modelStartedAt
+
+  await recordUsage(
+    env,
+    userId,
+    feature,
+    stream ? "stream" : "generate",
+    1,
+    result.inputTokens,
+    result.outputTokens,
+  )
+
+  logManagedTranslatePerf("request-complete", {
+    requestId,
+    userId,
+    scene,
+    isBatch: Boolean(body.isBatch),
+    stream,
+    modelMs,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
+    resultLength: result.text.length,
+    totalMs: Date.now() - startedAt,
+  })
+
+  if (stream) {
+    return streamWorkersAITranslationText(result.text)
+  }
+
+  return json({ text: result.text })
 }
 
 async function streamWithMetrics(
@@ -313,6 +374,19 @@ async function handleManagedTranslate(
   })
 
   try {
+    if (engine === "cf-workers-ai") {
+      return await handleWorkersAITranslation(
+        env,
+        user.id,
+        feature,
+        scene,
+        body,
+        stream,
+        requestId,
+        startedAt,
+      )
+    }
+
     const upstreamStartedAt = Date.now()
     const upstream = await forwardChatCompletions(
       env,

@@ -1,21 +1,19 @@
 export interface Env {
   DB: D1Database
+  AI?: Ai
   CLERK_SECRET_KEY: string
   CLERK_PUBLISHABLE_KEY: string
   CLERK_JWT_KEY?: string
   CLERK_AUDIENCE?: string
   CLERK_AUTHORIZED_PARTIES?: string
   PLATFORM_EXTENSION_TOKEN_SECRET?: string
-  ARK_API_KEY?: string
-  ARK_BASE_URL?: string
-  ARK_MODEL?: string
-  ARK_MODEL_FREE?: string
-  ARK_MODEL_PRO?: string
+  LLM_API_KEY?: string
+  LLM_BASE_URL?: string
+  LLM_MODEL?: string
+  LLM_EXTRA_BODY?: string
+  LLM_MAX_RETRIES?: string
   MANAGED_TRANSLATION_ENGINE?: string
-  AI_GATEWAY_BASE_URL: string
-  AI_GATEWAY_API_KEY: string
-  AI_GATEWAY_MODEL_FREE?: string
-  AI_GATEWAY_MODEL_PRO?: string
+  WORKERS_AI_TRANSLATION_MODEL?: string
   LEXIO_BACKFILL_DEV?: string
   PLATFORM_CHAT_WEB_FETCH_ENABLED?: string
   PADDLE_WEBHOOK_SECRET?: string

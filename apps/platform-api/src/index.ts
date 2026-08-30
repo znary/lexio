@@ -66,15 +66,15 @@ const handler: ExportedHandler<PlatformEnv> = {
       const url = new URL(request.url)
 
       if (request.method === "GET" && url.pathname === "/health") {
-        return handleHealthCheck(env)
+        return await handleHealthCheck(env)
       }
 
       if (request.method === "POST" && url.pathname === "/webhooks/paddle") {
-        return handlePaddleWebhook(request, env)
+        return await handlePaddleWebhook(request, env)
       }
 
       if (request.method === "POST" && url.pathname === "/__backfill/llm/chat/completions") {
-        return handleBackfillLlmChatCompletions(request, env)
+        return await handleBackfillLlmChatCompletions(request, env)
       }
 
       session = await requireSession(request, env)

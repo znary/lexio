@@ -1,8 +1,6 @@
 import type { Env } from "./env"
 import { toList } from "./env"
 
-const DEFAULT_ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
-
 function normalizeOptionalValue(value?: string): string {
   return value?.trim() || ""
 }
@@ -63,14 +61,13 @@ export interface PublicEnvDiagnostics {
       configured: boolean
       looksLocal: boolean
     }
-    aiGatewayBaseUrl: {
+    llmBaseUrl: {
       configured: boolean
       looksLocal: boolean
       looksLikeChatCompletionsEndpoint: boolean
     }
-    aiGatewayApiKey: boolean
-    aiGatewayModelFreeConfigured: boolean
-    aiGatewayModelProConfigured: boolean
+    llmApiKey: boolean
+    llmModelConfigured: boolean
     paddleWebhookSecret: boolean
     paddleProPriceId: boolean
   }
@@ -78,10 +75,9 @@ export interface PublicEnvDiagnostics {
 }
 
 export function buildPublicEnvDiagnostics(env: Env): PublicEnvDiagnostics {
-  const aiBaseUrl = firstConfiguredValue(env.ARK_BASE_URL, env.AI_GATEWAY_BASE_URL, DEFAULT_ARK_BASE_URL)
-  const aiApiKey = firstConfiguredValue(env.ARK_API_KEY, env.AI_GATEWAY_API_KEY)
-  const aiModelFree = firstConfiguredValue(env.ARK_MODEL_FREE, env.AI_GATEWAY_MODEL_FREE, env.ARK_MODEL)
-  const aiModelPro = firstConfiguredValue(env.ARK_MODEL_PRO, env.AI_GATEWAY_MODEL_PRO, env.ARK_MODEL)
+  const llmBaseUrl = firstConfiguredValue(env.LLM_BASE_URL)
+  const llmApiKey = firstConfiguredValue(env.LLM_API_KEY)
+  const llmModel = firstConfiguredValue(env.LLM_MODEL)
   const checks: PublicEnvDiagnostics["checks"] = {
     clerkSecretKey: Boolean(normalizeOptionalValue(env.CLERK_SECRET_KEY)),
     clerkPublishableKey: Boolean(normalizeOptionalValue(env.CLERK_PUBLISHABLE_KEY)),
@@ -91,14 +87,13 @@ export function buildPublicEnvDiagnostics(env: Env): PublicEnvDiagnostics {
       configured: Boolean(toList(env.CLERK_AUTHORIZED_PARTIES).length),
       looksLocal: listLooksLocal(env.CLERK_AUTHORIZED_PARTIES),
     },
-    aiGatewayBaseUrl: {
-      configured: Boolean(aiBaseUrl),
-      looksLocal: valueLooksLocal(aiBaseUrl),
-      looksLikeChatCompletionsEndpoint: looksLikeChatCompletionsEndpoint(aiBaseUrl),
+    llmBaseUrl: {
+      configured: Boolean(llmBaseUrl),
+      looksLocal: valueLooksLocal(llmBaseUrl),
+      looksLikeChatCompletionsEndpoint: looksLikeChatCompletionsEndpoint(llmBaseUrl),
     },
-    aiGatewayApiKey: Boolean(aiApiKey),
-    aiGatewayModelFreeConfigured: Boolean(aiModelFree),
-    aiGatewayModelProConfigured: Boolean(aiModelPro),
+    llmApiKey: Boolean(llmApiKey),
+    llmModelConfigured: Boolean(llmModel),
     paddleWebhookSecret: Boolean(normalizeOptionalValue(env.PADDLE_WEBHOOK_SECRET)),
     paddleProPriceId: Boolean(normalizeOptionalValue(env.PADDLE_PRO_PRICE_ID)),
   }
@@ -117,17 +112,20 @@ export function buildPublicEnvDiagnostics(env: Env): PublicEnvDiagnostics {
   if (checks.clerkAuthorizedParties.looksLocal) {
     warnings.push("CLERK_AUTHORIZED_PARTIES still points to localhost or 127.0.0.1")
   }
-  if (!checks.aiGatewayBaseUrl.configured) {
-    warnings.push("ARK_BASE_URL or AI_GATEWAY_BASE_URL is missing")
+  if (!checks.llmBaseUrl.configured) {
+    warnings.push("LLM_BASE_URL is missing")
   }
-  if (!checks.aiGatewayApiKey) {
-    warnings.push("ARK_API_KEY or AI_GATEWAY_API_KEY is missing")
+  if (!checks.llmApiKey) {
+    warnings.push("LLM_API_KEY is missing")
   }
-  if (checks.aiGatewayBaseUrl.looksLocal) {
-    warnings.push("ARK_BASE_URL or AI_GATEWAY_BASE_URL still points to localhost or 127.0.0.1")
+  if (!checks.llmModelConfigured) {
+    warnings.push("LLM_MODEL is missing")
   }
-  if (checks.aiGatewayBaseUrl.looksLikeChatCompletionsEndpoint) {
-    warnings.push("ARK_BASE_URL or AI_GATEWAY_BASE_URL should be the API root, not a /chat/completions endpoint")
+  if (checks.llmBaseUrl.looksLocal) {
+    warnings.push("LLM_BASE_URL still points to localhost or 127.0.0.1")
+  }
+  if (checks.llmBaseUrl.looksLikeChatCompletionsEndpoint) {
+    warnings.push("LLM_BASE_URL should be the API root, not a /chat/completions endpoint")
   }
   if (!checks.paddleWebhookSecret) {
     warnings.push("PADDLE_WEBHOOK_SECRET is missing, webhook verification will fail")

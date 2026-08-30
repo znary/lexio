@@ -9,10 +9,9 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     CLERK_JWT_KEY: "jwt-public-key",
     CLERK_AUDIENCE: "",
     CLERK_AUTHORIZED_PARTIES: "https://lexio.example.com",
-    AI_GATEWAY_BASE_URL: "https://gateway.example.com",
-    AI_GATEWAY_API_KEY: "gateway-key",
-    AI_GATEWAY_MODEL_FREE: "free-model",
-    AI_GATEWAY_MODEL_PRO: "pro-model",
+    LLM_BASE_URL: "https://api.example.com/v1",
+    LLM_API_KEY: "llm-key",
+    LLM_MODEL: "fast-model",
     PADDLE_WEBHOOK_SECRET: "whsec_123",
     PADDLE_PRO_PRICE_ID: "pri_123",
     ...overrides,
@@ -21,6 +20,7 @@ function createEnv(overrides: Partial<Env> = {}): Env {
 
 describe("forwardChatCompletions", () => {
   beforeEach(() => {
+    vi.resetModules()
     vi.clearAllMocks()
   })
 
@@ -28,69 +28,118 @@ describe("forwardChatCompletions", () => {
     vi.unstubAllGlobals()
   })
 
-  it("always forwards managed chat requests with thinking disabled and uses the highest tier configured model", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }))
+  it("forwards to the configured OpenAI-compatible endpoint with model and auth headers", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: "stub" } }],
+    }), { status: 200 }))
     vi.stubGlobal("fetch", fetchMock)
 
     const { forwardChatCompletions } = await import("../ai")
-    await forwardChatCompletions(createEnv({
-      AI_GATEWAY_BASE_URL: "https://ark.cn-beijing.volces.com/api/v3",
-      AI_GATEWAY_MODEL_FREE: "ep-ark-free",
-    }), {
-      model: "user-picked-model",
-      thinking: { type: "enabled" },
-      messages: [{ role: "user", content: "hello" }],
-      stream: false,
-      response_format: {
-        type: "json_object",
-      },
+    await forwardChatCompletions(createEnv(), {
+      messages: [{ role: "user", content: "hi" }],
     }, "free")
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
-
     const [url, init] = fetchMock.mock.calls[0]
-    expect(url).toBe("https://ark.cn-beijing.volces.com/api/v3/chat/completions")
-    expect(init.headers).toEqual({
-      "Content-Type": "application/json",
-      "Authorization": "Bearer gateway-key",
+    expect(String(url)).toBe("https://api.example.com/v1/chat/completions")
+    const headers = new Headers(init?.headers)
+    expect(headers.get("Authorization")).toBe("Bearer llm-key")
+    expect(headers.get("x-api-key")).toBe("llm-key")
+    expect(JSON.parse(String(init?.body))).toEqual({
+      messages: [{ role: "user", content: "hi" }],
+      model: "fast-model",
     })
-
-    const body = JSON.parse(String(init.body)) as Record<string, unknown>
-    expect(body).toEqual(expect.objectContaining({
-      model: "pro-model",
-      thinking: { type: "disabled" },
-      stream: false,
-      messages: [{ role: "user", content: "hello" }],
-    }))
-    expect(body.model).not.toBe("user-picked-model")
-    expect(body.response_format).toBeUndefined()
   })
 
-  it("accepts ARK_* env vars without the generic gateway vars", async () => {
+  it("merges provider-specific extra body fields from LLM_EXTRA_BODY and lets the model win", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }))
     vi.stubGlobal("fetch", fetchMock)
 
     const { forwardChatCompletions } = await import("../ai")
     await forwardChatCompletions(createEnv({
-      ARK_BASE_URL: "https://ark.cn-beijing.volces.com/api/v3",
-      ARK_API_KEY: "ark-key",
-      ARK_MODEL: "doubao-seed-2-0-lite-260215",
-      AI_GATEWAY_BASE_URL: "",
-      AI_GATEWAY_API_KEY: "",
-      AI_GATEWAY_MODEL_FREE: "",
-      AI_GATEWAY_MODEL_PRO: "",
+      LLM_EXTRA_BODY: JSON.stringify({ thinking: { type: "disabled" } }),
     }), {
-      messages: [{ role: "user", content: "hello" }],
-    }, "pro")
+      messages: [],
+      model: "client-model",
+    }, "free")
 
     const [, init] = fetchMock.mock.calls[0]
-    const body = JSON.parse(String(init.body)) as Record<string, unknown>
-
-    expect(init.headers).toEqual({
-      "Content-Type": "application/json",
-      "Authorization": "Bearer ark-key",
+    expect(JSON.parse(String(init?.body))).toEqual({
+      messages: [],
+      thinking: { type: "disabled" },
+      model: "fast-model",
     })
-    expect(body.model).toBe("doubao-seed-2-0-lite-260215")
-    expect(body.thinking).toEqual({ type: "disabled" })
   })
+
+  it("throws a 500 when LLM_BASE_URL is not configured", async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+
+    const { forwardChatCompletions } = await import("../ai")
+    await expect(forwardChatCompletions(createEnv({ LLM_BASE_URL: "" }), {
+      messages: [],
+    }, "free")).rejects.toMatchObject({ status: 500, message: "LLM_BASE_URL is not configured" })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("throws a 500 when LLM_API_KEY is not configured", async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+
+    const { forwardChatCompletions } = await import("../ai")
+    await expect(forwardChatCompletions(createEnv({ LLM_API_KEY: "" }), {
+      messages: [],
+    }, "free")).rejects.toMatchObject({ status: 500, message: "LLM_API_KEY is not configured" })
+  })
+
+  it("throws a 500 when LLM_MODEL is not configured", async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+
+    const { forwardChatCompletions } = await import("../ai")
+    await expect(forwardChatCompletions(createEnv({ LLM_MODEL: "" }), {
+      messages: [],
+    }, "free")).rejects.toMatchObject({ status: 500, message: "LLM_MODEL is not configured" })
+  })
+
+  it("surfaces the upstream error body on a non-retryable status", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("model not found", { status: 404 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const { forwardChatCompletions } = await import("../ai")
+    await expect(forwardChatCompletions(createEnv(), {
+      messages: [],
+    }, "free")).rejects.toMatchObject({ status: 404, message: "model not found" })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("retries transient 429 responses with backoff before succeeding", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response("rate limited", { status: 429 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: "ok" } }],
+      }), { status: 200 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const { forwardChatCompletions } = await import("../ai")
+    const response = await forwardChatCompletions(createEnv({ LLM_MAX_RETRIES: "2" }), {
+      messages: [],
+    }, "free")
+
+    expect(response.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  }, 15_000)
+
+  it("throws after exhausting transient retries", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response("rate limited", { status: 429 }))
+      .mockResolvedValueOnce(new Response("rate limited", { status: 429 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const { forwardChatCompletions } = await import("../ai")
+    await expect(forwardChatCompletions(createEnv({ LLM_MAX_RETRIES: "1" }), {
+      messages: [],
+    }, "free")).rejects.toMatchObject({ status: 429, message: "rate limited" })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  }, 15_000)
 })

@@ -23,7 +23,7 @@ import { RequestQueue } from "@/utils/request/request-queue"
 import { ensureInitializedConfig } from "./config"
 import { fireAndForgetTabMessage } from "./tab-message"
 
-export const MANAGED_TRANSLATION_MAX_CONCURRENCY = 100
+export const MANAGED_TRANSLATION_MAX_CONCURRENCY = 4
 export const MANAGED_TRANSLATION_QUEUE_TIMEOUT_MS = 3 * 60_000
 
 interface ManagedTranslationStatusNotification {

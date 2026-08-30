@@ -19,6 +19,40 @@ type SimpleIntersectionOptions = Omit<IntersectionObserverInit, "threshold"> & {
   threshold?: number
 }
 
+export const NAV_BOILERPLATE_DELAY_MS = 2500
+export const TOC_LINK_DENSE_DELAY_MS = 1500
+export const SHORT_TEXT_DELAY_MS = 800
+
+/**
+ * 正文优先：返回让该段落「晚入队」的延迟毫秒数。
+ * 正文（ARTICLE / MAIN / role=main 内）立即入队；导航/页头/页脚/侧栏等细碎外壳延后，
+ * 使优先队列先把正文译完，再处理目录、菜单、页脚。
+ */
+export function computeTranslationPriorityDelayMs(element: HTMLElement): number {
+  if (element.closest("article, main, [role='main']")) {
+    return 0
+  }
+
+  if (element.closest("nav, header, footer, aside, [role='navigation'], [role='banner'], [role='contentinfo'], [role='complementary']")) {
+    return NAV_BOILERPLATE_DELAY_MS
+  }
+
+  const text = element.textContent?.trim() ?? ""
+  const linkCount = element.querySelectorAll("a").length
+
+  // 目录/列表类：链接密集且文本较短
+  if (linkCount >= 3 && text.length < 600) {
+    return TOC_LINK_DENSE_DELAY_MS
+  }
+
+  // 细碎短文本（按钮、纯链接、碎片）
+  if (text.length < 40) {
+    return SHORT_TEXT_DELAY_MS
+  }
+
+  return 0
+}
+
 interface IPageTranslationManager {
   /**
    * Indicates whether the page translation is currently active
@@ -131,14 +165,26 @@ export class PageTranslationManager implements IPageTranslationManager {
       this.intersectionObserver = new IntersectionObserver(async (entries, observer) => {
         for (const entry of entries) {
           if (entry.isIntersecting) {
-            if (isHTMLElement(entry.target)) {
-              if (!entry.target.closest(`.${CONTENT_WRAPPER_CLASS}`)) {
+            const target = entry.target
+            if (isHTMLElement(target)) {
+              if (!target.closest(`.${CONTENT_WRAPPER_CLASS}`)) {
                 const currentConfig = await getLocalConfig()
                 if (!currentConfig) {
                   logger.error("Global config is not initialized")
                   return
                 }
-                void translateWalkedElement(entry.target, walkId, currentConfig)
+                const delayMs = computeTranslationPriorityDelayMs(target)
+                if (delayMs > 0) {
+                  window.setTimeout(() => {
+                    if (this.walkId !== walkId || !this.isPageTranslating) {
+                      return
+                    }
+                    void translateWalkedElement(target, walkId, currentConfig)
+                  }, delayMs)
+                }
+                else {
+                  void translateWalkedElement(target, walkId, currentConfig)
+                }
               }
             }
             observer.unobserve(entry.target)

@@ -10,10 +10,9 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     CLERK_JWT_KEY: "jwt-public-key",
     CLERK_AUDIENCE: "",
     CLERK_AUTHORIZED_PARTIES: "https://lexio.example.com",
-    AI_GATEWAY_BASE_URL: "https://gateway.example.com",
-    AI_GATEWAY_API_KEY: "gateway-key",
-    AI_GATEWAY_MODEL_FREE: "openai/gpt-4.1-nano",
-    AI_GATEWAY_MODEL_PRO: "openai/gpt-4.1-mini",
+    LLM_BASE_URL: "https://api.example.com/v1",
+    LLM_API_KEY: "llm-key",
+    LLM_MODEL: "fast-model",
     PADDLE_WEBHOOK_SECRET: "whsec_123",
     PADDLE_PRO_PRICE_ID: "pri_123",
     ...overrides,
@@ -21,33 +20,28 @@ function createEnv(overrides: Partial<Env> = {}): Env {
 }
 
 describe("buildPublicEnvDiagnostics", () => {
-  it("reports a healthy runtime without warnings", () => {
+  it("reports a healthy LLM configuration", () => {
     const diagnostics = buildPublicEnvDiagnostics(createEnv())
-
-    expect(diagnostics.checks.aiGatewayBaseUrl.configured).toBe(true)
-    expect(diagnostics.checks.aiGatewayBaseUrl.looksLocal).toBe(false)
+    expect(diagnostics.checks.llmBaseUrl.configured).toBe(true)
+    expect(diagnostics.checks.llmBaseUrl.looksLocal).toBe(false)
+    expect(diagnostics.checks.llmApiKey).toBe(true)
+    expect(diagnostics.checks.llmModelConfigured).toBe(true)
     expect(diagnostics.warnings).toEqual([])
   })
 
-  it("flags missing and localhost-style values without exposing the secret values", () => {
+  it("warns about a localhost or chat/completions base URL and missing model", () => {
     const diagnostics = buildPublicEnvDiagnostics(createEnv({
-      CLERK_AUTHORIZED_PARTIES: "http://127.0.0.1:3355",
-      AI_GATEWAY_BASE_URL: "http://127.0.0.1:8080/chat/completions",
-      AI_GATEWAY_API_KEY: "",
-      PADDLE_WEBHOOK_SECRET: "",
-      PADDLE_PRO_PRICE_ID: "",
+      LLM_BASE_URL: "http://127.0.0.1:8080/chat/completions",
+      LLM_API_KEY: "",
+      LLM_MODEL: "",
     }))
-
-    expect(diagnostics.checks.clerkAuthorizedParties.looksLocal).toBe(true)
-    expect(diagnostics.checks.aiGatewayBaseUrl.looksLocal).toBe(true)
-    expect(diagnostics.checks.aiGatewayBaseUrl.looksLikeChatCompletionsEndpoint).toBe(true)
+    expect(diagnostics.checks.llmBaseUrl.looksLocal).toBe(true)
+    expect(diagnostics.checks.llmBaseUrl.looksLikeChatCompletionsEndpoint).toBe(true)
     expect(diagnostics.warnings).toEqual(expect.arrayContaining([
-      "CLERK_AUTHORIZED_PARTIES still points to localhost or 127.0.0.1",
-      "ARK_API_KEY or AI_GATEWAY_API_KEY is missing",
-      "ARK_BASE_URL or AI_GATEWAY_BASE_URL still points to localhost or 127.0.0.1",
-      "ARK_BASE_URL or AI_GATEWAY_BASE_URL should be the API root, not a /chat/completions endpoint",
-      "PADDLE_WEBHOOK_SECRET is missing, webhook verification will fail",
-      "PADDLE_PRO_PRICE_ID is missing, Paddle webhooks cannot promote users to pro",
+      "LLM_API_KEY is missing",
+      "LLM_MODEL is missing",
+      "LLM_BASE_URL still points to localhost or 127.0.0.1",
+      "LLM_BASE_URL should be the API root, not a /chat/completions endpoint",
     ]))
   })
 })

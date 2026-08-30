@@ -1,5 +1,10 @@
 # AGENTS.md
 
+## LLM 网关 / 换服务商
+
+- Worker 的模型服务商 base URL / key / 模型名 / 请求附加字段**全部走环境变量（`LLM_*`）**，不写死。
+- 快速了解"怎么换服务商、有哪些坑（尤其 1101）、为什么不用 AI SDK"：看 `docs/llm-gateway-config.md`。
+
 ## Browser Debugging Memory
 
 - 调试浏览器扩展时，如果用户已经打开了登录过的 Chrome，而且问题就在当前页面复现，先用这个正在运行的 Chrome。不要默认再启动一个新的 Chrome 实例。
