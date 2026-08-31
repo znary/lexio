@@ -260,4 +260,85 @@ describe("vocabulary hover card", () => {
       })
     })
   })
+
+  it("opens the full detail view when the view-details anchor is clicked", async () => {
+    vi.resetModules()
+    vi.doMock("#imports", () => ({
+      i18n: {
+        t: (key: string) => {
+          const messages: Record<string, string> = {
+            "options.vocabulary.hoverCard.source": "原文",
+            "options.vocabulary.hoverCard.root": "词根",
+            "options.vocabulary.hoverCard.meaning": "释义",
+            "options.vocabulary.hoverCard.translation": "译文",
+            "options.vocabulary.hoverCard.details": "信息",
+            "options.vocabulary.hoverCard.viewDetails": "查看详情",
+            "options.vocabulary.hoverCard.markMastered": "标记为已掌握",
+            "options.vocabulary.hoverCard.unmarkMastered": "标记为学习中",
+          }
+
+          return messages[key] ?? key
+        },
+      },
+    }))
+    vi.doMock("@/utils/vocabulary/service", () => ({
+      setVocabularyItemMastered: (...args: unknown[]) => setVocabularyItemMasteredMock(...args),
+    }))
+    vi.doMock("@/components/ui/base-ui/tooltip", () => ({
+      Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+      TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+      TooltipContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    }))
+    vi.doMock("../selection-toolbar/atoms", async () => {
+      const actual = await vi.importActual<typeof import("jotai")>("jotai")
+      return {
+        selectionToolbarRectAtom: actual.atom(null),
+      }
+    })
+
+    const { VocabularyHoverCard } = await import("../components/vocabulary-hover-card")
+    const onOpenDetail = vi.fn()
+
+    render(
+      <VocabularyHoverCard
+        preview={{
+          anchorRect: {
+            top: 120,
+            right: 220,
+            bottom: 140,
+            left: 180,
+            width: 40,
+            height: 20,
+          },
+          item: {
+            id: "voc_1",
+            sourceText: "narrow",
+            normalizedText: "narrow",
+            translatedText: "限制范围",
+            definition: "缩小；限制范围",
+            sourceLang: "en",
+            targetLang: "zh-CN",
+            kind: "word",
+            wordCount: 1,
+            createdAt: 1,
+            lastSeenAt: 2,
+            hitCount: 3,
+            updatedAt: 4,
+            deletedAt: null,
+          },
+        }}
+        onOpenDetail={onOpenDetail}
+      />,
+    )
+
+    const viewDetailsLabel = screen.getByText(/查看详情|options\.vocabulary\.hoverCard\.viewDetails/)
+    const viewDetailsButton = viewDetailsLabel.closest("button")
+    expect(viewDetailsButton).not.toBeNull()
+    fireEvent.click(viewDetailsButton!)
+    expect(onOpenDetail).toHaveBeenCalledTimes(1)
+    expect(onOpenDetail).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "voc_1", sourceText: "narrow" }),
+      { x: 180, y: 120 },
+    )
+  })
 })

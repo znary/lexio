@@ -40,17 +40,19 @@
 
 > 相关绑定：`AI`（Workers AI binding，仅在 `cf-workers-ai` 引擎用）；`WORKERS_AI_TRANSLATION_MODEL`（Workers AI 模型名，默认 `@cf/meta/m2m100-1.2b`）。
 
-## 4. 当前提交的配置（B.AI）
+## 4. 当前提交的配置（SiliconFlow）
 
-`apps/platform-api/wrangler.jsonc` 目前写死指向 B.AI（这是"默认演示"，随时可改）：
+`apps/platform-api/wrangler.jsonc` 目前指向 SiliconFlow（`deepseek-ai/DeepSeek-V4-Flash`，OpenAI 兼容）：
 
 ```jsonc
 "MANAGED_TRANSLATION_ENGINE": "managed-llm",
-"LLM_BASE_URL": "https://api.b.ai/v1",
-"LLM_MODEL": "deepseek-v4-flash",
-"LLM_EXTRA_BODY": "{\"thinking\":{\"type\":\"disabled\"}}",
+"LLM_BASE_URL": "https://api.siliconflow.cn/v1",
+"LLM_MODEL": "Qwen/Qwen3.5-4B",
+"LLM_EXTRA_BODY": "{\"enable_thinking\":false}",
 "LLM_MAX_RETRIES": "4"
 ```
+
+> 注：SiliconFlow 的 thinking 开关用 `enable_thinking: false`（顶层布尔）。**不要**用 B.AI/DeepSeek 的 `thinking: { type: "disabled" }`，也不要用 `chat_template_kwargs: { "thinking": false }`（实测无效）。`enable_thinking:false` 对 `deepseek-ai/DeepSeek-V4-Flash` 有效（推理 token=0），但对 GLM-Z1-9B / DeepSeek-R1-0528-Qwen3-8B 这类原生推理模型**无效**（它们会无视该参数）。
 
 ## 5. 服务商特有字段之"关闭思考"（关键坑）
 

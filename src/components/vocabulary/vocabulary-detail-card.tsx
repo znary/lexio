@@ -44,6 +44,7 @@ export interface VocabularyDetailCardProps {
   item: VocabularyCardItem
   practiceHref?: string
   renderSpeakButton?: (request: SpeakRequest) => ReactNode
+  compact?: boolean
   definitionLoading?: boolean
   loading?: boolean
   showDefinition?: boolean
@@ -114,6 +115,7 @@ export function VocabularyDetailCard({
   item,
   practiceHref,
   renderSpeakButton,
+  compact = false,
   definitionLoading = false,
   loading = false,
   showDefinition = true,
@@ -121,10 +123,11 @@ export function VocabularyDetailCard({
   supportingContent,
   variant = "page",
 }: VocabularyDetailCardProps) {
+  const isCompact = variant === "popover" && compact
   const wordFamily = getVocabularyCardWordFamily(item)
   const contexts = getVisibleContexts(item, variant === "popover" ? 3 : 2, variant === "popover")
   const showLoadingSkeleton = loading && variant === "popover"
-  const hasWordFamily = Boolean(wordFamily) || showLoadingSkeleton
+  const hasWordFamily = !isCompact && (Boolean(wordFamily) || showLoadingSkeleton)
   const itemKey = getItemKey(item)
   const definition = getVocabularyCardDefinition(item)
   const hasResolvedDefinition = definitionLoading
@@ -143,6 +146,7 @@ export function VocabularyDetailCard({
   const rootClassName = [
     "vocabulary-detail-card",
     `vocabulary-detail-card--${variant}`,
+    isCompact ? "vocabulary-detail-card--compact" : null,
     "word-bank-detail__scroll",
     variant === "popover" ? "word-bank-detail word-bank-detail--single" : null,
   ].filter(Boolean).join(" ")
@@ -158,11 +162,15 @@ export function VocabularyDetailCard({
           <header className="word-bank-detail__header">
             <div className="word-bank-title-stack">
               <h2 className={WRAP_CLASS}>{item.sourceText}</h2>
-              <div className="word-bank-meta">
-                <span className={`word-chip ${WRAP_CLASS}`}>{partOfSpeech}</span>
-                <span className={WRAP_CLASS}>{phonetic}</span>
-                {wordSpeakButton}
-              </div>
+              {isCompact
+                ? null
+                : (
+                    <div className="word-bank-meta">
+                      <span className={`word-chip ${WRAP_CLASS}`}>{partOfSpeech}</span>
+                      <span className={WRAP_CLASS}>{phonetic}</span>
+                      {wordSpeakButton}
+                    </div>
+                  )}
             </div>
 
             {shouldShowHeaderActions
@@ -200,7 +208,7 @@ export function VocabularyDetailCard({
           {showDefinition
             ? (
                 <section className="detail-section">
-                  <h3>{copy.definition}</h3>
+                  <h3>{isCompact ? (copy.translation ?? copy.definition) : copy.definition}</h3>
                   {showLoadingSkeleton && !hasResolvedDefinition
                     ? <VocabularyDefinitionSkeleton />
                     : <p className={`detail-definition ${WRAP_CLASS}`}>{definition}</p>}
@@ -229,53 +237,57 @@ export function VocabularyDetailCard({
               )
             : null}
 
-          <section className="detail-section">
-            <h3>{copy.inContext}</h3>
-            {contexts.length > 0
-              ? (
-                  <div className="context-stack">
-                    {contexts.map((entry, index) => (
-                      <blockquote
-                        key={`${entry.sentence}-${entry.translatedSentence ?? ""}-${entry.sourceUrl ?? "no-source"}`}
-                        className={`context-block${index === 1 ? " context-block--muted" : ""}`}
-                      >
-                        <div className="context-block__row">
-                          <div className="context-block__text">
-                            <p className={`context-block__quote ${WRAP_CLASS}`}>
-                              &quot;
-                              {entry.sentence}
-                              &quot;
-                            </p>
-                            {entry.translatedSentence?.trim()
-                              ? (
-                                  <p className={`context-block__translation ${WRAP_CLASS}`}>
-                                    {entry.translatedSentence.trim()}
+          {isCompact
+            ? null
+            : (
+                <section className="detail-section">
+                  <h3>{copy.inContext}</h3>
+                  {contexts.length > 0
+                    ? (
+                        <div className="context-stack">
+                          {contexts.map((entry, index) => (
+                            <blockquote
+                              key={`${entry.sentence}-${entry.translatedSentence ?? ""}-${entry.sourceUrl ?? "no-source"}`}
+                              className={`context-block${index === 1 ? " context-block--muted" : ""}`}
+                            >
+                              <div className="context-block__row">
+                                <div className="context-block__text">
+                                  <p className={`context-block__quote ${WRAP_CLASS}`}>
+                                    &quot;
+                                    {entry.sentence}
+                                    &quot;
                                   </p>
-                                )
-                              : showLoadingSkeleton
-                                ? <VocabularyContextTranslationSkeleton />
-                                : null}
-                          </div>
-                          {renderSpeakButton?.({
-                            index,
-                            key: `${itemKey}:context:${index}`,
-                            language: item.sourceLang,
-                            text: entry.sentence,
-                            type: "context",
-                          })}
+                                  {entry.translatedSentence?.trim()
+                                    ? (
+                                        <p className={`context-block__translation ${WRAP_CLASS}`}>
+                                          {entry.translatedSentence.trim()}
+                                        </p>
+                                      )
+                                    : showLoadingSkeleton
+                                      ? <VocabularyContextTranslationSkeleton />
+                                      : null}
+                                </div>
+                                {renderSpeakButton?.({
+                                  index,
+                                  key: `${itemKey}:context:${index}`,
+                                  language: item.sourceLang,
+                                  text: entry.sentence,
+                                  type: "context",
+                                })}
+                              </div>
+                            </blockquote>
+                          ))}
                         </div>
-                      </blockquote>
-                    ))}
-                  </div>
-                )
-              : (
-                  <div className="context-stack">
-                    <blockquote className={`context-block context-block--muted ${WRAP_CLASS}`}>
-                      {copy.missingContext}
-                    </blockquote>
-                  </div>
-                )}
-          </section>
+                      )
+                    : (
+                        <div className="context-stack">
+                          <blockquote className={`context-block context-block--muted ${WRAP_CLASS}`}>
+                            {copy.missingContext}
+                          </blockquote>
+                        </div>
+                      )}
+                </section>
+              )}
 
           {footerMeta
             ? (

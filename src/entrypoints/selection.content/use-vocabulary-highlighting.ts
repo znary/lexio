@@ -127,6 +127,7 @@ interface ActiveHoverHighlight {
 interface VocabularyHighlightingState {
   handleHoverCardPointerEnter: () => void
   handleHoverCardPointerLeave: () => void
+  hideHoverPreview: () => void
   hoverPreview: VocabularyHoverPreview | null
   setHoverCardRect: (rect: VocabularyHighlightAnchorRect | null) => void
 }
@@ -1748,6 +1749,7 @@ export function useVocabularyHighlighting(): VocabularyHighlightingState {
   return {
     handleHoverCardPointerEnter,
     handleHoverCardPointerLeave,
+    hideHoverPreview,
     hoverPreview,
     setHoverCardRect,
   }

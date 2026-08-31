@@ -9,6 +9,33 @@ const WWW_PREFIX_RE = /^www\./
 
 export const WORD_FAMILY_GROUP_ORDER = ["core", "contrast", "related"] as const
 
+const WORD_SEPARATOR_RE = /\s+/
+const SENTENCE_PUNCTUATION_RE = /[.?!,;：。！？，；]/
+const MAX_COMPACT_SOURCE_WORDS = 8
+const MAX_COMPACT_SOURCE_LENGTH = 80
+
+// A selection is treated as sentence/phrase-of-words (rather than a single word
+// or short phrase for the dictionary card) when it is long or carries sentence
+// punctuation. Such selections get a restrained, small-source layout instead of
+// the oversized word vocabulary title.
+export function isSentenceLevelSelection(text: string | null | undefined): boolean {
+  const value = text?.trim() ?? ""
+
+  if (!value) {
+    return false
+  }
+
+  if (value.length > MAX_COMPACT_SOURCE_LENGTH) {
+    return true
+  }
+
+  if (value.split(WORD_SEPARATOR_RE).filter(Boolean).length > MAX_COMPACT_SOURCE_WORDS) {
+    return true
+  }
+
+  return SENTENCE_PUNCTUATION_RE.test(value)
+}
+
 export type WordFamilyGroupKey = (typeof WORD_FAMILY_GROUP_ORDER)[number]
 
 export interface VocabularyCardItem extends Partial<Omit<VocabularyItem, "contextEntries" | "contextSentences" | "contextSentence" | "wordFamily">> {

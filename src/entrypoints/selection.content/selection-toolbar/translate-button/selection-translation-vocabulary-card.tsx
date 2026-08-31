@@ -3,6 +3,7 @@ import type { BackgroundStructuredObjectStreamSnapshot } from "@/types/backgroun
 import type { SelectionToolbarCustomActionOutputField } from "@/types/config/selection-toolbar"
 import type { VocabularyItem, VocabularyWordFamily, VocabularyWordFamilyEntry } from "@/types/vocabulary"
 import { i18n } from "#imports"
+import { isSentenceLevelSelection } from "@/components/vocabulary/vocabulary-card-data"
 import { VocabularyDetailCard } from "@/components/vocabulary/vocabulary-detail-card"
 import { CopyButton } from "../../components/copy-button"
 import { SpeakButton } from "../../components/speak-button"
@@ -249,6 +250,7 @@ export function SelectionTranslationVocabularyCard({
   })
   const extraFields = extractExtraFields(detailedExplanation)
   const isDetailLoading = Boolean(detailedExplanation?.isLoading)
+  const isSentenceSelection = isSentenceLevelSelection(selectionContent)
   const hasDefinition = Boolean(cardItem.definition?.trim())
   const sourceText = selectionContent?.trim() || cardItem.sourceText
   const showLoadingStatus = isTranslating || isDetailLoading
@@ -257,6 +259,7 @@ export function SelectionTranslationVocabularyCard({
     <div className="selection-translation-card" data-testid="selection-translation-vocabulary-card">
       <VocabularyDetailCard
         variant="popover"
+        compact={isSentenceSelection}
         copy={getCardCopy()}
         item={cardItem}
         extraFields={extraFields}
@@ -268,7 +271,7 @@ export function SelectionTranslationVocabularyCard({
           </>
         )}
         loading={showLoadingStatus}
-        showDefinition={hasDefinition || showLoadingStatus}
+        showDefinition={isSentenceSelection || hasDefinition || showLoadingStatus}
       />
     </div>
   )

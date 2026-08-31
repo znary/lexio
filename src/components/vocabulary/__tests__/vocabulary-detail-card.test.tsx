@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
+import { isSentenceLevelSelection } from "../vocabulary-card-data"
 import { VocabularyDetailCard } from "../vocabulary-detail-card"
 import { buildVocabularyWordFamilyMindMapModel } from "../vocabulary-word-family-mind-map"
 
@@ -330,5 +331,35 @@ describe("vocabularyDetailCard", () => {
     expect(screen.getByText(/Vercel Functions provision resources automatically/)).toBeInTheDocument()
     expect(screen.getByText("Vercel 函数会自动预配资源。")).toBeInTheDocument()
     expect(screen.queryByText(/资源堆断/)).toBeNull()
+  })
+
+  it("classifies sentence-level selections for the compact card layout", () => {
+    expect(isSentenceLevelSelection("capability")).toBe(false)
+    expect(isSentenceLevelSelection("granular quota controls")).toBe(false)
+    expect(isSentenceLevelSelection("Simple to Start, Powerful at Enterprise Scale.")).toBe(true)
+    expect(isSentenceLevelSelection("This is a long paragraph that exceeds the compact source length threshold comfortably for sure yes.")).toBe(true)
+    expect(isSentenceLevelSelection("")).toBe(false)
+    expect(isSentenceLevelSelection(null)).toBe(false)
+  })
+
+  it("renders compact sentence translations without word family, word chip, or redundant context", () => {
+    const { container } = render(
+      <VocabularyDetailCard
+        variant="popover"
+        compact
+        copy={{ ...copy, translation: "Translation" }}
+        item={{
+          sourceText: "Simple to Start, Powerful at Enterprise Scale.",
+          translatedText: "简单起步，企业级强大扩展。",
+        }}
+      />,
+    )
+
+    expect(screen.getByText("Simple to Start, Powerful at Enterprise Scale.")).toBeInTheDocument()
+    expect(screen.getByText("简单起步，企业级强大扩展。")).toBeInTheDocument()
+    expect(container.querySelector(".word-bank-detail__layout.has-family")).toBeNull()
+    expect(container.querySelector(".word-bank-meta")).toBeNull()
+    expect(container.querySelector(".detail-section h3")).toHaveTextContent("Translation")
+    expect(screen.queryByRole("heading", { name: /In context/ })).toBeNull()
   })
 })

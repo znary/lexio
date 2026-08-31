@@ -940,6 +940,7 @@ options:
       meaning: 释义
       translation: 译文
       details: 信息
+      viewDetails: 查看详情
       markMastered: 标记为已掌握
       unmarkMastered: 标记为学习中
   videoSubtitles:

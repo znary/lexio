@@ -1,5 +1,7 @@
 import type { VocabularyHighlightAnchorRect, VocabularyHoverPreview } from "../vocabulary-highlight-ui"
+import type { VocabularyItem } from "@/types/vocabulary"
 import { i18n } from "#imports"
+import { RiArrowRightSLine } from "@remixicon/react"
 import { useAtomValue } from "jotai"
 import { useLayoutEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -15,10 +17,12 @@ import {
 export function VocabularyHoverCard({
   preview,
   onCardRectChange,
+  onOpenDetail,
   onPointerEnter,
   onPointerLeave,
 }: {
   onCardRectChange?: (rect: VocabularyHighlightAnchorRect | null) => void
+  onOpenDetail?: (item: VocabularyItem, anchor: { x: number, y: number }) => void
   onPointerEnter?: () => void
   onPointerLeave?: () => void
   preview: VocabularyHoverPreview | null
@@ -77,6 +81,7 @@ export function VocabularyHoverCard({
   const rootLabel = i18n.t("options.vocabulary.hoverCard.root")
   const meaningLabel = i18n.t("options.vocabulary.hoverCard.meaning")
   const detailLabel = i18n.t("options.vocabulary.hoverCard.details")
+  const viewDetailsLabel = i18n.t("options.vocabulary.hoverCard.viewDetails")
   const isMastered = preview.item.masteredAt != null
   const masteryLabel = i18n.t(
     (isMastered
@@ -145,6 +150,22 @@ export function VocabularyHoverCard({
             }}
           />
         </div>
+
+        {onOpenDetail && (
+          <button
+            type="button"
+            className="inline-flex items-center self-start gap-0.5 text-xs font-medium text-muted-foreground transition-colors hover:text-popover-foreground"
+            onClick={() => {
+              onOpenDetail(preview.item, {
+                x: preview.anchorRect.left,
+                y: preview.anchorRect.top,
+              })
+            }}
+          >
+            <span>{viewDetailsLabel}</span>
+            <RiArrowRightSLine className="size-3.5" />
+          </button>
+        )}
       </div>
     </div>
   )

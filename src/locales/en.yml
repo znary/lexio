@@ -947,6 +947,7 @@ options:
       meaning: Meaning
       translation: Translation
       details: Details
+      viewDetails: View details
       markMastered: Mark as mastered
       unmarkMastered: Mark as learning again
   videoSubtitles:

@@ -234,6 +234,25 @@
   letter-spacing: 0;
 }
 
+.vocabulary-detail-card--popover.vocabulary-detail-card--compact .word-bank-detail__header h2 {
+  margin: 0 0 8px;
+  color: var(--vocabulary-card-muted);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.vocabulary-detail-card--popover.vocabulary-detail-card--compact .detail-section {
+  margin-top: 16px;
+}
+
+.vocabulary-detail-card--popover.vocabulary-detail-card--compact .detail-definition {
+  color: var(--vocabulary-card-text);
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.65;
+}
+
 .vocabulary-detail-card--popover .context-stack {
   display: grid;
   gap: 12px;
