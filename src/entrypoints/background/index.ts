@@ -32,7 +32,6 @@ import {
 import { setUpSubtitlesTranslationQueue, setUpWebPageTranslationQueue } from "./translation-queues"
 import { translationMessage } from "./translation-signal"
 import { setupTTSPlaybackMessageHandlers } from "./tts-playback"
-import { setupUninstallSurvey } from "./uninstall-survey"
 
 function getWebsiteOrigin(): string | null {
   try {
@@ -183,7 +182,6 @@ export default defineBackground({
     void setUpDatabaseCleanup()
     void setUpSidePanelBehavior()
     setUpConfigBackup()
-    void setupUninstallSurvey()
 
     proxyFetch()
     setupEdgeTTSMessageHandlers()

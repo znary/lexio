@@ -58,6 +58,10 @@ export function resolvePlatformApiUrl(): string {
     return "http://127.0.0.1:8787"
   }
 
+  if (hostname === "lexio.fromreviews.app") {
+    return "https://lexio-api.fromreviews.app"
+  }
+
   if (hostname.includes("platform-web") && hostname.endsWith(".workers.dev")) {
     return origin.replace("platform-web", "platform-api")
   }

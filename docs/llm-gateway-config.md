@@ -8,7 +8,7 @@
 
 ## 1. 一次说清：这个 Worker 是"OpenAI 兼容网关"
 
-- Worker 位置：`apps/platform-api`（`name: lexio-platform-api`，线上 `https://lexio-platform-api.lznwpu.workers.dev`）。
+- Worker 位置：`apps/platform-api`（`name: lexio-platform-api`，线上 `https://lexio-api.fromreviews.app`，原 `https://lexio-platform-api.lznwpu.workers.dev` 仍可用）。
 - 核心转发函数：`apps/platform-api/src/lib/ai.ts` 的 `forwardChatCompletions(env, body, plan, signal)`。
 - 它把收到的请求体**原样转发**到 `POST ${LLM_BASE_URL}/chat/completions`（OpenAI Chat Completions 协议），并**原样透传**上游的 Response（成功时直接返回，流式则透传 SSE）。
 - 认证头：同时设置 `Authorization: Bearer <LLM_API_KEY>` 与 `x-api-key: <LLM_API_KEY>`（兼容两类服务商）。
@@ -85,7 +85,7 @@ npx wrangler secret put LLM_API_KEY
 npx wrangler deploy
 
 # 4. 验证
-curl -s https://lexio-platform-api.lznwpu.workers.dev/health | jq .envDiagnostics
+curl -s https://lexio-api.fromreviews.app/health | jq .envDiagnostics
 # 期望 llmBaseUrl.configured=true, llmApiKey=true, llmModelConfigured=true, warnings=[]
 ```
 
@@ -104,6 +104,7 @@ curl -s https://lexio-platform-api.lznwpu.workers.dev/health | jq .envDiagnostic
 ## 9. 相关站点/其余说明
 
 - 扩展端路由无需改：托管 provider 固定指向平台 `/v1/translate`（文本）与 `/v1/llm`（结构化）。
+- 平台 web（word-bank / sign-in / pricing / extension-sync）线上 `https://lexio.fromreviews.app`，与原 `lexio-platform-web.lznwpu.workers.dev` 配套；API 线上 `https://lexio-api.fromreviews.app`。
 - worker 中 429/5xx 的退避重试在 `forwardChatCompletions` 内完成（§3 的 `LLM_MAX_RETRIES`）。
 - 页面"正文优先"翻译（正文先译、目录/导航延后）是扩展内容脚本逻辑，见
   `src/entrypoints/host.content/translation-control/page-translation.ts` 的 `computeTranslationPriorityDelayMs`，与本文的 LLM 网关无关。

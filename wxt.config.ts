@@ -6,7 +6,7 @@ const WXT_API_KEY_PATTERN = /^WXT_.*API_KEY/
 const ALLOWED_BUNDLED_API_KEYS = new Set([
   "WXT_POSTHOG_API_KEY",
 ])
-const DEFAULT_WEBSITE_URL = "https://lexio-platform-web.lznwpu.workers.dev"
+const DEFAULT_WEBSITE_URL = "https://lexio.fromreviews.app"
 
 function valueLooksLocal(urlLike: string | undefined): boolean {
   const value = urlLike?.trim()

@@ -1,4 +1,4 @@
-const DEFAULT_WEBSITE_URL = "https://lexio-platform-web.lznwpu.workers.dev"
+const DEFAULT_WEBSITE_URL = "https://lexio.fromreviews.app"
 
 export const WEBSITE_URL = import.meta.env.WXT_WEBSITE_URL || DEFAULT_WEBSITE_URL
 
