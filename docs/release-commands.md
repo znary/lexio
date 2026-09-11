@@ -168,7 +168,9 @@ $HOME/Library/Mobile Documents/com~apple~CloudDocs/lexio-chrome-mv3-时间标识
 
 ## 一个容易误会的命令
 
-根目录的 `pnpm release` 还在保留，但它只是给 Changesets 和 GitHub Actions 打 tag 用。
+根目录的 `pnpm release` 只做一件事：用 Changesets 打 tag，然后把 tag 推到远端。
+
+GitHub Actions 的发版流水线已经移除（原 `.github/workflows/release.yml`），所以打 tag、构建 zip、上传 GitHub Release 现在全部在本机手动完成。
 
 它不负责下面这些事：
 

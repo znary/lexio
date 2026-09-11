@@ -16,7 +16,7 @@ function buildHeaders(token, extraHeaders = {}) {
     "Accept": "application/vnd.github+json",
     "Authorization": `Bearer ${token}`,
     "Content-Type": "application/json",
-    "User-Agent": "read-frog-contributor-trust",
+    "User-Agent": "tupa-contributor-trust",
     ...extraHeaders,
   }
 }
