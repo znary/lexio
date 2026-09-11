@@ -159,7 +159,7 @@ export function WordBankPage() {
       try {
         const token = await getToken()
         if (!token) {
-          throw new Error("Could not read your Lexio session.")
+          throw new Error("Could not read your Tupa session.")
         }
 
         const nextItems = await getPlatformVocabularyItems(token)

@@ -1,8 +1,8 @@
 const DEFAULT_PLATFORM_API_URL = "https://lexio-api.fromreviews.app"
 
 export const MANAGED_CLOUD_PROVIDER_ID = "managed-cloud-default"
-export const MANAGED_CLOUD_PROVIDER_NAME = "Lexio Cloud"
-export const MANAGED_CLOUD_PROVIDER_DESCRIPTION = "Managed by your Lexio account."
+export const MANAGED_CLOUD_PROVIDER_NAME = "Tupa Cloud"
+export const MANAGED_CLOUD_PROVIDER_DESCRIPTION = "Managed by your Tupa account."
 
 export const PLATFORM_API_URL = import.meta.env.WXT_PLATFORM_API_URL || DEFAULT_PLATFORM_API_URL
 

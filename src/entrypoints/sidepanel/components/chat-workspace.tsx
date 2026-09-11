@@ -924,7 +924,7 @@ export function ChatWorkspace({
   let content = (
     <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
       <IconLoader2 className="size-4 animate-spin" />
-      Loading Lexio Cloud...
+      Loading Tupa Cloud...
     </div>
   )
 

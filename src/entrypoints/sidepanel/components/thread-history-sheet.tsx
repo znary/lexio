@@ -206,8 +206,8 @@ export function ThreadHistorySheet({
             <AlertDialogTitle>Delete this thread?</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingDeleteThread
-                ? `“${pendingDeleteThread.title}” will be removed from Lexio Cloud.`
-                : "This thread will be removed from Lexio Cloud."}
+                ? `“${pendingDeleteThread.title}” will be removed from Tupa Cloud.`
+                : "This thread will be removed from Tupa Cloud."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

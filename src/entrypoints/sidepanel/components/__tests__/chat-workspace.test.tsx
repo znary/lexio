@@ -353,7 +353,7 @@ describe("chatWorkspace", () => {
     await screen.findByText("Cached hello")
     expect(screen.getByText("Cached hello")).toBeInTheDocument()
     expect(screen.getByPlaceholderText("问任何问题")).toBeInTheDocument()
-    expect(screen.queryByText("Loading Lexio Cloud...")).not.toBeInTheDocument()
+    expect(screen.queryByText("Loading Tupa Cloud...")).not.toBeInTheDocument()
     expect(getSidepanelChatSnapshotMock).toHaveBeenCalledWith("user-1")
     expect(listPlatformChatThreadsMock).toHaveBeenCalledTimes(1)
 

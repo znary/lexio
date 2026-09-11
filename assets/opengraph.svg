@@ -31,7 +31,7 @@
     <path d="M112 69H184V127C184 137.493 175.493 146 165 146H112V69Z" fill="#08111D"/>
   </g>
 
-  <text x="274" y="170" fill="#F8FAFC" font-family="Helvetica, Arial, sans-serif" font-size="94" font-weight="800" letter-spacing="-4">Lexio</text>
+  <text x="274" y="170" fill="#F8FAFC" font-family="Helvetica, Arial, sans-serif" font-size="94" font-weight="800" letter-spacing="-4">Tupa</text>
   <text x="278" y="228" fill="#B7CCE4" font-family="Helvetica, Arial, sans-serif" font-size="28" font-weight="500">AI reading companion</text>
 
   <text x="88" y="340" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-size="58" font-weight="780" letter-spacing="-1.8">Understand while you read.</text>
@@ -41,7 +41,7 @@
     <rect width="348" height="238" rx="30" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.08)"/>
     <text x="28" y="56" fill="#F8FAFC" font-family="Helvetica, Arial, sans-serif" font-size="20" font-weight="700">Brand shift</text>
     <text x="28" y="104" fill="#C8D7EA" font-family="Helvetica, Arial, sans-serif" font-size="23" font-weight="600">One name</text>
-    <text x="28" y="136" fill="#E2ECF8" font-family="Helvetica, Arial, sans-serif" font-size="17" font-weight="500">Lexio across the app, docs, and visuals.</text>
+    <text x="28" y="136" fill="#E2ECF8" font-family="Helvetica, Arial, sans-serif" font-size="17" font-weight="500">Tupa across the app, docs, and visuals.</text>
     <text x="28" y="188" fill="#C8D7EA" font-family="Helvetica, Arial, sans-serif" font-size="23" font-weight="600">No mascot</text>
     <text x="28" y="220" fill="#E2ECF8" font-family="Helvetica, Arial, sans-serif" font-size="17" font-weight="500">Clean product geometry replaces the frog face.</text>
   </g>

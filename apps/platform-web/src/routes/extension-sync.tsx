@@ -80,7 +80,7 @@ export function ExtensionSyncPage() {
       await syncPlatformAuthToExtension(token, {
         id: user?.id,
         email: user?.primaryEmailAddress?.emailAddress ?? null,
-        name: user?.fullName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress ?? "Lexio user",
+        name: user?.fullName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress ?? "Tupa user",
         imageUrl: user?.imageUrl ?? null,
       })
 

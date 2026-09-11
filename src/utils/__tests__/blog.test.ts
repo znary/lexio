@@ -169,11 +169,11 @@ describe("bilibili helpers", () => {
   })
 
   it("returns null when the URL does not contain a bilibili video id", () => {
-    expect(buildBilibiliEmbedUrl("https://readfrog.app/blog")).toBeNull()
+    expect(buildBilibiliEmbedUrl("https://tupa.example.com/blog")).toBeNull()
   })
 
   it("returns null when the URL is not hosted on bilibili", () => {
-    expect(extractBilibiliVideoId("https://readfrog.app/blog?bvid=BV1JoAszwEfF")).toBeNull()
+    expect(extractBilibiliVideoId("https://tupa.example.com/blog?bvid=BV1JoAszwEfF")).toBeNull()
   })
 })
 

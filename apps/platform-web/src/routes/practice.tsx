@@ -895,7 +895,7 @@ export function PracticePage() {
         setLoadError("")
         const token = await getToken()
         if (!token) {
-          throw new Error("Could not read your Lexio session.")
+          throw new Error("Could not read your Tupa session.")
         }
 
         const nextSession = await getPlatformPracticeSession(token)
@@ -1313,7 +1313,7 @@ export function PracticePage() {
   async function getRequiredToken(): Promise<string> {
     const token = await getToken()
     if (!token) {
-      throw new Error("Could not read your Lexio session.")
+      throw new Error("Could not read your Tupa session.")
     }
 
     return token

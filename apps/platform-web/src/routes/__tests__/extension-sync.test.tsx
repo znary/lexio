@@ -82,9 +82,9 @@ describe("extension sync page", () => {
     renderWithSitePreferences(<ExtensionSyncPage />)
 
     expect(syncPlatformAuthToExtensionMock).not.toHaveBeenCalled()
-    expect(screen.queryByText("The extension can add saved words and definitions to the same Lexio account you are using here.")).toBeNull()
+    expect(screen.queryByText("The extension can add saved words and definitions to the same Tupa account you are using here.")).toBeNull()
     expect(screen.queryByText("The extension receives your display name, email address, and avatar for account identification.")).toBeNull()
-    expect(screen.queryByText("The extension receives a fresh Lexio session token so it can act on your behalf after you approve.")).toBeNull()
+    expect(screen.queryByText("The extension receives a fresh Tupa session token so it can act on your behalf after you approve.")).toBeNull()
 
     fireEvent.click(screen.getByRole("button", { name: "Authorize Access" }))
 

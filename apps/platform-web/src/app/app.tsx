@@ -93,7 +93,7 @@ function SiteHeader({ pathname, variant }: { pathname: string, variant: "hero" |
     <header className="site-header">
       <div className="site-header__inner">
         <a className="brand-link" href={APP_ROUTES.home}>
-          <span className="brand-wordmark">Lexio</span>
+          <span className="brand-wordmark">Tupa</span>
         </a>
 
         <nav className="site-nav" aria-label={copy.common.navigation.wordBank}>

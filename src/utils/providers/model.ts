@@ -46,7 +46,7 @@ async function getLanguageModelById(providerId: string) {
 
   const session = await getPlatformAuthSession()
   if (!session?.token) {
-    throw new Error("No Lexio account token found. Sign in again.")
+    throw new Error("No Tupa account token found. Sign in again.")
   }
 
   return createOpenAICompatible({

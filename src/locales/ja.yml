@@ -1,7 +1,6 @@
-name: Lexio
-extName: Lexio - オープンソースインビジブル翻訳
-extDescription: Lexioは、あらゆるウェブサイトから言語を深く学ぶために設計されたオープンソースのブラウザ拡張機能です。
-uninstallSurveyUrl: https://tally.so/r/nPK6Ob
+name: Tupa
+extName: Tupa - オープンソースインビジブル翻訳
+extDescription: Tupaは、あらゆるウェブサイトから言語を深く学ぶために設計されたオープンソースのブラウザ拡張機能です。
 dataTypes:
   string: テキスト
   number: 数値
@@ -26,10 +25,8 @@ popup:
   translateParagraph: 段落を翻訳
   hub:
     tooltip: 複数の翻訳モデルで同時にテキストを翻訳
-  discord:
-    tooltip: Discordに参加して開発者とつながり、新機能を先行体験しましょう
   blog:
-    notification: Lexioの最新情報
+    notification: Tupaの最新情報
   aiSmartContext: AI スマートコンテキスト
   aiSmartContextDescription: ウェブページのコンテキストを使用して翻訳品質を向上させます。LLM翻訳プロバイダーが必要です。
   more:
@@ -43,7 +40,7 @@ popup:
     tutorial: 使い方ガイド
 platform:
   quickAccess:
-    title: Lexio Cloud
+    title: Tupa Cloud
     accountHint: 一度サインインすると、設定、単語、契約プランを同期できます。
     menuLabel: アカウントメニューを開く
     status:
@@ -210,7 +207,7 @@ options:
     title: 一般
     quickSettings:
       cloud:
-        title: Lexio Cloud
+        title: Tupa Cloud
         description: チャットを始める前に、クラウドアカウントとプランを管理します。
       reading:
         title: 読解
@@ -308,7 +305,7 @@ options:
     floatingButton:
       globalToggle:
         title: フローティングボタンを有効化
-        description: ウェブページにフローティングボタンを表示し、Lexio機能に素早くアクセス
+        description: ウェブページにフローティングボタンを表示し、Tupa機能に素早くアクセス
       closeMenu:
         disableForSite: このサイトで無効化
         disableGlobally: グローバルで無効化
@@ -407,14 +404,14 @@ options:
             title: Notebase 接続
             description: このアクションの構造化された結果をリモート Notebase に保存します。
             loginRequiredTitle: Notebase を設定するにはログインが必要です
-            loginRequiredDescription: notebase を選択したりマッピングを編集したりする前に、Lexio にログインしてください。
+            loginRequiredDescription: notebase を選択したりマッピングを編集したりする前に、Tupa にログインしてください。
             loginAction: ログイン
             tableLabel: Notebase
             tablePlaceholder: notebase を選択
             tableClearOption: notebase を接続しない
             refreshAction: 更新
             emptyTitle: Notebase がまだありません
-            emptyDescription: Lexio で notebase を作成してから、ここに戻ってフィールドをマッピングしてください。
+            emptyDescription: Tupa で notebase を作成してから、ここに戻ってフィールドをマッピングしてください。
             openNotebaseAction: Notebase を開く
             betaLockedTitle: このアカウントは Notebase ベータ対象外です
             betaLockedDescription: このアクション設定は保持できますが、Notebase の選択と結果の同期は現在一部のベータアカウントのみに提供されています。
@@ -494,8 +491,6 @@ options:
     personalizedPrompts:
       title: 個人化プロンプト
       description: 異なるタイプのプロンプトをカスタマイズすることで、翻訳時にプロンプトタイプを自ら調整できます。プロンプトとは、ユーザーがLLMに送信するテキストを指します。
-      communityPrompts: コミュニティからプロンプトを取得・共有
-      communityPromptsUrl: https://github.com/mengxi-ream/read-frog/discussions/821
       addPrompt: プロンプトを追加
       default: デフォルト
       importSuccess: インポート成功
@@ -632,7 +627,7 @@ options:
       fallback: フォールバック
       selectPlaceholder: ボイスを選択
       preview: 試聴
-      previewSample: Lexio からこんにちは！朗読するときはこのように聞こえます。
+      previewSample: Tupa からこんにちは！朗読するときはこのように聞こえます。
     languageVoice:
       label: 言語別ボイス
       reset: デフォルトにリセット
@@ -657,12 +652,12 @@ options:
   config:
     title: 設定
     about:
-      title: Lexio について
-      description: Lexio は 2025 年 4 月に生まれました
-      mission: Lexio は、AI 時代における質の高い教育機会への平等なアクセスを広げるため、語学学習、医学、その他の知識集約型分野で、実際の教師に近い学習体験を手頃な価格で提供することを目指しています。
+      title: Tupa について
+      description: Tupa は 2025 年 4 月に生まれました
+      mission: Tupa は、AI 時代における質の高い教育機会への平等なアクセスを広げるため、語学学習、医学、その他の知識集約型分野で、実際の教師に近い学習体験を手頃な価格で提供することを目指しています。
       analytics:
         title: ユーザー体験の改善に協力する
-        tooltip: 有効にすると、Lexio は匿名の利用シグナルを送信し、機能の安定性確認、性能や UX の改善、今後優先すべき機能の判断に役立てます。
+        tooltip: 有効にすると、Tupa は匿名の利用シグナルを送信し、機能の安定性確認、性能や UX の改善、今後優先すべき機能の判断に役立てます。
     sync:
       title: 手動設定同期
       description: 手動で設定をインポート・エクスポート
@@ -671,7 +666,7 @@ options:
       importSuccess: 設定のインポートが完了しました
       exportSuccess: 設定のエクスポートが完了しました
       importError: インポートに失敗しました
-      versionTooNew: インポートされた設定のバージョンが新しいため、Lexioを最新バージョンにアップグレードしてください
+      versionTooNew: インポートされた設定のバージョンが新しいため、Tupaを最新バージョンにアップグレードしてください
       migrationError: 移行に失敗しました
       validationError: 設定の検証に失敗しました
       exportOptions:
@@ -903,7 +898,7 @@ action:
   saveToNotebaseSaving: 保存中...
   saveToNotebaseSuccess: Notebase に保存しました
   saveToNotebaseFailed: Notebase への保存に失敗しました
-  saveToNotebaseLoginRequired: Notebase に保存するには Lexio にログインしてください
+  saveToNotebaseLoginRequired: Notebase に保存するには Tupa にログインしてください
   saveToNotebaseBetaRequired: このアカウントはまだ Notebase ベータに参加していません
   saveToNotebaseTableUnavailable: 選択した Notebase は利用できなくなりました
   saveToNotebaseConnectionInvalid: この Notebase 接続は古くなっています。Custom AI Actions で更新し、マッピングを修正してください。
@@ -935,7 +930,7 @@ subtitles:
   actions:
     downloadSource: 元字幕をダウンロード
   state:
-    loading: Lexio 字幕読み込み中
+    loading: Tupa 字幕読み込み中
     error: エラーが発生しました
   errors:
     http429: 429 YouTube字幕APIへのリクエストが多すぎます。しばらくしてから再試行してください

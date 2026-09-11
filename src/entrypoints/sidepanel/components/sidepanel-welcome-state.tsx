@@ -26,7 +26,7 @@ export function SidepanelWelcomeState() {
 
         <div className="mt-4 space-y-2">
           <p className="text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            Lexio Cloud
+            Tupa Cloud
           </p>
           <h2 className="text-xl font-semibold tracking-tight text-foreground">
             The sidebar is ready.

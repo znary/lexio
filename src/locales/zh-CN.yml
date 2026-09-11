@@ -1,7 +1,6 @@
-name: Lexio
-extName: Lexio - 沉浸式翻译与单词同步
-extDescription: Lexio是一款浏览器插件，用来做沉浸式翻译、单词短句收藏，以及账号多端同步。
-uninstallSurveyUrl: https://tally.so/r/3E9XDL
+name: Tupa
+extName: Tupa - 沉浸式翻译与单词同步
+extDescription: Tupa是一款浏览器插件，用来做沉浸式翻译、单词短句收藏，以及账号多端同步。
 dataTypes:
   string: 文本
   number: 数字
@@ -28,10 +27,8 @@ popup:
   translateParagraph: 来翻译段落
   hub:
     tooltip: 一次性调用多个翻译模型翻译文本
-  discord:
-    tooltip: 加入 Discord 与开发者交流，抢先体验新功能
   blog:
-    notification: 陪读蛙更新动态
+    notification: Tupa 更新动态
   aiSmartContext: AI 智能上下文
   aiSmartContextDescription: 开启托管 AI 分析后，会结合网页上下文提升翻译效果。
   more:
@@ -41,7 +38,7 @@ popup:
     tutorial: 使用教程
 platform:
   quickAccess:
-    title: Lexio Cloud
+    title: Tupa Cloud
     accountHint: 登录后可同步设置、词汇和你的托管套餐。
     menuLabel: 打开账户菜单
     status:
@@ -209,7 +206,7 @@ options:
     title: 通用
     quickSettings:
       cloud:
-        title: Lexio Cloud
+        title: Tupa Cloud
         description: 在开始聊天前管理你的云账户和套餐。
       reading:
         title: 常用翻译设置
@@ -307,7 +304,7 @@ options:
     floatingButton:
       globalToggle:
         title: 启用悬浮按钮
-        description: 在网页上显示悬浮按钮，快速访问陪读蛙功能
+        description: 在网页上显示悬浮按钮，快速访问 Tupa 功能
       closeMenu:
         disableForSite: 禁用此网站
         disableGlobally: 全局禁用
@@ -406,14 +403,14 @@ options:
             title: 笔记库连接
             description: 将这个指令的结构化结果保存到远程笔记库。
             loginRequiredTitle: 登录后才能配置笔记库
-            loginRequiredDescription: 先在 Lexio 登录，然后再选择笔记库和编辑映射。
+            loginRequiredDescription: 先在 Tupa 登录，然后再选择笔记库和编辑映射。
             loginAction: 去登录
             tableLabel: 笔记库
             tablePlaceholder: 选择一个笔记库
             tableClearOption: 不连接笔记库
             refreshAction: 刷新
             emptyTitle: 还没有笔记库
-            emptyDescription: 先去 Lexio 创建一个笔记库，再回来映射字段。
+            emptyDescription: 先去 Tupa 创建一个笔记库，再回来映射字段。
             openNotebaseAction: 打开笔记库
             betaLockedTitle: 当前账号尚未加入 Notebase Beta
             betaLockedDescription: 你可以继续保留当前 action 配置，但选择笔记库和同步结果目前仅对部分 Beta 账号开放。
@@ -581,7 +578,7 @@ options:
     title: 翻译
     pageLanguageDetection:
       title: 页面语言识别
-      description: 在翻译当前网页前，选择 Lexio 识别页面语言的方式。
+      description: 在翻译当前网页前，选择 Tupa 识别页面语言的方式。
       mode:
         basic: 基础
         llm: LLM
@@ -620,8 +617,6 @@ options:
     personalizedPrompts:
       title: 个性化 Prompt
       description: 自定义不同类型的 Prompt，可以在翻译时自行调整 Prompt 类型。Prompt 表示以用户身份发送给 LLM 的文本。
-      communityPrompts: 获取或分享社区 Prompt
-      communityPromptsUrl: https://github.com/mengxi-ream/read-frog/discussions/820
       addPrompt: 添加 Prompt
       default: 通用
       importSuccess: 导入成功
@@ -758,7 +753,7 @@ options:
       fallback: 兜底
       selectPlaceholder: 请选择一个声音
       preview: 试听
-      previewSample: 来自 Lexio 的问候！这是我朗读时的声音。
+      previewSample: 来自 Tupa 的问候！这是我朗读时的声音。
     languageVoice:
       label: 语言语音
       reset: 重置为默认
@@ -784,11 +779,11 @@ options:
     title: 配置
     about:
       title: 关于
-      description: Lexio 出生于 2025 年 4 月
-      mission: Lexio 致力于在 AI 时代扩大高质量教育机会的平等可及性，通过更低成本地提供尽可能接近真人教师的学习体验，覆盖语言学习、医学以及其他知识密集型领域。
+      description: Tupa 出生于 2025 年 4 月
+      mission: Tupa 致力于在 AI 时代扩大高质量教育机会的平等可及性，通过更低成本地提供尽可能接近真人教师的学习体验，覆盖语言学习、医学以及其他知识密集型领域。
       analytics:
         title: 帮助改进用户体验
-        tooltip: 开启后，Lexio 会发送匿名的产品使用信号，用于验证功能是否稳定、优化性能与交互细节，并帮助我们决定接下来优先投入的方向。
+        tooltip: 开启后，Tupa 会发送匿名的产品使用信号，用于验证功能是否稳定、优化性能与交互细节，并帮助我们决定接下来优先投入的方向。
     sync:
       title: 手动配置同步
       description: 手动导入和导出您的配置设置
@@ -797,7 +792,7 @@ options:
       importSuccess: 配置导入成功
       exportSuccess: 配置导出成功
       importError: 导入失败
-      versionTooNew: 导入的配置版本较新，请升级 Lexio 到最新版本
+      versionTooNew: 导入的配置版本较新，请升级 Tupa 到最新版本
       migrationError: 迁移失败
       validationError: 配置验证失败
       exportOptions:
@@ -1081,7 +1076,7 @@ action:
   saveToNotebaseSaving: 保存中...
   saveToNotebaseSuccess: 已保存到笔记库
   saveToNotebaseFailed: 保存到笔记库失败
-  saveToNotebaseLoginRequired: 请先在 Lexio 登录后再保存到笔记库
+  saveToNotebaseLoginRequired: 请先在 Tupa 登录后再保存到笔记库
   saveToNotebaseBetaRequired: 当前账号尚未加入 Notebase Beta
   saveToNotebaseTableUnavailable: 选中的笔记库已不可用
   saveToNotebaseConnectionInvalid: 当前笔记库连接已经过期，请到 Custom AI Actions 中刷新并修复映射
@@ -1113,7 +1108,7 @@ subtitles:
   actions:
     downloadSource: 下载原字幕
   state:
-    loading: Lexio 字幕加载中
+    loading: Tupa 字幕加载中
     error: 发生错误
   errors:
     http429: 429 youtube 字幕接口请求次数过多，请稍后再试

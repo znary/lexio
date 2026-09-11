@@ -1,7 +1,6 @@
-name: Lexio
-extName: Lexio - Иммерсивный переводчик с открытым исходным кодом
-extDescription: Lexio — расширение браузера с открытым исходным кодом, которое поможет вам глубоко изучать языки на любом веб-сайте.
-uninstallSurveyUrl: https://tally.so/r/nPK6Ob
+name: Tupa
+extName: Tupa - Иммерсивный переводчик с открытым исходным кодом
+extDescription: Tupa — расширение браузера с открытым исходным кодом, которое поможет вам глубоко изучать языки на любом веб-сайте.
 dataTypes:
   string: Текст
   number: Число
@@ -26,10 +25,8 @@ popup:
   translateParagraph: для перевода абзаца
   hub:
     tooltip: Переводите текст несколькими моделями одновременно
-  discord:
-    tooltip: Присоединяйтесь к Discord, чтобы связаться с разработчиками и получить ранний доступ к новым функциям
   blog:
-    notification: Что нового в Lexio
+    notification: Что нового в Tupa
   aiSmartContext: Умный контекст ИИ
   aiSmartContextDescription: Использует контекст веб-страницы для улучшения качества перевода. Требуется LLM-провайдер перевода.
   more:
@@ -43,7 +40,7 @@ popup:
     tutorial: Руководство
 platform:
   quickAccess:
-    title: Lexio Cloud
+    title: Tupa Cloud
     accountHint: Войдите один раз, чтобы синхронизировать настройки, словарь и свой тариф.
     menuLabel: Открыть меню аккаунта
     status:
@@ -210,7 +207,7 @@ options:
     title: Общие
     quickSettings:
       cloud:
-        title: Lexio Cloud
+        title: Tupa Cloud
         description: Управляйте облачным аккаунтом и тарифом перед началом чата.
       reading:
         title: Чтение
@@ -308,7 +305,7 @@ options:
     floatingButton:
       globalToggle:
         title: Включить плавающую кнопку
-        description: Отображать плавающую кнопку на веб-страницах для быстрого доступа к функциям Lexio
+        description: Отображать плавающую кнопку на веб-страницах для быстрого доступа к функциям Tupa
       closeMenu:
         disableForSite: Отключить для этого сайта
         disableGlobally: Отключить глобально
@@ -407,14 +404,14 @@ options:
             title: Подключение Notebase
             description: Сохранить структурированные результаты этого действия в удалённую Notebase.
             loginRequiredTitle: Войдите, чтобы настроить Notebase
-            loginRequiredDescription: Войдите на Lexio, прежде чем выбирать notebase или редактировать сопоставления.
+            loginRequiredDescription: Войдите на Tupa, прежде чем выбирать notebase или редактировать сопоставления.
             loginAction: Войти
             tableLabel: Notebase
             tablePlaceholder: Выберите notebase
             tableClearOption: Не подключать notebase
             refreshAction: Обновить
             emptyTitle: Notebase пока нет
-            emptyDescription: Создайте notebase на Lexio, затем вернитесь сюда и сопоставьте поля.
+            emptyDescription: Создайте notebase на Tupa, затем вернитесь сюда и сопоставьте поля.
             openNotebaseAction: Открыть Notebase
             betaLockedTitle: Этот аккаунт ещё не участвует в beta Notebase
             betaLockedDescription: Вы можете сохранить текущую настройку action, но выбор Notebase и синхронизация результатов пока доступны только выбранным beta-аккаунтам.
@@ -494,8 +491,6 @@ options:
     personalizedPrompts:
       title: Персонализированные промпты
       description: Настройка различных типов промптов позволяет вам самостоятельно изменять тип промпта во время перевода. Промпт — это текст, который пользователь отправляет LLM.
-      communityPrompts: Получайте или делитесь промптами с сообществом
-      communityPromptsUrl: https://github.com/mengxi-ream/read-frog/discussions/821
       addPrompt: Добавить промпт
       default: По умолчанию
       importSuccess: Импорт успешен
@@ -632,7 +627,7 @@ options:
       fallback: Резервный
       selectPlaceholder: Выберите голос
       preview: Предпросмотр
-      previewSample: Привет от Lexio! Так я буду звучать при чтении вслух.
+      previewSample: Привет от Tupa! Так я буду звучать при чтении вслух.
     languageVoice:
       label: Голос для языка
       reset: Сбросить на значение по умолчанию
@@ -658,11 +653,11 @@ options:
     title: Конфигурация
     about:
       title: О приложении
-      description: Lexio появился в апреле 2025 года
-      mission: Lexio стремится расширить равный доступ к качественному образованию в эпоху ИИ, делая обучение, максимально похожее на занятия с настоящим преподавателем, доступным по цене в языках, медицине и других знанияемких областях.
+      description: Tupa появился в апреле 2025 года
+      mission: Tupa стремится расширить равный доступ к качественному образованию в эпоху ИИ, делая обучение, максимально похожее на занятия с настоящим преподавателем, доступным по цене в языках, медицине и других знанияемких областях.
       analytics:
         title: Помочь улучшить пользовательский опыт
-        tooltip: Когда параметр включен, Lexio отправляет анонимные сигналы об использовании продукта, чтобы мы могли проверять надежность функций, улучшать производительность и UX-детали, а также понимать, что развивать дальше в первую очередь.
+        tooltip: Когда параметр включен, Tupa отправляет анонимные сигналы об использовании продукта, чтобы мы могли проверять надежность функций, улучшать производительность и UX-детали, а также понимать, что развивать дальше в первую очередь.
     sync:
       title: Ручная синхронизация конфигурации
       description: Ручной импорт и экспорт настроек конфигурации
@@ -671,7 +666,7 @@ options:
       importSuccess: Конфигурация успешно импортирована
       exportSuccess: Конфигурация успешно экспортирована
       importError: Ошибка импорта
-      versionTooNew: Версия импортированной конфигурации новее, пожалуйста, обновите Lexio до последней версии
+      versionTooNew: Версия импортированной конфигурации новее, пожалуйста, обновите Tupa до последней версии
       migrationError: Ошибка миграции
       validationError: Ошибка валидации конфигурации
       exportOptions:
@@ -903,7 +898,7 @@ action:
   saveToNotebaseSaving: Сохранение...
   saveToNotebaseSuccess: Сохранено в Notebase
   saveToNotebaseFailed: Не удалось сохранить в Notebase
-  saveToNotebaseLoginRequired: Войдите на Lexio, чтобы сохранить в Notebase
+  saveToNotebaseLoginRequired: Войдите на Tupa, чтобы сохранить в Notebase
   saveToNotebaseBetaRequired: Для этого аккаунта beta-доступ к Notebase пока не включён
   saveToNotebaseTableUnavailable: Выбранная Notebase больше недоступна
   saveToNotebaseConnectionInvalid: Это подключение Notebase устарело. Обновите его в Custom AI Actions и исправьте сопоставления.
@@ -935,7 +930,7 @@ subtitles:
   actions:
     downloadSource: Скачать исходные субтитры
   state:
-    loading: Lexio загрузка субтитров
+    loading: Tupa загрузка субтитров
     error: Произошла ошибка
   errors:
     http429: 429 Слишком много запросов к API YouTube субтитров, пожалуйста, попробуйте снова позже

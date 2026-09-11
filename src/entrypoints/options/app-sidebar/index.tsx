@@ -1,7 +1,7 @@
 import { i18n } from "#imports"
 import { IconSearch } from "@tabler/icons-react"
 import { useSetAtom } from "jotai"
-import lexioLogo from "@/assets/icons/lexio.svg"
+import lexioLogo from "@/assets/icons/lexio.png"
 import {
   InputGroup,
   InputGroupAddon,

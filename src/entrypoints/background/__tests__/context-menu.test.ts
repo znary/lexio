@@ -65,7 +65,7 @@ describe("background context menu", () => {
     queueSidePanelChatRequestMock.mockResolvedValue(undefined)
 
     i18n.t = vi.fn((key: string) => ({
-      "name": "Lexio",
+      "name": "Tupa",
       "contextMenu.translate": "Translate this page",
       "contextMenu.summarizeCurrentPage": "Summarize this page",
       "contextMenu.translateSelection": "Translate selected text",
@@ -74,7 +74,7 @@ describe("background context menu", () => {
     })[key] ?? key) as typeof i18n.t
   })
 
-  it("creates one Lexio submenu and toggles child items by context later", async () => {
+  it("creates one Tupa submenu and toggles child items by context later", async () => {
     ensureInitializedConfigMock.mockResolvedValue(createConfig(true))
 
     const {
@@ -91,7 +91,7 @@ describe("background context menu", () => {
     expect(browser.contextMenus.removeAll).toHaveBeenCalledOnce()
     expect(browser.contextMenus.create).toHaveBeenNthCalledWith(1, {
       id: MENU_ID_ROOT,
-      title: "Lexio",
+      title: "Tupa",
       contexts: ["page", "selection"],
     })
     expect(browser.contextMenus.create).toHaveBeenNthCalledWith(2, {

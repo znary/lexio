@@ -19,7 +19,7 @@ vi.mock("../../../components/page-layout", () => ({
 }))
 
 vi.mock("@/components/platform/platform-quick-access", () => ({
-  PlatformQuickAccess: () => <div>Lexio Cloud</div>,
+  PlatformQuickAccess: () => <div>Tupa Cloud</div>,
 }))
 
 vi.mock("../../../../popup/components/node-translation-hotkey-selector", () => ({

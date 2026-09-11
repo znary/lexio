@@ -18,15 +18,6 @@ export function PersonalizedPrompts() {
       description={(
         <p>
           {i18n.t("options.translation.personalizedPrompts.description")}
-          {" "}
-          <a
-            href={i18n.t("options.translation.personalizedPrompts.communityPromptsUrl")}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="text-link hover:underline"
-          >
-            {i18n.t("options.translation.personalizedPrompts.communityPrompts")}
-          </a>
         </p>
       )}
     />

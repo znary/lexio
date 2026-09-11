@@ -10,8 +10,8 @@ vi.mock("#imports", () => ({
   },
 }))
 
-vi.mock("@/assets/icons/lexio.svg", () => ({
-  default: "lexio.svg",
+vi.mock("@/assets/icons/lexio.png", () => ({
+  default: "lexio.png",
 }))
 
 vi.mock("@/components/ui/base-ui/input-group", () => ({

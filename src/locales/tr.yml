@@ -1,7 +1,6 @@
-name: Lexio
-extName: Lexio - Açık Kaynak Sürükleyici Çeviri
-extDescription: Lexio, herhangi bir web sitesinden dilleri derinlemesine öğrenmenize yardımcı olmak için tasarlanmış açık kaynaklı bir tarayıcı uzantısıdır.
-uninstallSurveyUrl: https://tally.so/r/nPK6Ob
+name: Tupa
+extName: Tupa - Açık Kaynak Sürükleyici Çeviri
+extDescription: Tupa, herhangi bir web sitesinden dilleri derinlemesine öğrenmenize yardımcı olmak için tasarlanmış açık kaynaklı bir tarayıcı uzantısıdır.
 dataTypes:
   string: Metin
   number: Sayı
@@ -26,10 +25,8 @@ popup:
   translateParagraph: paragrafı çevirmek için
   hub:
     tooltip: Birden fazla çeviri modeliyle aynı anda metin çevirin
-  discord:
-    tooltip: Geliştiricilerle bağlantı kurmak ve yeni özelliklere erken erişim sağlamak için Discord'a katılın
   blog:
-    notification: Lexio'da yenilikler
+    notification: Tupa'da yenilikler
   aiSmartContext: AI Akıllı Bağlam
   aiSmartContextDescription: Çeviri kalitesini artırmak için web sayfası bağlamını kullanır. LLM çeviri sağlayıcısı gerektirir.
   more:
@@ -43,7 +40,7 @@ popup:
     tutorial: Rehber
 platform:
   quickAccess:
-    title: Lexio Cloud
+    title: Tupa Cloud
     accountHint: Ayarları, kelimeleri ve planını eşitlemek için bir kez giriş yap.
     menuLabel: Hesap menüsünü aç
     status:
@@ -210,7 +207,7 @@ options:
     title: Genel
     quickSettings:
       cloud:
-        title: Lexio Cloud
+        title: Tupa Cloud
         description: Sohbete başlamadan önce bulut hesabını ve planını yönet.
       reading:
         title: Okuma
@@ -308,7 +305,7 @@ options:
     floatingButton:
       globalToggle:
         title: Yüzen Butonu Etkinleştir
-        description: Lexio özelliklerine hızlı erişim için web sayfalarında yüzen butonu görüntüle
+        description: Tupa özelliklerine hızlı erişim için web sayfalarında yüzen butonu görüntüle
       closeMenu:
         disableForSite: Bu site için devre dışı bırak
         disableGlobally: Genel olarak devre dışı bırak
@@ -407,14 +404,14 @@ options:
             title: Notebase Bağlantısı
             description: Bu eylemin yapılandırılmış sonuçlarını uzak bir Notebase'e kaydedin.
             loginRequiredTitle: Notebase yapılandırmak için giriş yapın
-            loginRequiredDescription: notebase seçmeden veya eşlemeleri düzenlemeden önce Lexio'te oturum açın.
+            loginRequiredDescription: notebase seçmeden veya eşlemeleri düzenlemeden önce Tupa'da oturum açın.
             loginAction: Giriş yap
             tableLabel: Notebase
             tablePlaceholder: Bir notebase seçin
             tableClearOption: Notebase bağlama
             refreshAction: Yenile
             emptyTitle: Henüz Notebase yok
-            emptyDescription: Lexio'te bir notebase oluşturun, sonra alanları eşlemek için buraya dönün.
+            emptyDescription: Tupa'da bir notebase oluşturun, sonra alanları eşlemek için buraya dönün.
             openNotebaseAction: Notebase'i Aç
             betaLockedTitle: Bu hesap Notebase beta programında değil
             betaLockedDescription: Bu action yapılandırmasını koruyabilirsiniz, ancak Notebase seçimi ve sonuç senkronizasyonu şimdilik yalnızca seçili beta hesapları için açık.
@@ -494,8 +491,6 @@ options:
     personalizedPrompts:
       title: Kişiselleştirilmiş Promptlar
       description: Farklı türde Promptları özelleştirmek, çeviri sırasında Prompt türünü kendiniz ayarlamanıza olanak tanır. Prompt, kullanıcının LLM'ye gönderdiği metni temsil eder.
-      communityPrompts: Topluluktan prompt al veya paylaş
-      communityPromptsUrl: https://github.com/mengxi-ream/read-frog/discussions/821
       addPrompt: Prompt Ekle
       default: Varsayılan
       importSuccess: İçe Aktarma Başarılı
@@ -632,7 +627,7 @@ options:
       fallback: Yedek
       selectPlaceholder: Bir ses seçin
       preview: Önizleme
-      previewSample: Lexio'dan merhaba! Yüksek sesle okurken böyle ses çıkaracağım.
+      previewSample: Tupa'dan merhaba! Yüksek sesle okurken böyle ses çıkaracağım.
     languageVoice:
       label: Dil Sesi
       reset: Varsayılana Sıfırla
@@ -658,11 +653,11 @@ options:
     title: Yapılandırma
     about:
       title: Hakkında
-      description: Lexio Nisan 2025'te doğdu
-      mission: Lexio, yapay zeka çağında yüksek kaliteli eğitime daha eşit erişimi genişletmek için, dil öğrenimi, tıp ve bilgi yoğun diğer alanlarda gerçek bir öğretmene daha yakın hissettiren öğrenme deneyimlerini daha ulaşılabilir maliyetlerle sunmayı hedefler.
+      description: Tupa Nisan 2025'te doğdu
+      mission: Tupa, yapay zeka çağında yüksek kaliteli eğitime daha eşit erişimi genişletmek için, dil öğrenimi, tıp ve bilgi yoğun diğer alanlarda gerçek bir öğretmene daha yakın hissettiren öğrenme deneyimlerini daha ulaşılabilir maliyetlerle sunmayı hedefler.
       analytics:
         title: Kullanıcı deneyimini geliştirmemize yardımcı ol
-        tooltip: Açık olduğunda Lexio, özelliklerin güvenilir çalıştığını doğrulamak, performansı ve UX ayrıntılarını iyileştirmek ve sıradaki önceliklerimizi belirlemek için anonim kullanım sinyalleri gönderir.
+        tooltip: Açık olduğunda Tupa, özelliklerin güvenilir çalıştığını doğrulamak, performansı ve UX ayrıntılarını iyileştirmek ve sıradaki önceliklerimizi belirlemek için anonim kullanım sinyalleri gönderir.
     sync:
       title: Manuel Yapılandırma Senkronizasyonu
       description: Yapılandırma ayarlarınızı manuel olarak içe ve dışa aktarın
@@ -671,7 +666,7 @@ options:
       importSuccess: Yapılandırma başarıyla içe aktarıldı
       exportSuccess: Yapılandırma başarıyla dışa aktarıldı
       importError: İçe aktarma başarısız
-      versionTooNew: İçe aktarılan yapılandırma sürümü daha yeni, lütfen Lexio'u en son sürüme yükseltin
+      versionTooNew: İçe aktarılan yapılandırma sürümü daha yeni, lütfen Tupa'yı en son sürüme yükseltin
       migrationError: Geçiş başarısız
       validationError: Yapılandırma doğrulaması başarısız
       exportOptions:
@@ -903,7 +898,7 @@ action:
   saveToNotebaseSaving: Kaydediliyor...
   saveToNotebaseSuccess: Notebase'e kaydedildi
   saveToNotebaseFailed: Notebase'e kaydetme başarısız oldu
-  saveToNotebaseLoginRequired: Notebase'e kaydetmek için Lexio'te oturum açın
+  saveToNotebaseLoginRequired: Notebase'e kaydetmek için Tupa'da oturum açın
   saveToNotebaseBetaRequired: Bu hesap henüz Notebase beta erişimine sahip değil
   saveToNotebaseTableUnavailable: Seçilen Notebase artık kullanılamıyor
   saveToNotebaseConnectionInvalid: Bu Notebase bağlantısı güncel değil. Custom AI Actions içinde yenileyin ve eşlemeleri düzeltin.
@@ -935,7 +930,7 @@ subtitles:
   actions:
     downloadSource: Kaynak altyazıları indir
   state:
-    loading: Lexio altyazılar yükleniyor
+    loading: Tupa altyazılar yükleniyor
     error: Bir hata oluştu
   errors:
     http429: 429 YouTube altyazı API'sine çok fazla istek gönderildi. Lütfen biraz bekleyip tekrar deneyin.

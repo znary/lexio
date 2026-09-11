@@ -2,7 +2,7 @@ import { browser, i18n } from "#imports"
 import { IconSettings, IconX } from "@tabler/icons-react"
 import { useAtom, useAtomValue } from "jotai"
 import { useEffect, useRef, useState } from "react"
-import lexioLogo from "@/assets/icons/lexio.svg?url&no-inline"
+import lexioLogo from "@/assets/icons/lexio.png?url&no-inline"
 import {
   DropdownMenu,
   DropdownMenuContent,

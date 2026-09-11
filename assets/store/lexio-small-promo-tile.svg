@@ -23,7 +23,7 @@
     <path d="M69 45H115V80C115 86.6274 109.627 92 103 92H69V45Z" fill="#08111D"/>
   </g>
 
-  <text x="150" y="96" fill="#F8FAFC" font-family="Helvetica, Arial, sans-serif" font-size="50" font-weight="800" letter-spacing="-2">Lexio</text>
+  <text x="150" y="96" fill="#F8FAFC" font-family="Helvetica, Arial, sans-serif" font-size="50" font-weight="800" letter-spacing="-2">Tupa</text>
   <text x="150" y="132" fill="#B7CCE4" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="500">AI reading companion</text>
   <text x="42" y="206" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="760" letter-spacing="-1">Understand while you read</text>
 </svg>

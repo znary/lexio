@@ -3,7 +3,7 @@ import { kebabCase } from "case-anything"
 import * as React from "react"
 
 import { Toaster } from "sonner"
-import brandIcon from "@/assets/icons/lexio.svg?url&no-inline"
+import brandIcon from "@/assets/icons/lexio.png?url&no-inline"
 import { APP_NAME } from "@/utils/constants/app"
 
 const brandIconUrl = new URL(brandIcon, browser.runtime.getURL("/")).href
